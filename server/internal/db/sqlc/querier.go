@@ -16,6 +16,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
+	GetUserByEmail(ctx context.Context, emailID string) (User, error)
+	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 }
 

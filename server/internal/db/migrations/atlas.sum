@@ -1,4 +1,5 @@
-h1:mNO3Y7JRcZonbVcWf0f98KqlbbqPptKGim4auDD9Itk=
+h1:XDfOLnFWOf2O8Q7w1gPJFgbYef+Euh6iICuW6wS/+YQ=
 20260609122837_initial_db_schemas.sql h1:Qlt9JvF4auI2yCUz7oDluImiRst+uVpfBkBVc7ToUYM=
 20260609125210_add_user_status_column.sql h1:NdZtJ6Bw7BEOZXUULmLGqKTbbs3FB8aLfoTjAdOZ55s=
 20260609132310_make_domain_nullable.sql h1:XIcLOCpbS2hEgRxp0f7PZZCZQZZtxl3hN//05Sv4hr8=
+20260609152158_make_user_role_non_nullable.sql h1:xBpEL1Yrb5YN6nEt7so93DZplye6oDVKzii8r0sbHRg=

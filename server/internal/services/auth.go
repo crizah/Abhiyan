@@ -3,22 +3,27 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
+	"github.com/crizah/Abhiyan/server/internal/util"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	db      *sql.DB     // Needed to start transactions
-	queries *db.Queries // The sqlc query wrapper
+	db        *sql.DB     // Needed to start transactions
+	queries   *db.Queries // The sqlc query wrapper
+	jwtSecret []byte
 }
 
-func NewAuthService(dbConn *sql.DB) *AuthService {
+func NewAuthService(dbConn *sql.DB, s []byte) *AuthService {
 	return &AuthService{
-		db:      dbConn,
-		queries: db.New(dbConn),
+		db:        dbConn,
+		queries:   db.New(dbConn),
+		jwtSecret: s,
 	}
 }
 
@@ -58,10 +63,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: req.AdminPhone,
-		Role: db.NullUserRole{
-			UserRole: db.UserRoleSUPERADMIN,
-			Valid:    true,
-		},
+		Role:        db.UserRoleSUPERADMIN,
 	})
 	if err != nil {
 		return err
@@ -79,22 +81,47 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 	// 6. Commit transaction
 	return tx.Commit()
 }
-
-// Stub for Login
 func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {
 	// 1. Fetch User by Email
+	user, err := s.queries.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errors.New("invalid email or password")
+		}
+		return "", err
+	}
+
 	// 2. Fetch User Credentials by User ID
-	// 3. bcrypt.CompareHashAndPassword()
-	// 4. If valid, generate and return JWT
+	creds, err := s.queries.GetUserCredentials(ctx, user.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// This happens if an INVITED user tries to log in before accepting the invite
+			return "", errors.New("account setup incomplete: please check your email for the invite link")
+		}
+		return "", err
+	}
 
-	// After verifying CheckPassword(req.Password, userCreds.PasswordHash) is true...
-	// token, err := util.GenerateAccessToken(
-	// 	user.ID.String(),
-	// 	user.OrgID.String(),
-	// 	string(user.Role),
-	// 	[]byte("your-super-secret-key"),
-	// 	24*time.Hour, // Standard 1-day expiration
-	// )
+	// 3. Compare the provided password against the stored hash
+	isValid := util.CheckPassword(req.Password, creds.PasswordHash)
+	if !isValid {
+		return "", errors.New("invalid email or password")
+	}
 
-	return "mock_jwt_token", nil
+	// 4. Generate and return the Access JWT
+	// Note: In production, load the secret key from an environment variable (e.g., os.Getenv("JWT_SECRET"))
+	jwtSecret := s.jwtSecret
+
+	// Assuming user.Role is generated as a custom enum type by sqlc, we cast it to string
+	token, err := util.GenerateAccessToken(
+		user.ID.String(),
+		user.OrgID.String(),
+		string(user.Role),
+		jwtSecret,
+		24*time.Hour, // 1-day expiration
+	)
+	if err != nil {
+		return "", errors.New("failed to generate authentication token")
+	}
+
+	return token, nil
 }

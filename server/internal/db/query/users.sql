@@ -13,3 +13,11 @@ INSERT into user_credentials (
     $1, $2
 )
 RETURNING *;
+
+-- name: GetUserByEmail :one
+SELECT * FROM users 
+WHERE email_id = $1 LIMIT 1;
+
+-- name: GetUserCredentials :one
+SELECT * FROM user_credentials 
+WHERE user_id = $1 LIMIT 1;

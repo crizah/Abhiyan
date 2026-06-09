@@ -28,7 +28,7 @@ type CreateUserParams struct {
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
 	PhoneNumber string         `json:"phone_number"`
-	Role        NullUserRole   `json:"role"`
+	Role        UserRole       `json:"role"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -72,6 +72,40 @@ type CreateUserCredentialsParams struct {
 
 func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error) {
 	row := q.db.QueryRowContext(ctx, createUserCredentials, arg.UserID, arg.PasswordHash)
+	var i UserCredential
+	err := row.Scan(&i.UserID, &i.PasswordHash, &i.UpdatedAt)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at FROM users 
+WHERE email_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, emailID string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, emailID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Status,
+		&i.FirstName,
+		&i.LastName,
+		&i.EmailID,
+		&i.PhoneNumber,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUserCredentials = `-- name: GetUserCredentials :one
+SELECT user_id, password_hash, updated_at FROM user_credentials 
+WHERE user_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error) {
+	row := q.db.QueryRowContext(ctx, getUserCredentials, userID)
 	var i UserCredential
 	err := row.Scan(&i.UserID, &i.PasswordHash, &i.UpdatedAt)
 	return i, err

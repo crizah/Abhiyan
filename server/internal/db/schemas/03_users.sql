@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,
     phone_number TEXT UNIQUE NOT NULL,
-    role user_role DEFAULT 'DEFAULT',
+    role user_role NOT NULL DEFAULT 'DEFAULT',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

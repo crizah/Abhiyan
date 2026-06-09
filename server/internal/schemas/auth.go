@@ -18,15 +18,17 @@ type LoginRequest struct {
 }
 
 type InviteUserRequest struct {
-	Email     string `json:"email" binding:"required,email"`
-	FirstName string `json:"first_name" binding:"required"`
-	LastName  string `json:"last_name"`
-	Role      string `json:"role" binding:"required,oneof=ADMIN EMPLOYEE"`
+	Email string `json:"email" binding:"required,email"`
+	// FirstName string `json:"first_name" binding:"required"`
+	// LastName  string `json:"last_name"`
+	Role string `json:"role" binding:"required,oneof=ADMIN EMPLOYEE"`
 }
 
 type AcceptInviteRequest struct {
 	Token       string `json:"token" binding:"required"` // The JWT from the URL
 	Phone       string `json:"phone" binding:"required"`
+	FirstName   string `json:"first_name" binding:"required"`
+	LastName    string `json:"last_name"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 

@@ -86,5 +86,15 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	// 2. Fetch User Credentials by User ID
 	// 3. bcrypt.CompareHashAndPassword()
 	// 4. If valid, generate and return JWT
+
+	// After verifying CheckPassword(req.Password, userCreds.PasswordHash) is true...
+	// token, err := util.GenerateAccessToken(
+	// 	user.ID.String(),
+	// 	user.OrgID.String(),
+	// 	string(user.Role),
+	// 	[]byte("your-super-secret-key"),
+	// 	24*time.Hour, // Standard 1-day expiration
+	// )
+
 	return "mock_jwt_token", nil
 }

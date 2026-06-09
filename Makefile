@@ -38,6 +38,6 @@ migrate-status:
 		--revisions-schema public
 
 sqlc:
-    sqlc generate
+	sqlc generate
 
 .PHONY: build run migrate-create migrate-up migrate-down migrate-status

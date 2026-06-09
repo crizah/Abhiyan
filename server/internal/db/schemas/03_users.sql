@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    status user_status DEFAULT 'INVITED',
     first_name TEXT NOT NULL,
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,

@@ -4,3 +4,4 @@ CREATE TYPE task_fulfillment_status AS ENUM ('PENDING', 'COMPLETED');
 CREATE TYPE participant_role AS ENUM ('ASSIGNEE', 'SUBSCRIBER'); 
 CREATE TYPE reminder_channel AS ENUM ('WHATSAPP', 'EMAIL');
 CREATE TYPE reminder_status AS ENUM ('PENDING', 'SENT', 'CANCELLED');
+CREATE TYPE user_status AS ENUM ('INVITED', 'ACTIVE', 'SUSPENDED')

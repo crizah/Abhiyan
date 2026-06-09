@@ -1,0 +1,6 @@
+CREATE TYPE user_role AS ENUM ('SUPERADMIN', 'ADMIN', 'EMPLOYEE', 'DEFAULT');
+CREATE TYPE task_status AS ENUM ('OPEN', 'CLOSED');
+CREATE TYPE task_fulfillment_status AS ENUM ('PENDING', 'COMPLETED');
+CREATE TYPE participant_role AS ENUM ('ASSIGNEE', 'SUBSCRIBER'); 
+CREATE TYPE reminder_channel AS ENUM ('WHATSAPP', 'EMAIL');
+CREATE TYPE reminder_status AS ENUM ('PENDING', 'SENT', 'CANCELLED');

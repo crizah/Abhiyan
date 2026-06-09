@@ -42,4 +42,7 @@ unfuck-atlas:
 sqlc:
 	sqlc generate -f server/sqlc.yaml
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status
+dev-up:
+	docker-compose up -d --build
+
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up

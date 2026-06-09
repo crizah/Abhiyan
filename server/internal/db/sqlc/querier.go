@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -19,6 +20,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
+	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

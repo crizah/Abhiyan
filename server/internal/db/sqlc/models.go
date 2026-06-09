@@ -370,10 +370,10 @@ type User struct {
 	ID          uuid.UUID      `json:"id"`
 	OrgID       uuid.UUID      `json:"org_id"`
 	Status      NullUserStatus `json:"status"`
-	FirstName   string         `json:"first_name"`
+	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 	Role        UserRole       `json:"role"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }

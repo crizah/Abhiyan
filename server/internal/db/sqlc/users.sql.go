@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const createInvitedUser = `-- name: CreateInvitedUser :one
+INSERT INTO users (
+    org_id, email_id, role, status
+) VALUES (
+    $1, $2, $3, 'INVITED'
+)
+RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at
+`
+
+type CreateInvitedUserParams struct {
+	OrgID   uuid.UUID `json:"org_id"`
+	EmailID string    `json:"email_id"`
+	Role    UserRole  `json:"role"`
+}
+
+func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, createInvitedUser, arg.OrgID, arg.EmailID, arg.Role)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Status,
+		&i.FirstName,
+		&i.LastName,
+		&i.EmailID,
+		&i.PhoneNumber,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT into users (
     org_id, status, first_name, last_name, email_id, phone_number, role
@@ -24,10 +56,10 @@ RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, rol
 type CreateUserParams struct {
 	OrgID       uuid.UUID      `json:"org_id"`
 	Status      NullUserStatus `json:"status"`
-	FirstName   string         `json:"first_name"`
+	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 	Role        UserRole       `json:"role"`
 }
 
@@ -108,5 +140,46 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	row := q.db.QueryRowContext(ctx, getUserCredentials, userID)
 	var i UserCredential
 	err := row.Scan(&i.UserID, &i.PasswordHash, &i.UpdatedAt)
+	return i, err
+}
+
+const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
+UPDATE users 
+SET 
+    first_name = $1, 
+    last_name = $2, 
+    phone_number = $3, 
+    status = 'ACTIVE'
+WHERE 
+    email_id = $4 AND status = 'INVITED'
+RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at
+`
+
+type UpdateUserOnboardingParams struct {
+	FirstName   sql.NullString `json:"first_name"`
+	LastName    sql.NullString `json:"last_name"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+	EmailID     string         `json:"email_id"`
+}
+
+func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserOnboarding,
+		arg.FirstName,
+		arg.LastName,
+		arg.PhoneNumber,
+		arg.EmailID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Status,
+		&i.FirstName,
+		&i.LastName,
+		&i.EmailID,
+		&i.PhoneNumber,
+		&i.Role,
+		&i.CreatedAt,
+	)
 	return i, err
 }

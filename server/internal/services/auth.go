@@ -59,10 +59,10 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 	// 4. Create Super Admin User (Status ACTIVE, Role SUPERADMIN)
 	user, err := qtx.CreateUser(ctx, db.CreateUserParams{
 		OrgID:       org.ID,
-		FirstName:   req.AdminFirstName,
+		FirstName:   sql.NullString{String: req.AdminFirstName, Valid: true},
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
-		PhoneNumber: req.AdminPhone,
+		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
 		Role:        db.UserRoleSUPERADMIN,
 	})
 	if err != nil {
@@ -124,4 +124,81 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	}
 
 	return token, nil
+}
+
+// --- Invite User (Admin Only) ---
+func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
+	// 1. Insert user into DB as INVITED
+	// (Assumes org_id maps to UUID)
+	user, err := s.queries.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
+		OrgID:   util.ParseUUID(adminOrgID), // You may need a quick uuid.Parse() helper here
+		EmailID: req.Email,
+		Role:    db.UserRole(req.Role),
+	})
+	if err != nil {
+		return "", errors.New("user with this email may already exist")
+	}
+
+	// 2. Generate the Invite Token (Valid for 48 hours)
+	token, err := util.GenerateInviteToken(
+		user.EmailID,
+		adminOrgID,
+		string(user.Role),
+		s.jwtSecret,
+		48*time.Hour,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	// 3. TODO: Push a job to your Go-Redis queue to email this token as a link!
+	// queue.Enqueue("send_email", map[string]string{"to": req.Email, "link": "https://.../accept?token=" + token})
+
+	return token, nil // Returning token for easy testing in Postman
+}
+
+// --- Accept Invite (Public Link) ---
+func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
+	// 1. Parse and validate the JWT from the URL
+	claims, err := util.ParseInviteToken(req.Token, []byte("your-super-secret-key"))
+	if err != nil {
+		return errors.New("invalid or expired invite link")
+	}
+
+	// 2. Hash the new password
+	hashedPassword, err := util.HashPassword(req.NewPassword)
+	if err != nil {
+		return err
+	}
+
+	// 3. Start Database Transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+
+	// 4. Update the User profile and flip status to ACTIVE
+	user, err := qtx.UpdateUserOnboarding(ctx, db.UpdateUserOnboardingParams{
+		FirstName:   sql.NullString{String: req.FirstName, Valid: true},
+		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
+		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
+		EmailID:     claims.Email, // Extracted safely from the signed JWT, not user input!
+	})
+	if err != nil {
+		return errors.New("failed to update user profile or invite already accepted")
+	}
+
+	// 5. Insert their new password into user_credentials
+	_, err = qtx.CreateUserCredentials(ctx, db.CreateUserCredentialsParams{
+		UserID:       user.ID,
+		PasswordHash: hashedPassword,
+	})
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

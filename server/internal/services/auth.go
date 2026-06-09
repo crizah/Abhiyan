@@ -9,6 +9,7 @@ import (
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
+	"github.com/crizah/Onion/app"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -17,13 +18,15 @@ type AuthService struct {
 	db        *sql.DB     // Needed to start transactions
 	queries   *db.Queries // The sqlc query wrapper
 	jwtSecret []byte
+	onionApp  *app.App
 }
 
-func NewAuthService(dbConn *sql.DB, s []byte) *AuthService {
+func NewAuthService(dbConn *sql.DB, s []byte, oa *app.App) *AuthService {
 	return &AuthService{
 		db:        dbConn,
 		queries:   db.New(dbConn),
 		jwtSecret: s,
+		onionApp:  oa,
 	}
 }
 
@@ -151,8 +154,10 @@ func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req sch
 		return "", err
 	}
 
-	// 3. TODO: Push a job to your Go-Redis queue to email this token as a link!
-	// queue.Enqueue("send_email", map[string]string{"to": req.Email, "link": "https://.../accept?token=" + token})
+	link := ""
+
+	// push the job to queue
+	s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
 
 	return token, nil // Returning token for easy testing in Postman
 }

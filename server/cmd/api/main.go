@@ -8,6 +8,7 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/handlers"
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
+	app "github.com/crizah/Onion/app"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -16,6 +17,7 @@ func main() {
 	godotenv.Load()
 
 	db_url := os.Getenv("DB_URL")
+
 	// 1. Connect to Database
 	dbConn, err := sql.Open("postgres", db_url)
 	if err != nil {
@@ -24,8 +26,21 @@ func main() {
 	s := os.Getenv("JWT_SECRET")
 	s_byte := []byte(s)
 
+	// initialise task queue
+	broker_url := os.Getenv("BROKER_URL")
+	dashboard_addr := os.Getenv("DASHBOARD_URL")
+	onionApp, err := app.New(app.Config{
+		BrokerAddr:    broker_url,
+		BackendURL:    db_url,
+		DashboardAddr: dashboard_addr,
+	})
+	if err != nil {
+		panic(err)
+	}
+	onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": "john@mnc.com"})
+
 	// 2. Initialize Services & Handlers
-	authService := services.NewAuthService(dbConn, s_byte)
+	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	authHandler := handlers.NewAuthHandler(authService)
 
 	// 3. Setup Gin Router
@@ -58,5 +73,6 @@ func main() {
 	}
 
 	// 5. Start Server
+
 	r.Run(":8080")
 }

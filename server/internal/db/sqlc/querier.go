@@ -11,7 +11,10 @@ import (
 )
 
 type Querier interface {
+	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 }

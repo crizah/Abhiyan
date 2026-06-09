@@ -1,0 +1,15 @@
+-- name: CreateUser :one
+INSERT into users (
+    org_id, status, first_name, last_name, email_id, phone_number, role
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+)
+RETURNING *;
+
+-- name: CreateUserCredentials :one
+INSERT into user_credentials (
+    user_id, password_hash
+) VALUES (
+    $1, $2
+)
+RETURNING *;

@@ -36,8 +36,10 @@ migrate-status:
 		--dir "file://$(MIGRATIONS_DIR)" \
 		--url "$(DB_URL)" \
 		--revisions-schema public
+unfuck-atlas:
+	atlas migrate hash --dir "file://server/internal/db/migrations"
 
 sqlc:
-	sqlc generate
+	sqlc generate -f server/sqlc.yaml
 
 .PHONY: build run migrate-create migrate-up migrate-down migrate-status

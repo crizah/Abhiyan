@@ -37,7 +37,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": "john@mnc.com"})
 
 	// 2. Initialize Services & Handlers
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)

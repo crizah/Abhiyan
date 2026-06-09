@@ -4,10 +4,10 @@ BUILD_DIR = server/cmd/api
 BINARY          = abhiyan.exe
 
 build:
-	go build -o $(BINARY) $(BUILD_DIR)/main.go
+	cd server && go build -o $(BINARY) cmd/api/main.go
 
 run:
-	./$(BINARY)
+	cd server ./$(BINARY)
 
 # Diffs schemas/ against the current DB and generates a migration file.
 # Atlas spins up a temporary Docker container as scratch — no second DB needed.

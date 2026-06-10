@@ -268,11 +268,54 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type UserStatus string
+
+const (
+	UserStatusINVITED   UserStatus = "INVITED"
+	UserStatusACTIVE    UserStatus = "ACTIVE"
+	UserStatusSUSPENDED UserStatus = "SUSPENDED"
+)
+
+func (e *UserStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserStatus(s)
+	case string:
+		*e = UserStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserStatus: %T", src)
+	}
+	return nil
+}
+
+type NullUserStatus struct {
+	UserStatus UserStatus `json:"user_status"`
+	Valid      bool       `json:"valid"` // Valid is true if UserStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUserStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserStatus), nil
+}
+
 type Organization struct {
-	ID        uuid.UUID    `json:"id"`
-	Name      string       `json:"name"`
-	Domain    string       `json:"domain"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	ID        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Domain    sql.NullString `json:"domain"`
+	CreatedAt sql.NullTime   `json:"created_at"`
 }
 
 type Reminder struct {
@@ -326,11 +369,12 @@ type TeamMember struct {
 type User struct {
 	ID          uuid.UUID      `json:"id"`
 	OrgID       uuid.UUID      `json:"org_id"`
-	FirstName   string         `json:"first_name"`
+	Status      NullUserStatus `json:"status"`
+	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber string         `json:"phone_number"`
-	Role        NullUserRole   `json:"role"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+	Role        UserRole       `json:"role"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }
 

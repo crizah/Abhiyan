@@ -1,11 +1,12 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    first_name TEXT NOT NULL,
+    status user_status DEFAULT 'INVITED',
+    first_name TEXT,
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,
-    phone_number TEXT UNIQUE NOT NULL,
-    role user_role DEFAULT 'DEFAULT',
+    phone_number TEXT UNIQUE,
+    role user_role NOT NULL DEFAULT 'DEFAULT',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

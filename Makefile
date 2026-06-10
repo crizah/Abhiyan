@@ -4,10 +4,10 @@ BUILD_DIR = server/cmd/api
 BINARY          = abhiyan.exe
 
 build:
-	go build -o $(BINARY) $(BUILD_DIR)/main.go
+	cd server && go build -o $(BINARY) cmd/api/main.go
 
 run:
-	./$(BINARY)
+	cd server ./$(BINARY)
 
 # Diffs schemas/ against the current DB and generates a migration file.
 # Atlas spins up a temporary Docker container as scratch — no second DB needed.
@@ -36,8 +36,13 @@ migrate-status:
 		--dir "file://$(MIGRATIONS_DIR)" \
 		--url "$(DB_URL)" \
 		--revisions-schema public
+unfuck-atlas:
+	atlas migrate hash --dir "file://server/internal/db/migrations"
 
 sqlc:
-    sqlc generate
+	sqlc generate -f server/sqlc.yaml
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status
+dev-up:
+	docker-compose up -d --build
+
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up

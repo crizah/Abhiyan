@@ -9,6 +9,7 @@ import (
 	app "github.com/crizah/Onion/app"
 	broker "github.com/crizah/Onion/broker"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {

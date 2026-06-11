@@ -33,3 +33,25 @@ func CORSMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// func CORSMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		origin := c.Request.Header.Get("Origin")
+
+// 		// Mirror the exact origin of the request
+// 		if origin != "" {
+// 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+// 		}
+
+// 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
+// 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
+// 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+
+// 		if c.Request.Method == "OPTIONS" {
+// 			c.AbortWithStatus(204)
+// 			return
+// 		}
+
+// 		c.Next()
+// 	}
+// }

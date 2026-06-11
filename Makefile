@@ -1,13 +1,14 @@
 DB_URL         ?= postgres://postgres:password@localhost:5432/abhiyan_dev?sslmode=disable
 MIGRATIONS_DIR  = server/internal/db/migrations
 BUILD_DIR = server/cmd/api
-BINARY          = abhiyan.exe
+BINARY          = abhiyan
 
 build:
-	cd server && go build -o $(BINARY) cmd/api/main.go
+	cd server && GOOS=linux go build -o $(BINARY) cmd/api/main.go
 
 run:
-	cd server ./$(BINARY)
+	chmod +x server/$(BINARY)
+	cd server && ./$(BINARY)
 
 # Diffs schemas/ against the current DB and generates a migration file.
 # Atlas spins up a temporary Docker container as scratch — no second DB needed.

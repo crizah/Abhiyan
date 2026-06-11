@@ -7,6 +7,8 @@ package db
 import (
 	"context"
 	"database/sql"
+
+	_ "github.com/lib/pq"
 )
 
 type DBTX interface {

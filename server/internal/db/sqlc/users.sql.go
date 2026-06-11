@@ -10,6 +10,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
 
 const createInvitedUser = `-- name: CreateInvitedUser :one

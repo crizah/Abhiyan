@@ -13,6 +13,7 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/crizah/Onion/app"
 
+	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 

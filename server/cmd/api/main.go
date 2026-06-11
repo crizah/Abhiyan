@@ -1,7 +1,8 @@
-package api
+package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	app "github.com/crizah/Onion/app"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -72,6 +74,7 @@ func main() {
 	}
 
 	// 5. Start Server
+	fmt.Printf("listening....")
 
-	r.Run(":8080")
+	r.Run(":8082")
 }

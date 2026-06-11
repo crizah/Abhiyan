@@ -45,4 +45,7 @@ sqlc:
 dev-up:
 	docker-compose up -d --build
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up
+dev-down:
+	docker-compose down
+
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down

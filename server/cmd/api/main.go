@@ -82,7 +82,8 @@ func main() {
 		{
 			// Fully secured endpoints using the new AdminHandler
 			admin.POST("/users/invite", adminHandler.InviteUser)
-			admin.GET("/stats", adminHandler.GetDashboardStats) // <-- This matches your React axios call perfectly
+			admin.GET("/stats", adminHandler.GetDashboardStats)
+			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
 		}
 	}
 

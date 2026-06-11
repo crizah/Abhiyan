@@ -21,6 +21,7 @@ type Querier interface {
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
+	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	// NEW: Fetches all roles assigned to a user

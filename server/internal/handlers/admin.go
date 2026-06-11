@@ -50,3 +50,16 @@ func (h *AdminHandler) GetDashboardStats(c *gin.Context) {
 		"total_users": count,
 	})
 }
+
+func (h *AdminHandler) GetAdminTeamStats(c *gin.Context) {
+	// Extract the securely injected User ID
+	userID := c.MustGet("user_id").(string)
+
+	count, err := h.adminService.GetAdminTeamUsersCount(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch team statistics"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"total_users": count})
+}

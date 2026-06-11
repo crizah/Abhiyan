@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import apiClient from '../config/axios';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -91,11 +92,18 @@ export default function AppLayout() {
 
   const handleRoleSwitch = async (targetRole) => {
     try {
-      // await authAPI.switchRole({ target_role: targetRole });
+      // Actually hit the Go backend to mint and set the new JWT cookie
+      await apiClient.post('/auth/switch-role', { target_role: targetRole });
+      
       message.success(`Switched context to ${targetRole}`);
+      
+      // Reloading the window forces React to mount again, hit the /me endpoint, 
+      // read the brand new cookie, and route you to the correct dashboard!
       window.location.reload(); 
     } catch (err) {
-      message.error("Failed to switch roles");
+      // Show the actual error from the Go backend if it fails
+      const errorMessage = err.response?.data?.error || "Failed to switch roles";
+      message.error(errorMessage);
     }
   };
 

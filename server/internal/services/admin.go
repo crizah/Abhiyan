@@ -74,3 +74,7 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, error) {
 	return s.queries.GetTotalUsersByOrg(ctx, util.ParseUUID(orgID))
 }
+
+func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string) (int64, error) {
+	return s.queries.GetTotalUsersInAdminTeams(ctx, util.ParseUUID(userID))
+}

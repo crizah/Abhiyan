@@ -3,17 +3,36 @@ package tasks
 import (
 	"context"
 	"fmt"
+
+	"github.com/crizah/Abhiyan/server/internal/services"
 )
 
-// SendInviteEmail is the actual Go function that Onion will execute
-func SendInviteEmailTask(ctx context.Context, args map[string]any) (any, error) {
-	email := args["email"].(string)
-	link := args["invite_link"].(string)
+// NewSendInviteEmailTask acts as a constructor to inject the EmailService dependency
+func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
 
-	fmt.Printf("Attempting to send email to %s...\n", email)
-	fmt.Printf("Link: %s\n", link)
+	// This returned function is what Onion will actually execute
+	return func(ctx context.Context, args map[string]any) (any, error) {
 
-	// TODO: actually send the email via SES or smth
+		// 1. Extract arguments safely to prevent panics
+		email, ok := args["email"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'email' argument")
+		}
+		link, ok := args["link"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'link' argument")
+		}
 
-	return "Email sent successfully", nil
+		fmt.Printf("Attempting to send invite email to %s...\n", email)
+
+		// 2. AWS SES
+		err := emailService.SendInviteEmail(ctx, email, link)
+		if err != nil {
+			fmt.Printf("Failed to send email to %s: %v\n", email, err)
+			return nil, err
+		}
+
+		fmt.Printf("Successfully sent invite email to %s\n", email)
+		return "Email sent successfully", nil
+	}
 }

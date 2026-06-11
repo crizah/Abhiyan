@@ -6,3 +6,7 @@ INSERT INTO organizations (
 )
 RETURNING *;
 
+-- name: GetOrganizationName :one
+SELECT name FROM organizations 
+WHERE id = $1 LIMIT 1;
+

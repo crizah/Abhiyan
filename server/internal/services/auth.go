@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"os"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -19,7 +17,7 @@ import (
 
 type AuthService struct {
 	db        *sql.DB     // Needed to start transactions
-	queries   *db.Queries // The sqlc query wrapper
+	Queries   *db.Queries // The sqlc query wrapper
 	JwtSecret []byte
 	onionApp  *app.App
 }
@@ -27,7 +25,7 @@ type AuthService struct {
 func NewAuthService(dbConn *sql.DB, s []byte, oa *app.App) *AuthService {
 	return &AuthService{
 		db:        dbConn,
-		queries:   db.New(dbConn),
+		Queries:   db.New(dbConn),
 		JwtSecret: s,
 		onionApp:  oa,
 	}
@@ -48,7 +46,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 	defer tx.Rollback() // Safe to call; does nothing if already committed
 
 	// Bind sqlc queries to this transaction
-	qtx := s.queries.WithTx(tx)
+	qtx := s.Queries.WithTx(tx)
 
 	// 3. Create Organization
 	org, err := qtx.CreateOrganizations(ctx, db.CreateOrganizationsParams{
@@ -69,7 +67,15 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
-		Role:        db.UserRoleSUPERADMIN,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Grant SUPER_ADMIN system role
+	_, err = qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
+		UserID: user.ID,
+		Role:   db.SystemRoleSUPERADMIN,
 	})
 	if err != nil {
 		return err
@@ -87,9 +93,16 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 	// 6. Commit transaction
 	return tx.Commit()
 }
+
+func (s *AuthService) GetOrganizationName(ctx context.Context, orgID string) (string, error) {
+	// util.ParseUUID is assuming you have a helper to convert the string to pgtype.UUID or uuid.UUID
+	parsedUUID := util.ParseUUID(orgID)
+	return s.Queries.GetOrganizationName(ctx, parsedUUID)
+}
+
 func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {
 	// 1. Fetch User by Email
-	user, err := s.queries.GetUserByEmail(ctx, req.Email)
+	user, err := s.Queries.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", errors.New("invalid email or password")
@@ -98,7 +111,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	}
 
 	// 2. Fetch User Credentials by User ID
-	creds, err := s.queries.GetUserCredentials(ctx, user.ID)
+	creds, err := s.Queries.GetUserCredentials(ctx, user.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// This happens if an INVITED user tries to log in before accepting the invite
@@ -113,15 +126,33 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 		return "", errors.New("invalid email or password")
 	}
 
+	// Fetch user roles
+	roles, err := s.Queries.GetUserSystemRoles(ctx, user.ID)
+	if err != nil || len(roles) == 0 {
+		return "", errors.New("user has no assigned roles")
+	}
+
+	// Determine the highest priority role to act as their "Active" session role
+	// (We default to the highest power they possess upon login)
+	activeRole := "EMPLOYEE"
+	for _, r := range roles {
+		roleStr := string(r)
+		if roleStr == "SUPER_ADMIN" {
+			activeRole = "SUPER_ADMIN"
+			break // Highest possible, stop checking
+		} else if roleStr == "ADMIN" {
+			activeRole = "ADMIN"
+		}
+	}
+
 	// 4. Generate and return the Access JWT
-	// Note: In production, load the secret key from an environment variable (e.g., os.Getenv("JWT_SECRET"))
 	JwtSecret := s.JwtSecret
 
 	// Assuming user.Role is generated as a custom enum type by sqlc, we cast it to string
 	token, err := util.GenerateAccessToken(
 		user.ID.String(),
 		user.OrgID.String(),
-		string(user.Role),
+		activeRole,
 		req.Email,
 		JwtSecret,
 		24*time.Hour, // 1-day expiration
@@ -133,38 +164,59 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	return token, nil
 }
 
-// --- Invite User (Admin Only) ---
-func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
-	// 1. Insert user into DB as INVITED
-	// (Assumes org_id maps to UUID)
-	user, err := s.queries.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
-		OrgID:   util.ParseUUID(adminOrgID), // You may need a quick uuid.Parse() helper here
-		EmailID: req.Email,
-		Role:    db.UserRole(req.Role),
-	})
-	if err != nil {
-		return "", errors.New("user with this email may already exist")
-	}
+// // --- Invite User (Admin Only) ---
+// func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
 
-	// 2. Generate the Invite Token (Valid for 48 hours)
-	token, err := util.GenerateInviteToken(
-		user.EmailID,
-		adminOrgID,
-		string(user.Role),
-		s.JwtSecret,
-		48*time.Hour,
-	)
-	if err != nil {
-		return "", err
-	}
-	frontendURL := os.Getenv("FRONTEND_URL")
-	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
+// 	tx, err := s.db.BeginTx(ctx, nil)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer tx.Rollback()
 
-	// push the job to queue
-	s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
+// 	qtx := s.Queries.WithTx(tx)
+// 	// 1. Insert user into DB as INVITED
+// 	// (Assumes org_id maps to UUID)
+// 	user, err := s.Queries.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
+// 		OrgID:   util.ParseUUID(adminOrgID), // You may need a quick uuid.Parse() helper here
+// 		EmailID: req.Email,
+// 		// Role:    db.UserRole(req.Role),
+// 	})
+// 	if err != nil {
+// 		return "", errors.New("user with this email may already exist")
+// 	}
 
-	return token, nil // Returning token for easy testing in Postman
-}
+// 	// 2. NEW: Assign the requested role
+// 	_, err = qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
+// 		UserID: user.ID,
+// 		Role:   db.SystemRole(req.Role),
+// 	})
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	if err := tx.Commit(); err != nil {
+// 		return "", err
+// 	}
+
+// 	// 2. Generate the Invite Token (Valid for 48 hours)
+// 	token, err := util.GenerateInviteToken(
+// 		user.EmailID,
+// 		adminOrgID,
+// 		req.Role,
+// 		s.JwtSecret,
+// 		48*time.Hour,
+// 	)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	frontendURL := os.Getenv("FRONTEND_URL")
+// 	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
+
+// 	// push the job to queue
+// 	s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
+
+// 	return token, nil // Returning token for easy testing in Postman
+// }
 
 // --- Accept Invite (Public Link) ---
 func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
@@ -187,7 +239,7 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 	}
 	defer tx.Rollback()
 
-	qtx := s.queries.WithTx(tx)
+	qtx := s.Queries.WithTx(tx)
 
 	// 4. Update the User profile and flip status to ACTIVE
 	user, err := qtx.UpdateUserOnboarding(ctx, db.UpdateUserOnboardingParams{

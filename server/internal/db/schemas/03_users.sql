@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS users (
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,
     phone_number TEXT UNIQUE,
-    role user_role NOT NULL DEFAULT 'DEFAULT',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -17,4 +16,14 @@ CREATE TABLE IF NOT EXISTS user_credentials (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     password_hash TEXT NOT NULL, -- Contains both salt and hash via Argon2id/bcrypt
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- 3. NEW: System Roles Junction Table (Multi-role support)
+-- This allows user X to be BOTH a Super Admin and an Admin
+CREATE TABLE IF NOT EXISTS user_system_roles (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role system_role NOT NULL,
+    granted_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, role)
 );

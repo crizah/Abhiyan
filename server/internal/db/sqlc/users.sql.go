@@ -10,26 +10,45 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
+
+const addUserSystemRole = `-- name: AddUserSystemRole :one
+INSERT INTO user_system_roles (
+    user_id, role
+) VALUES (
+    $1, $2
+) RETURNING user_id, role, granted_at
+`
+
+type AddUserSystemRoleParams struct {
+	UserID uuid.UUID  `json:"user_id"`
+	Role   SystemRole `json:"role"`
+}
+
+// NEW: Assigns a system role to a user
+func (q *Queries) AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error) {
+	row := q.db.QueryRowContext(ctx, addUserSystemRole, arg.UserID, arg.Role)
+	var i UserSystemRole
+	err := row.Scan(&i.UserID, &i.Role, &i.GrantedAt)
+	return i, err
+}
 
 const createInvitedUser = `-- name: CreateInvitedUser :one
 INSERT INTO users (
-    org_id, email_id, role, status
+    org_id, email_id, status
 ) VALUES (
-    $1, $2, $3, 'INVITED'
+    $1, $2, 'INVITED'
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
 `
 
 type CreateInvitedUserParams struct {
 	OrgID   uuid.UUID `json:"org_id"`
 	EmailID string    `json:"email_id"`
-	Role    UserRole  `json:"role"`
 }
 
 func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createInvitedUser, arg.OrgID, arg.EmailID, arg.Role)
+	row := q.db.QueryRowContext(ctx, createInvitedUser, arg.OrgID, arg.EmailID)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -39,7 +58,6 @@ func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserPa
 		&i.LastName,
 		&i.EmailID,
 		&i.PhoneNumber,
-		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -47,11 +65,11 @@ func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserPa
 
 const createUser = `-- name: CreateUser :one
 INSERT into users (
-    org_id, status, first_name, last_name, email_id, phone_number, role
+    org_id, status, first_name, last_name, email_id, phone_number
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
 `
 
 type CreateUserParams struct {
@@ -61,7 +79,6 @@ type CreateUserParams struct {
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
 	PhoneNumber sql.NullString `json:"phone_number"`
-	Role        UserRole       `json:"role"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -72,7 +89,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.LastName,
 		arg.EmailID,
 		arg.PhoneNumber,
-		arg.Role,
 	)
 	var i User
 	err := row.Scan(
@@ -83,7 +99,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastName,
 		&i.EmailID,
 		&i.PhoneNumber,
-		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -110,8 +125,20 @@ func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCrede
 	return i, err
 }
 
+const getTotalUsersByOrg = `-- name: GetTotalUsersByOrg :one
+SELECT COUNT(*) FROM users 
+WHERE org_id = $1
+`
+
+func (q *Queries) GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalUsersByOrg, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at FROM users 
+SELECT id, org_id, status, first_name, last_name, email_id, phone_number, created_at FROM users 
 WHERE email_id = $1 LIMIT 1
 `
 
@@ -126,7 +153,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailID string) (User, err
 		&i.LastName,
 		&i.EmailID,
 		&i.PhoneNumber,
-		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -144,6 +170,35 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	return i, err
 }
 
+const getUserSystemRoles = `-- name: GetUserSystemRoles :many
+SELECT role FROM user_system_roles 
+WHERE user_id = $1
+`
+
+// NEW: Fetches all roles assigned to a user
+func (q *Queries) GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error) {
+	rows, err := q.db.QueryContext(ctx, getUserSystemRoles, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SystemRole
+	for rows.Next() {
+		var role SystemRole
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 
@@ -153,7 +208,7 @@ SET
     status = 'ACTIVE'
 WHERE 
     email_id = $4 AND status = 'INVITED'
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, role, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
 `
 
 type UpdateUserOnboardingParams struct {
@@ -179,7 +234,6 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 		&i.LastName,
 		&i.EmailID,
 		&i.PhoneNumber,
-		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err

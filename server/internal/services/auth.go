@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -153,8 +155,8 @@ func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req sch
 	if err != nil {
 		return "", err
 	}
-
-	link := ""
+	frontendURL := os.Getenv("FRONTEND_URL")
+	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
 
 	// push the job to queue
 	s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})

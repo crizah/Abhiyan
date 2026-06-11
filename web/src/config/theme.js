@@ -2,7 +2,7 @@
 export const customTheme = {
   token: {
     fontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`,
-    colorPrimary: '#F5A623', // Pale Orange accent
+    colorPrimary: '#FF4B33', // Pale Orange accent
     colorInfo: '#1A365D',    // Navy Blue accent
     colorTextBase: '#1f2937', // Dark Grey/Black for text
     colorBgBase: '#ffffff',
@@ -12,8 +12,8 @@ export const customTheme = {
   },
   components: {
     Button: {
-      colorPrimary: '#F5A623',
-      colorPrimaryHover: '#E09612',
+      colorPrimary: '#FF4B33',
+      colorPrimaryHover: '#FF333D',
       colorPrimaryActive: '#CC8810',
     },
     Input: {

@@ -6,6 +6,7 @@ import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 import LoginPage from './features/auth/pages/LoginPage';
+import Dashboard from './features/tasks/pages/Dashboard';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 
 // A simple wrapper to protect routes that require authentication
@@ -37,8 +38,7 @@ export default function App() {
                 path="/dashboard" 
                 element={
                   <ProtectedRoute>
-                    {/* We will build this next! */}
-                    <div>Dashboard Placeholder</div>
+                    {<Dashboard />}
                   </ProtectedRoute>
                 } 
               />

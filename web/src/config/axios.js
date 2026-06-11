@@ -32,16 +32,19 @@ apiClient.interceptors.request.use(
 );
 
 // Response Interceptor: Handle global 401 Unauthorized errors
+// Response Interceptor: Handle global 401 Unauthorized errors
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
-            // If the token expires, clear it and force a login
+        const originalRequest = error.config;
+        
+        // If it's a 401, AND it is NOT the login endpoint itself...
+        if (error.response && error.response.status === 401 && !originalRequest.url.includes('login')) {
             localStorage.removeItem('access_token');
             window.location.href = '/login'; 
         }
+        
         return Promise.reject(error);
     }
 );
-
 export default apiClient;

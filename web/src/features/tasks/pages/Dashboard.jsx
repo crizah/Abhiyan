@@ -1,43 +1,60 @@
 import React from 'react';
-import { Typography, Flex } from 'antd';
+import { Typography, Flex, Button } from 'antd'; // <-- Import Button
+import { LogoutOutlined } from '@ant-design/icons'; // <-- Import the icon
 import { useAuth } from '../../../context/AuthContext';
 
 const { Title } = Typography;
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth(); // <-- Grab the logout function from context
 
-  // If the user object isn't loaded yet, return null or a spinner
   if (!user) return null;
 
+  const userRole = (user.role || '').toLowerCase();
+
+  // A reusable header for all dashboard views
+  const DashboardHeader = () => (
+    <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
+      <Title level={2} style={{ margin: 0 }}>
+        {userRole === 'super_admin' ? 'Super Admin Dashboard' : 
+         userRole === 'admin' ? 'Admin Workspace' : 'My Tasks'}
+      </Title>
+      <Button 
+        type="default" 
+        danger 
+        icon={<LogoutOutlined />} 
+        onClick={logout}
+      >
+        Sign Out
+      </Button>
+    </Flex>
+  );
+
   // 1. Super Admin View
-  if (user.role === 'SUPERADMIN') {
+  if (userRole === 'super_admin' || userRole === 'superadmin') {
     return (
-      <Flex vertical padding="24px">
-        <Title level={2}>Super Admin Dashboard</Title>
-        <p>Welcome, {user.email}. Here you can manage the entire organization, view billing, and manage admins.</p>
-        {/* <SuperAdminOrgSettings /> */}
+      <Flex vertical style={{ padding: '24px' }}>
+        <DashboardHeader />
+        <p>Welcome, {user.email || 'Admin'}. Here you can manage the entire organization, view billing, and manage admins.</p>
       </Flex>
     );
   }
 
   // 2. Admin View
-  if (user.role === 'ADMIN') {
+  if (userRole === 'admin') {
     return (
-      <Flex vertical padding="24px">
-        <Title level={2}>Admin Workspace</Title>
-        <p>Welcome, {user.email}. Here you can invite employees and manage team tasks.</p>
-        {/* <AdminTaskBoard /> */}
+      <Flex vertical style={{ padding: '24px' }}>
+        <DashboardHeader />
+        <p>Welcome, {user.email || 'Manager'}. Here you can invite employees and manage team tasks.</p>
       </Flex>
     );
   }
 
   // 3. Standard Employee View
   return (
-    <Flex vertical padding="24px">
-      <Title level={2}>My Tasks</Title>
-      <p>Welcome back, {user.email}. Here are your assigned tasks for today.</p>
-      {/* <EmployeeTaskBoard /> */}
+    <Flex vertical style={{ padding: '24px' }}>
+      <DashboardHeader />
+      <p>Welcome back, {user.email || 'Team Member'}. Here are your assigned tasks for today.</p>
     </Flex>
   );
 }

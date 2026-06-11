@@ -8,10 +8,17 @@ export const authAPI = {
     
     login: async (credentials) => {
         const response = await apiClient.post('/auth/login', credentials);
-        // Save the token on successful login
-        if (response.data.access_token) {
-            localStorage.setItem('access_token', response.data.access_token);
-        }
+        
+        return response.data;
+    },
+
+    logout: async () => {
+    const response = await apiClient.post('/auth/logout');
+    return response.data;
+    },
+
+    me: async () => {
+        const response = await apiClient.get('/auth/me');
         return response.data;
     },
 

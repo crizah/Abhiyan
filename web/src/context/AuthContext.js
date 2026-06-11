@@ -1,53 +1,55 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode';
+import { authAPI } from '../features/auth/api'; 
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // Now we store the actual user data!
+  const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Run once when the app loads
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
+    const checkAuth = async () => {
       try {
-        const decodedToken = jwtDecode(token);
-        setUser(decodedToken);
+        // Ask the backend to read the cookie and return our profile
+        const userData = await authAPI.me();
+        setUser(userData);
         setIsAuthenticated(true);
       } catch (error) {
-        console.error("Invalid token");
-        localStorage.removeItem('access_token');
+        // If it fails (no cookie, expired cookie), we aren't logged in
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+
+    checkAuth();
   }, []);
 
- const login = (token) => {
-    console.log("1. Raw token received:", token);
-    
-    if (!token) {
-      console.error("Token is missing! Axios didn't pass it correctly.");
-      return; 
-    }
-
+  const login = async () => {
+    // Axios already stored the cookie automatically from the login response!
+    // We just need to fetch our user profile now to update the UI.
     try {
-      const decodedToken = jwtDecode(token);
-      console.log("2. Decoded Payload:", decodedToken);
-      
-      localStorage.setItem('access_token', token);
-      setUser(decodedToken);
-      setIsAuthenticated(true);
+        const userData = await authAPI.me();
+        setUser(userData);
+        setIsAuthenticated(true);
     } catch (error) {
-      console.error("3. CRASH! Failed to decode token. Is this a real JWT? Error:", error);
+        console.error("Failed to fetch user after login");
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    setUser(null);
-    setIsAuthenticated(false);
-    window.location.href = '/login';
+  const logout = async () => {
+    try {
+      await authAPI.logout(); // Tells Go to delete the cookie
+    } catch (error) {
+      console.error("Backend logout failed");
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+      window.location.href = '/login';
+    }
   };
 
   return (

@@ -20,7 +20,7 @@ import (
 type AuthService struct {
 	db        *sql.DB     // Needed to start transactions
 	queries   *db.Queries // The sqlc query wrapper
-	jwtSecret []byte
+	JwtSecret []byte
 	onionApp  *app.App
 }
 
@@ -28,7 +28,7 @@ func NewAuthService(dbConn *sql.DB, s []byte, oa *app.App) *AuthService {
 	return &AuthService{
 		db:        dbConn,
 		queries:   db.New(dbConn),
-		jwtSecret: s,
+		JwtSecret: s,
 		onionApp:  oa,
 	}
 }
@@ -115,14 +115,15 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 
 	// 4. Generate and return the Access JWT
 	// Note: In production, load the secret key from an environment variable (e.g., os.Getenv("JWT_SECRET"))
-	jwtSecret := s.jwtSecret
+	JwtSecret := s.JwtSecret
 
 	// Assuming user.Role is generated as a custom enum type by sqlc, we cast it to string
 	token, err := util.GenerateAccessToken(
 		user.ID.String(),
 		user.OrgID.String(),
 		string(user.Role),
-		jwtSecret,
+		req.Email,
+		JwtSecret,
 		24*time.Hour, // 1-day expiration
 	)
 	if err != nil {
@@ -150,7 +151,7 @@ func (s *AuthService) InviteUser(ctx context.Context, adminOrgID string, req sch
 		user.EmailID,
 		adminOrgID,
 		string(user.Role),
-		s.jwtSecret,
+		s.JwtSecret,
 		48*time.Hour,
 	)
 	if err != nil {

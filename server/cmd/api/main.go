@@ -55,7 +55,11 @@ func main() {
 		{
 			auth.POST("/register-org", authHandler.RegisterOrg)
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/accept-invite", authHandler.AcceptInvite)
+
+			// me is protected
+			auth.GET("/me", middleware.RequireAuth(s_byte), authHandler.Me)
 		}
 		// protected routes
 		admin := v1.Group("/admin")

@@ -17,17 +17,21 @@ export default function LoginPage() {
   const onFinish = async (values) => {
     try {
       setIsLoading(true);
-      const data = await authAPI.login(values);
-      login(data.access_token);
+      
+      await authAPI.login(values); 
+      
+      // 2. WAIT for the AuthContext to fetch the user profile via /me
+      await login(); 
+
+      // 3. Now that we know who you are, go to the dashboard
       message.success('Welcome back!');
-      navigate('/dashboard'); // Redirect to main app
+      navigate('/dashboard');
     } catch (error) {
       message.error(error.response?.data?.error || 'Failed to login');
     } finally {
       setIsLoading(false);
     }
   };
-
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100vh', backgroundColor: token.colorBgLayout }}>
       <Flex

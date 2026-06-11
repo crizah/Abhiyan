@@ -40,41 +40,50 @@ func main() {
 		panic(err)
 	}
 
-	// 2. Initialize Services & Handlers
+	// --- 1. Initialize Services ---
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
+	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
+
+	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
+	adminHandler := handlers.NewAdminHandler(adminService)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
 
-	// 4. Define Routes
+	// --- 3. Define Routes ---
 	v1 := r.Group("/api/v1")
 	{
+		// ==========================================
+		// AUTHENTICATION DOMAIN
+		// ==========================================
 		auth := v1.Group("/auth")
 		{
+			// Public
 			auth.POST("/register-org", authHandler.RegisterOrg)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/accept-invite", authHandler.AcceptInvite)
 
-			// me is protected
+			// Protected Auth Context
 			auth.GET("/me", middleware.RequireAuth(s_byte), authHandler.Me)
+			auth.POST("/switch-role", middleware.RequireAuth(s_byte), authHandler.SwitchRole)
 		}
-		// protected routes
+
+		// ADMIN DOMAIN
 		admin := v1.Group("/admin")
 
-		// Order matters!
-		// 1. RequireAuth validates the token and injects the role/org into context
+		// Block 1: Require Valid Token
 		admin.Use(middleware.RequireAuth(s_byte))
 
-		// 2. RequireRole reads the injected role to block standard employees
-		admin.Use(middleware.RequireRole("ADMIN", "SUPERADMIN"))
+		// Block 2: Require Admin or Super Admin Role
+		admin.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
 		{
-			// This route is now fully secured
-			admin.POST("/users/invite", authHandler.InviteUser)
+			// Fully secured endpoints using the new AdminHandler
+			admin.POST("/users/invite", adminHandler.InviteUser)
+			admin.GET("/stats", adminHandler.GetDashboardStats) // <-- This matches your React axios call perfectly
 		}
-
 	}
 
 	// 5. Start Server

@@ -1,8 +1,8 @@
 -- name: CreateUser :one
 INSERT into users (
-    org_id, status, first_name, last_name, email_id, phone_number, role
+    org_id, status, first_name, last_name, email_id, phone_number
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 
@@ -14,6 +14,20 @@ INSERT into user_credentials (
 )
 RETURNING *;
 
+-- name: AddUserSystemRole :one
+-- NEW: Assigns a system role to a user
+INSERT INTO user_system_roles (
+    user_id, role
+) VALUES (
+    $1, $2
+) RETURNING *;
+
+
+-- name: GetUserSystemRoles :many
+-- NEW: Fetches all roles assigned to a user
+SELECT role FROM user_system_roles 
+WHERE user_id = $1;
+
 -- name: GetUserByEmail :one
 SELECT * FROM users 
 WHERE email_id = $1 LIMIT 1;
@@ -24,9 +38,9 @@ WHERE user_id = $1 LIMIT 1;
 
 -- name: CreateInvitedUser :one
 INSERT INTO users (
-    org_id, email_id, role, status
+    org_id, email_id, status
 ) VALUES (
-    $1, $2, $3, 'INVITED'
+    $1, $2, 'INVITED'
 )
 RETURNING *;
 
@@ -40,3 +54,7 @@ SET
 WHERE 
     email_id = $4 AND status = 'INVITED'
 RETURNING *;
+
+-- name: GetTotalUsersByOrg :one
+SELECT COUNT(*) FROM users 
+WHERE org_id = $1;

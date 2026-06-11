@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
 
 type ParticipantRole string
@@ -141,6 +140,49 @@ func (ns NullReminderStatus) Value() (driver.Value, error) {
 	return string(ns.ReminderStatus), nil
 }
 
+type SystemRole string
+
+const (
+	SystemRoleSUPERADMIN SystemRole = "SUPER_ADMIN"
+	SystemRoleADMIN      SystemRole = "ADMIN"
+	SystemRoleEMPLOYEE   SystemRole = "EMPLOYEE"
+)
+
+func (e *SystemRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SystemRole(s)
+	case string:
+		*e = SystemRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SystemRole: %T", src)
+	}
+	return nil
+}
+
+type NullSystemRole struct {
+	SystemRole SystemRole `json:"system_role"`
+	Valid      bool       `json:"valid"` // Valid is true if SystemRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSystemRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.SystemRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SystemRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSystemRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SystemRole), nil
+}
+
 type TaskFulfillmentStatus string
 
 const (
@@ -225,48 +267,46 @@ func (ns NullTaskStatus) Value() (driver.Value, error) {
 	return string(ns.TaskStatus), nil
 }
 
-type UserRole string
+type TeamRoleEnum string
 
 const (
-	UserRoleSUPERADMIN UserRole = "SUPERADMIN"
-	UserRoleADMIN      UserRole = "ADMIN"
-	UserRoleEMPLOYEE   UserRole = "EMPLOYEE"
-	UserRoleDEFAULT    UserRole = "DEFAULT"
+	TeamRoleEnumTEAMADMIN TeamRoleEnum = "TEAM_ADMIN"
+	TeamRoleEnumMEMBER    TeamRoleEnum = "MEMBER"
 )
 
-func (e *UserRole) Scan(src interface{}) error {
+func (e *TeamRoleEnum) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = UserRole(s)
+		*e = TeamRoleEnum(s)
 	case string:
-		*e = UserRole(s)
+		*e = TeamRoleEnum(s)
 	default:
-		return fmt.Errorf("unsupported scan type for UserRole: %T", src)
+		return fmt.Errorf("unsupported scan type for TeamRoleEnum: %T", src)
 	}
 	return nil
 }
 
-type NullUserRole struct {
-	UserRole UserRole `json:"user_role"`
-	Valid    bool     `json:"valid"` // Valid is true if UserRole is not NULL
+type NullTeamRoleEnum struct {
+	TeamRoleEnum TeamRoleEnum `json:"team_role_enum"`
+	Valid        bool         `json:"valid"` // Valid is true if TeamRoleEnum is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullUserRole) Scan(value interface{}) error {
+func (ns *NullTeamRoleEnum) Scan(value interface{}) error {
 	if value == nil {
-		ns.UserRole, ns.Valid = "", false
+		ns.TeamRoleEnum, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.UserRole.Scan(value)
+	return ns.TeamRoleEnum.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullUserRole) Value() (driver.Value, error) {
+func (ns NullTeamRoleEnum) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.UserRole), nil
+	return string(ns.TeamRoleEnum), nil
 }
 
 type UserStatus string
@@ -358,13 +398,14 @@ type Team struct {
 	ID        uuid.UUID    `json:"id"`
 	OrgID     uuid.UUID    `json:"org_id"`
 	Name      string       `json:"name"`
-	AdminID   uuid.UUID    `json:"admin_id"`
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
 type TeamMember struct {
-	TeamID uuid.UUID `json:"team_id"`
-	UserID uuid.UUID `json:"user_id"`
+	TeamID   uuid.UUID    `json:"team_id"`
+	UserID   uuid.UUID    `json:"user_id"`
+	TeamRole TeamRoleEnum `json:"team_role"`
+	JoinedAt sql.NullTime `json:"joined_at"`
 }
 
 type User struct {
@@ -375,7 +416,6 @@ type User struct {
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
 	PhoneNumber sql.NullString `json:"phone_number"`
-	Role        UserRole       `json:"role"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }
 
@@ -383,4 +423,10 @@ type UserCredential struct {
 	UserID       uuid.UUID    `json:"user_id"`
 	PasswordHash string       `json:"password_hash"`
 	UpdatedAt    sql.NullTime `json:"updated_at"`
+}
+
+type UserSystemRole struct {
+	UserID    uuid.UUID    `json:"user_id"`
+	Role      SystemRole   `json:"role"`
+	GrantedAt sql.NullTime `json:"granted_at"`
 }

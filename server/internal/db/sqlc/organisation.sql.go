@@ -9,7 +9,7 @@ import (
 	"context"
 	"database/sql"
 
-	_ "github.com/lib/pq"
+	"github.com/google/uuid"
 )
 
 const createOrganizations = `-- name: CreateOrganizations :one
@@ -36,4 +36,16 @@ func (q *Queries) CreateOrganizations(ctx context.Context, arg CreateOrganizatio
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getOrganizationName = `-- name: GetOrganizationName :one
+SELECT name FROM organizations 
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOrganizationName, id)
+	var name string
+	err := row.Scan(&name)
+	return name, err
 }

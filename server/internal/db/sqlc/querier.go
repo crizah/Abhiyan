@@ -11,14 +11,20 @@ import (
 )
 
 type Querier interface {
+	// NEW: Assigns a system role to a user
+	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
+	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
+	// NEW: Fetches all roles assigned to a user
+	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 }

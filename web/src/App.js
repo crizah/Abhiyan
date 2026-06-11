@@ -5,9 +5,11 @@ import { ConfigProvider, App as AntApp } from 'antd';
 import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
+// Pages & Layouts
 import LoginPage from './features/auth/pages/LoginPage';
-import Dashboard from './features/tasks/pages/Dashboard';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
+import AppLayout from './layouts/AppLayout';
+import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
 
 // A simple wrapper to protect routes that require authentication
 const ProtectedRoute = ({ children }) => {
@@ -26,24 +28,37 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public Routes */}
+              {/* --- Public Routes --- */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register-org" element={<RegisterOrgPage />} />
               
               {/* Add the accept-invite route later */}
               {/* <Route path="/accept-invite" element={<AcceptInvitePage />} /> */}
 
-              {/* Protected Routes */}
+              {/* --- Protected App Routes --- */}
+              {/* Anything inside this block gets wrapped by the Sidebar and Header! */}
               <Route 
-                path="/dashboard" 
+                path="/" 
                 element={
                   <ProtectedRoute>
-                    {<Dashboard />}
+                    <AppLayout />
                   </ProtectedRoute>
-                } 
-              />
+                }
+              >
+                {/* Automatically redirect the base "/" to "/dashboard" */}
+                <Route index element={<Navigate to="dashboard" replace />} />
+                
+                {/* The Dashboards */}
+                {/* Note: We will eventually add a Router here to render different dashboards based on role, 
+                    but for now, we render the SuperAdminDashboard */}
+                <Route path="dashboard" element={<SuperAdminDashboard />} />
 
-              {/* Default redirect */}
+                {/* Future Routes go here, inside the Layout! */}
+                {/* <Route path="users" element={<UserManagement />} /> */}
+                {/* <Route path="tasks" element={<TaskBoard />} /> */}
+              </Route>
+
+              {/* Default catch-all redirect */}
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </BrowserRouter>

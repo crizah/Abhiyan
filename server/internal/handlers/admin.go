@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/services"
@@ -62,4 +63,24 @@ func (h *AdminHandler) GetAdminTeamStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"total_users": count})
+}
+
+func (h *AdminHandler) GetOrgUsers(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	// Extract pagination and search params from the query string
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	searchTerm := c.Query("search")
+
+	// Calculate SQL Offset
+	offset := (page - 1) * pageSize
+
+	response, err := h.adminService.GetOrgUsers(c.Request.Context(), orgID, int32(pageSize), int32(offset), searchTerm)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }

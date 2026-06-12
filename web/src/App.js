@@ -15,6 +15,7 @@ import UserProfilePage from './features/users/UserProfilePage'
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
 import AdminDashboard from './features/dashboard/pages/AdminDashboard';
 import EmployeeDashboard from './features/dashboard/pages/EmployeeDashboard';
+import UserManagementPage from './features/users/UserManagementPage'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardRouter />} />
                 <Route path="profile" element={<UserProfilePage />} />
+                <Route path="user-management" element={<UserManagementPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

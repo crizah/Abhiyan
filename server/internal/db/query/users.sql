@@ -88,3 +88,35 @@ UPDATE users
 SET first_name = $2, last_name = $3, phone_number = $4
 WHERE id = $1
 RETURNING id, first_name, last_name, phone_number;
+
+-- name: GetUsersByOrg :many
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.status,
+    COALESCE(
+        (SELECT array_agg(role)::text[] 
+         FROM user_system_roles 
+         WHERE user_id = u.id), 
+    '{}') AS roles
+FROM users u
+WHERE u.org_id = $1
+ORDER BY u.created_at DESC;
+
+
+-- name: GetUsersByOrgPaginated :many
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.status,
+    COALESCE(
+        (SELECT array_agg(role)::text[] 
+         FROM user_system_roles 
+         WHERE user_id = u.id), 
+    '{}') AS roles,
+    COUNT(*) OVER() AS total_count
+FROM users u
+WHERE u.org_id = $1
+  -- If search_term is empty, it returns everything. Otherwise, it searches email and name.
+  AND (@search_term::text = '' OR 
+       u.email_id ILIKE '%' || @search_term || '%' OR 
+       u.first_name ILIKE '%' || @search_term || '%' OR 
+       u.last_name ILIKE '%' || @search_term || '%')
+ORDER BY u.created_at DESC
+LIMIT $2 OFFSET $3;

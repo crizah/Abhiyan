@@ -28,6 +28,8 @@ type Querier interface {
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
+	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
+	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)

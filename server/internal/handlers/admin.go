@@ -198,3 +198,38 @@ func (h *AdminHandler) RemoveTeamMember(c *gin.Context) {
 	}
 	c.Status(http.StatusOK)
 }
+
+func (h *AdminHandler) TransferTeamMember(c *gin.Context) {
+	var req schemas.TransferTeamMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.adminService.TransferTeamMember(c.Request.Context(), req.FromTeamID, req.ToTeamID, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func (h *AdminHandler) GetAssignedUsers(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+	users, err := h.adminService.GetAssignedOrgUsers(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch assigned users"})
+		return
+	}
+	c.JSON(http.StatusOK, users)
+}
+
+func (h *AdminHandler) GetUserTeams(c *gin.Context) {
+	userID := c.Param("user_id")
+	teams, err := h.adminService.GetUserTeams(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user teams"})
+		return
+	}
+	c.JSON(http.StatusOK, teams)
+}

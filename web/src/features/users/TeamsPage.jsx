@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Tabs, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Badge, Popconfirm } from 'antd';
-import { TeamOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
+import { Typography, Tabs, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Badge, Popconfirm, Divider } from 'antd';
+import { TeamOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 
 const { Title, Text } = Typography;
@@ -8,33 +8,42 @@ const { Title, Text } = Typography;
 export default function TeamsPage() {
   const [activeTab, setActiveTab] = useState('1');
   const [teams, setTeams] = useState([]);
+  const [assignedUsers, setAssignedUsers] = useState([]);
   const [unassignedUsers, setUnassignedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // New state to track which team is selected in the dropdown BEFORE assigning
-  const [pendingAssignments, setPendingAssignments] = useState({});
 
   // Modals & Drawers
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   
+  // Drawer 1: Manage Team Members
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isTeamDrawerOpen, setIsTeamDrawerOpen] = useState(false);
+
+  // Drawer 2: Manage User Teams
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userTeams, setUserTeams] = useState([]);
+  const [isUserDrawerOpen, setIsUserDrawerOpen] = useState(false);
+  const [teamToAssign, setTeamToAssign] = useState(null);
+
+  // Unassigned Queue State
+  const [pendingAssignments, setPendingAssignments] = useState({});
 
   useEffect(() => {
     fetchAllData();
   }, []);
 
-  // Fetch both independently so the dropdown ALWAYS has the latest teams
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [teamsRes, unassignedRes] = await Promise.all([
+      const [teamsRes, assignedRes, unassignedRes] = await Promise.all([
         apiClient.get('/admin/teams'),
+        apiClient.get('/admin/users/assigned'),
         apiClient.get('/admin/users/unassigned')
       ]);
       setTeams(teamsRes.data || []);
+      setAssignedUsers(assignedRes.data || []);
       setUnassignedUsers(unassignedRes.data || []);
     } catch (err) {
       message.error("Failed to load data.");
@@ -51,16 +60,16 @@ export default function TeamsPage() {
       message.success("Team created successfully");
       setIsCreateModalOpen(false);
       setNewTeamName('');
-      fetchAllData(); // Instantly refreshes the dropdown in Tab 2
+      fetchAllData();
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to create team");
     }
   };
 
-  // --- DRAWER MANAGEMENT (Manage Team Members) ---
+  // --- DRAWER 1: MANAGE TEAM MEMBERS ---
   const openTeamDrawer = async (team) => {
     setSelectedTeam(team);
-    setIsDrawerOpen(true);
+    setIsTeamDrawerOpen(true);
     fetchTeamMembers(team.id);
   };
 
@@ -73,41 +82,70 @@ export default function TeamsPage() {
     }
   };
 
-  const updateMemberRole = async (userId, newRole) => {
+  const updateMemberRole = async (userId, teamId, newRole, refreshType) => {
     try {
-      await apiClient.post(`/admin/teams/${selectedTeam.id}/members`, { user_id: userId, team_role: newRole });
+      await apiClient.post(`/admin/teams/${teamId}/members`, { user_id: userId, team_role: newRole });
       message.success("Role updated");
-      fetchTeamMembers(selectedTeam.id);
+      if (refreshType === 'TEAM') fetchTeamMembers(teamId);
+      if (refreshType === 'USER') fetchUserTeams(userId);
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to update role");
     }
   };
 
-  const removeMember = async (userId) => {
+  const removeMember = async (userId, teamId, refreshType) => {
     try {
-      await apiClient.delete(`/admin/teams/${selectedTeam.id}/members/${userId}`);
-      message.success("Member removed");
-      fetchTeamMembers(selectedTeam.id);
+      await apiClient.delete(`/admin/teams/${teamId}/members/${userId}`);
+      message.success("Removed from team");
+      if (refreshType === 'TEAM') fetchTeamMembers(teamId);
+      if (refreshType === 'USER') fetchUserTeams(userId);
       fetchAllData(); 
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to remove member");
     }
   };
 
-  // --- QUEUE ASSIGNMENT ---
-  const handleDropdownChange = (userId, teamId) => {
+  // --- DRAWER 2: MANAGE USER TEAMS ---
+  const openUserDrawer = async (user) => {
+    setSelectedUser(user);
+    setIsUserDrawerOpen(true);
+    fetchUserTeams(user.id);
+  };
+
+  const fetchUserTeams = async (userId) => {
+    try {
+      const res = await apiClient.get(`/admin/users/${userId}/teams`);
+      setUserTeams(res.data || []);
+    } catch (err) {
+      message.error("Failed to load user teams");
+    }
+  };
+
+  const handleAssignToAdditionalTeam = async () => {
+    if (!teamToAssign) return;
+    try {
+      await apiClient.post(`/admin/teams/${teamToAssign}/members`, { user_id: selectedUser.id, team_role: 'MEMBER' });
+      message.success("Added to team!");
+      setTeamToAssign(null);
+      fetchUserTeams(selectedUser.id);
+      fetchAllData();
+    } catch (err) {
+      message.error("Failed to assign team.");
+    }
+  };
+
+  // --- TAB 3: UNASSIGNED QUEUE ---
+  const handleQueueDropdownChange = (userId, teamId) => {
     setPendingAssignments(prev => ({ ...prev, [userId]: teamId }));
   };
 
-  const executeAssignment = async (userId) => {
+  const executeQueueAssignment = async (userId) => {
     const teamId = pendingAssignments[userId];
     if (!teamId) return;
 
     try {
       await apiClient.post(`/admin/teams/${teamId}/members`, { user_id: userId, team_role: 'MEMBER' });
       message.success("User assigned to team!");
-      
-      // Clear the local state for this user and refresh the tables
       setPendingAssignments(prev => {
         const next = { ...prev };
         delete next[userId];
@@ -119,20 +157,28 @@ export default function TeamsPage() {
     }
   };
 
+  // --- TABLE COLUMNS ---
   const teamColumns = [
     { title: 'Team Name', dataIndex: 'name', key: 'name', render: text => <Text strong>{text}</Text> },
     { title: 'Total Members', dataIndex: 'member_count', key: 'count' },
     { 
-      title: 'Action', 
-      key: 'action', 
+      title: 'Action', key: 'action', 
       render: (_, record) => (
-        <Button 
-          type="default" 
-          size="small" 
-          icon={<SettingOutlined />} 
-          onClick={() => openTeamDrawer(record)}
-        >
+        <Button type="default" size="small" icon={<SettingOutlined />} onClick={() => openTeamDrawer(record)}>
           Manage Members
+        </Button>
+      )
+    }
+  ];
+
+  const assignedUserColumns = [
+    { title: 'Name', dataIndex: 'full_name', key: 'name', render: text => <Text strong>{text}</Text> },
+    { title: 'Email', dataIndex: 'email_id', key: 'email' },
+    { 
+      title: 'Action', key: 'action', 
+      render: (_, record) => (
+        <Button type="default" size="small" icon={<UserOutlined />} onClick={() => openUserDrawer(record)}>
+          Manage User
         </Button>
       )
     }
@@ -142,23 +188,17 @@ export default function TeamsPage() {
     { title: 'Name', dataIndex: 'full_name', key: 'name', render: text => <Text strong>{text}</Text> },
     { title: 'Email', dataIndex: 'email_id', key: 'email' },
     { 
-      title: 'Assign To', 
-      key: 'assign', 
+      title: 'Assign To', key: 'assign', 
       render: (_, record) => (
         <Flex gap="small" align="center">
           <Select 
             placeholder="Select Team" 
             style={{ width: 160 }}
             value={pendingAssignments[record.id]}
-            onChange={(val) => handleDropdownChange(record.id, val)}
+            onChange={(val) => handleQueueDropdownChange(record.id, val)}
             options={teams.map(t => ({ label: t.name, value: t.id }))} 
           />
-          <Button 
-            type="primary" 
-            size="small" 
-            disabled={!pendingAssignments[record.id]}
-            onClick={() => executeAssignment(record.id)}
-          >
+          <Button type="primary" size="small" disabled={!pendingAssignments[record.id]} onClick={() => executeQueueAssignment(record.id)}>
             Assign
           </Button>
         </Flex>
@@ -166,29 +206,46 @@ export default function TeamsPage() {
     }
   ];
 
-  const drawerColumns = [
+  // Drawer 1 Columns
+  const teamDrawerColumns = [
     { title: 'Name', dataIndex: 'full_name', key: 'name' },
     { 
-      title: 'Role', 
-      dataIndex: 'team_role', 
-      key: 'role',
+      title: 'Role', dataIndex: 'team_role', key: 'role',
       render: (role, record) => (
         <Select 
-          value={role} 
-          style={{ width: 130 }} 
-          onChange={(val) => updateMemberRole(record.id, val)}
-          options={[
-            { value: 'TEAM_ADMIN', label: 'Team Admin' },
-            { value: 'MEMBER', label: 'Member' },
-          ]}
+          value={role} style={{ width: 130 }} 
+          onChange={(val) => updateMemberRole(record.id, selectedTeam.id, val, 'TEAM')}
+          options={[{ value: 'TEAM_ADMIN', label: 'Team Admin' }, { value: 'MEMBER', label: 'Member' }]}
         />
       )
     },
     { 
-      title: '', 
-      key: 'action',
+      title: '', key: 'action',
       render: (_, record) => (
-        <Popconfirm title="Remove from team?" onConfirm={() => removeMember(record.id)}>
+        <Popconfirm title="Remove from team?" onConfirm={() => removeMember(record.id, selectedTeam.id, 'TEAM')}>
+          <Button type="text" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      )
+    }
+  ];
+
+  // Drawer 2 Columns
+  const userDrawerColumns = [
+    { title: 'Team', dataIndex: 'team_name', key: 'name', render: text => <Text strong>{text}</Text> },
+    { 
+      title: 'Role', dataIndex: 'team_role', key: 'role',
+      render: (role, record) => (
+        <Select 
+          value={role} style={{ width: 130 }} 
+          onChange={(val) => updateMemberRole(selectedUser.id, record.team_id, val, 'USER')}
+          options={[{ value: 'TEAM_ADMIN', label: 'Team Admin' }, { value: 'MEMBER', label: 'Member' }]}
+        />
+      )
+    },
+    { 
+      title: '', key: 'action',
+      render: (_, record) => (
+        <Popconfirm title="Remove from this team?" onConfirm={() => removeMember(selectedUser.id, record.team_id, 'USER')}>
           <Button type="text" danger icon={<DeleteOutlined />} />
         </Popconfirm>
       )
@@ -216,6 +273,11 @@ export default function TeamsPage() {
             },
             {
               key: '2',
+              label: <span><UserOutlined /> Assigned Users</span>,
+              children: <Table columns={assignedUserColumns} dataSource={assignedUsers} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+            },
+            {
+              key: '3',
               label: <span><UserAddOutlined /> Unassigned Queue {unassignedUsers.length > 0 && <Badge count={unassignedUsers.length} style={{ backgroundColor: '#fa8c16', marginLeft: 8 }}/>}</span>,
               children: <Table columns={unassignedColumns} dataSource={unassignedUsers} rowKey="id" loading={loading} pagination={false} />
             }
@@ -227,17 +289,40 @@ export default function TeamsPage() {
         <Input placeholder="e.g. Engineering, Marketing" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} size="large" />
       </Modal>
 
+      {/* DRAWER 1: Manage Team Members */}
       <Drawer
-        title={selectedTeam ? `Manage: ${selectedTeam.name}` : 'Manage Team'}
-        placement="right"
-        width={500}
-        onClose={() => setIsDrawerOpen(false)}
-        open={isDrawerOpen}
+        title={selectedTeam ? `Manage Members: ${selectedTeam.name}` : 'Manage Team'}
+        placement="right" width={500}
+        onClose={() => setIsTeamDrawerOpen(false)} open={isTeamDrawerOpen}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
-          Assigning a user as a "Team Admin" automatically grants them access to the Admin Dashboard for this specific team.
+          Assigning a user as a "Team Admin" grants them access to manage this team.
         </Text>
-        <Table columns={drawerColumns} dataSource={teamMembers} rowKey="id" pagination={false} size="small" />
+        <Table columns={teamDrawerColumns} dataSource={teamMembers} rowKey="id" pagination={false} size="small" />
+      </Drawer>
+
+      {/* DRAWER 2: Manage User Teams */}
+      <Drawer
+        title={selectedUser ? `Manage Teams: ${selectedUser.full_name}` : 'Manage User'}
+        placement="right" width={500}
+        onClose={() => setIsUserDrawerOpen(false)} open={isUserDrawerOpen}
+      >
+        <Flex gap="small" align="center" style={{ marginBottom: '24px' }}>
+          <Select 
+            placeholder="Add to another team..." 
+            style={{ flex: 1 }}
+            value={teamToAssign}
+            onChange={setTeamToAssign}
+            // Filter out teams the user is already in
+            options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))} 
+          />
+          <Button type="primary" disabled={!teamToAssign} onClick={handleAssignToAdditionalTeam}>
+            Add to Team
+          </Button>
+        </Flex>
+        <Divider />
+        <Text strong style={{ display: 'block', marginBottom: '16px' }}>Current Memberships</Text>
+        <Table columns={userDrawerColumns} dataSource={userTeams} rowKey="team_id" pagination={false} size="small" />
       </Drawer>
     </div>
   );

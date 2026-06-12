@@ -309,23 +309,38 @@ func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string) ([]sch
 	}
 	return members, nil
 }
-
 func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool) error {
 	tID := util.ParseUUID(teamID)
 	uID := util.ParseUUID(userID)
 
-	// Security Rule: Prevent removing/demoting the LAST admin
+	// GUARD 1: SYSTEM ROLE CHECK FOR TEAM ADMINS
+	if !isRemoval && role == "TEAM_ADMIN" {
+		sysRoles, err := s.queries.GetUserSystemRoles(ctx, uID)
+		if err != nil {
+			return err
+		}
+
+		isSystemAdmin := false
+		for _, r := range sysRoles {
+			if r == "ADMIN" || r == "SUPER_ADMIN" {
+				isSystemAdmin = true
+				break
+			}
+		}
+
+		if !isSystemAdmin {
+			return errors.New("action blocked: Only System Admins or Super Admins can be made Team Admins")
+		}
+	}
+
+	// GUARD 2: PREVENT REMOVING THE LAST ADMIN
 	if isRemoval || role == "MEMBER" {
 		adminCount, err := s.queries.GetTeamAdminCount(ctx, tID)
 		if err != nil {
 			return err
 		}
 
-		// We need to check if the user we are modifying is currently an admin
-		// For safety, if admin count is 1, and we are trying to remove/demote, we block it.
-		// (A more robust check would verify if THIS specific user is that 1 admin, but this is a safe catch-all)
 		if adminCount <= 1 {
-			// Let's verify if the person being removed/demoted is an admin
 			members, _ := s.GetTeamMembers(ctx, teamID)
 			for _, m := range members {
 				if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
@@ -335,6 +350,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 		}
 	}
 
+	// Execute DB Transaction
 	if isRemoval {
 		return s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
 			TeamID: tID,
@@ -347,4 +363,87 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 		UserID:   uID,
 		TeamRole: db.TeamRoleEnum(role),
 	})
+}
+
+func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTeamID, userID string) error {
+	fID := util.ParseUUID(fromTeamID)
+	tID := util.ParseUUID(toTeamID)
+	uID := util.ParseUUID(userID)
+
+	// Enforce safety rule: Prevent moving the last admin out of the current team
+	adminCount, err := s.queries.GetTeamAdminCount(ctx, fID)
+	if err != nil {
+		return err
+	}
+
+	if adminCount <= 1 {
+		members, _ := s.GetTeamMembers(ctx, fromTeamID)
+		for _, m := range members {
+			if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
+				return errors.New("cannot transfer the last Team Admin. Promote someone else on this team first")
+			}
+		}
+	}
+
+	// Remove from old team
+	err = s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
+		TeamID: fID,
+		UserID: uID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Insert into new team (defaults to MEMBER role)
+	return s.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+		TeamID:   tID,
+		UserID:   uID,
+		TeamRole: "MEMBER",
+	})
+}
+
+func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string) ([]schemas.AssignedUserResponse, error) {
+	dbUsers, err := s.queries.GetAssignedOrgUsers(ctx, util.ParseUUID(orgID))
+	if err != nil {
+		return nil, err
+	}
+
+	var users []schemas.AssignedUserResponse
+	for _, u := range dbUsers {
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance"
+		}
+
+		users = append(users, schemas.AssignedUserResponse{
+			ID:       u.ID.String(),
+			FullName: fullName,
+			EmailID:  u.EmailID,
+			Status:   string(u.Status.UserStatus),
+		})
+	}
+	if users == nil {
+		users = []schemas.AssignedUserResponse{}
+	}
+	return users, nil
+}
+
+func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schemas.UserTeamResponse, error) {
+	dbTeams, err := s.queries.GetUserTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.UserTeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.UserTeamResponse{
+			TeamID:   t.ID.String(),
+			TeamName: t.Name,
+			TeamRole: t.TmTeamRole,
+		})
+	}
+	if teams == nil {
+		teams = []schemas.UserTeamResponse{}
+	}
+	return teams, nil
 }

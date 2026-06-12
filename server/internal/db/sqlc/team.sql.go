@@ -248,6 +248,43 @@ func (q *Queries) GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUI
 	return count, err
 }
 
+const getUserTeams = `-- name: GetUserTeams :many
+SELECT t.id, t.name, tm.team_role::text
+FROM team_members tm
+JOIN teams t ON tm.team_id = t.id
+WHERE tm.user_id = $1
+ORDER BY t.name ASC
+`
+
+type GetUserTeamsRow struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	TmTeamRole string    `json:"tm_team_role"`
+}
+
+func (q *Queries) GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTeams, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserTeamsRow
+	for rows.Next() {
+		var i GetUserTeamsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.TmTeamRole); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeTeamMember = `-- name: RemoveTeamMember :exec
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2
 `

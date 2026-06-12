@@ -55,3 +55,22 @@ type AssignTeamMemberRequest struct {
 	UserID   string `json:"user_id" binding:"required"`
 	TeamRole string `json:"team_role" binding:"required,oneof=TEAM_ADMIN MEMBER"`
 }
+
+type TransferTeamMemberRequest struct {
+	UserID     string `json:"user_id" binding:"required"`
+	FromTeamID string `json:"from_team_id" binding:"required"`
+	ToTeamID   string `json:"to_team_id" binding:"required"`
+}
+
+type AssignedUserResponse struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	EmailID  string `json:"email_id"`
+	Status   string `json:"status"`
+}
+
+type UserTeamResponse struct {
+	TeamID   string `json:"team_id"`
+	TeamName string `json:"team_name"`
+	TeamRole string `json:"team_role"`
+}

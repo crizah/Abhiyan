@@ -21,6 +21,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
@@ -36,6 +37,7 @@ type Querier interface {
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
+	GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error)
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)

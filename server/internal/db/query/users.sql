@@ -128,3 +128,10 @@ LEFT JOIN team_members tm ON u.id = tm.user_id
 WHERE u.org_id = $1 
   AND tm.team_id IS NULL
 ORDER BY u.created_at DESC;
+
+-- name: GetAssignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+WHERE u.org_id = $1 
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.created_at DESC;

@@ -107,6 +107,9 @@ func main() {
 			superAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
 			superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
 			superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
+			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
+			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers)
+			superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

@@ -62,3 +62,10 @@ DO UPDATE SET team_role = EXCLUDED.team_role;
 
 -- name: RemoveTeamMember :exec
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;
+
+-- name: GetUserTeams :many
+SELECT t.id, t.name, tm.team_role::text
+FROM team_members tm
+JOIN teams t ON tm.team_id = t.id
+WHERE tm.user_id = $1
+ORDER BY t.name ASC;

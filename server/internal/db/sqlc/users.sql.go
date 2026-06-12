@@ -125,6 +125,51 @@ func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCrede
 	return i, err
 }
 
+const getAssignedOrgUsers = `-- name: GetAssignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+WHERE u.org_id = $1 
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.created_at DESC
+`
+
+type GetAssignedOrgUsersRow struct {
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+	Status    NullUserStatus `json:"status"`
+}
+
+func (q *Queries) GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAssignedOrgUsers, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignedOrgUsersRow
+	for rows.Next() {
+		var i GetAssignedOrgUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFullUserProfile = `-- name: GetFullUserProfile :one
 SELECT 
     u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,

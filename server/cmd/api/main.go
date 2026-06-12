@@ -43,10 +43,12 @@ func main() {
 	// --- 1. Initialize Services ---
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
+	userService := services.NewUserService(dbConn)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
 	adminHandler := handlers.NewAdminHandler(adminService)
+	userHandler := handlers.NewUserHandler(userService)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -84,6 +86,16 @@ func main() {
 			admin.POST("/users/invite", adminHandler.InviteUser)
 			admin.GET("/stats", adminHandler.GetDashboardStats)
 			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
+		}
+
+		users := v1.Group("/users")
+
+		// Every route in this block requires a valid login
+		users.Use(middleware.RequireAuth(s_byte))
+		{
+			// Note: These match the exact endpoints React is calling
+			users.GET("/me/profile", userHandler.GetMyProfile)
+			users.PUT("/me/profile", userHandler.UpdateMyProfile)
 		}
 	}
 

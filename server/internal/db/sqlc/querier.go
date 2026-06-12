@@ -18,6 +18,7 @@ type Querier interface {
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
@@ -26,8 +27,10 @@ type Querier interface {
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
+	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 import AppLayout from './layouts/AppLayout';
+import UserProfilePage from './features/users/UserProfilePage'
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -46,9 +47,8 @@ export default function App() {
               
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<Navigate to="dashboard" replace />} />
-                
-                {/* Replaced hardcoded SuperAdmin with our new Router */}
                 <Route path="dashboard" element={<DashboardRouter />} />
+                <Route path="profile" element={<UserProfilePage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

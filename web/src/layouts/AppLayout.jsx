@@ -19,6 +19,10 @@ import {
   CSidebarHeader,
   CSidebarNav,
   CNavItem,
+  CDropdown, 
+  CDropdownItem,
+  CDropdownMenu,
+  CDropdownToggle
 } from '@coreui/react';
 
 import '@coreui/coreui/dist/css/coreui.min.css'; 
@@ -29,9 +33,9 @@ const { Text } = Typography;
 // --- REUSABLE COMPONENTS ---
 
 // 1. Reusable Top Header
-const GlobalHeader = ({ user, token }) => (
+const GlobalHeader = ({ user, token, navigate }) => (
   <Header style={{ 
-    height: '64px',           // Explicitly set height here
+    height: '64px',
     background: token.colorBgContainer, 
     padding: '0 24px', 
     display: 'flex', 
@@ -50,10 +54,22 @@ const GlobalHeader = ({ user, token }) => (
       <Badge dot>
         <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
       </Badge>
-      <Flex align="center" gap="small" style={{ marginLeft: '8px' }}>
-        <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
-        <Text strong>{user?.email}</Text>
-      </Flex>
+      
+      {/* CoreUI Dropdown Integration */}
+      <CDropdown variant="nav-item" style={{ listStyle: 'none' }}>
+        <CDropdownToggle placement="bottom-end" className="py-0 pe-0" caret={false} style={{ background: 'transparent', border: 'none' }}>
+          <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
+            <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
+            <Text strong>{user?.email}</Text>
+          </Flex>
+        </CDropdownToggle>
+        <CDropdownMenu className="pt-0" placement="bottom-end">
+          <CDropdownItem onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }}>
+            User Profile
+          </CDropdownItem>
+        </CDropdownMenu>
+      </CDropdown>
+
     </Flex>
   </Header>
 );
@@ -168,7 +184,7 @@ export default function AppLayout() {
       }}>
         
         {/* Render our newly extracted Global Header */}
-        <GlobalHeader user={user} token={token} />
+        <GlobalHeader user={user} token={token} navigate={navigate} />
 
         {/* Dynamic Page Content */}
         <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>

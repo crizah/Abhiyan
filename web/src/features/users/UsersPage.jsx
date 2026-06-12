@@ -7,7 +7,7 @@ import { ConfigProvider } from 'antd';
 
 const { Title, Text } = Typography;
 
-export default function UserManagementPage() {
+export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
@@ -129,7 +129,7 @@ const fetchUsers = async () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={3}>User Management</Title>
+      <Title level={3}>Users</Title>
 
       {/* Filters & Search Bar */}
      <Flex gap="middle" style={{ marginBottom: '24px' }}>

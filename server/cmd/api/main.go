@@ -87,6 +87,8 @@ func main() {
 			admin.GET("/stats", adminHandler.GetDashboardStats)
 			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
 			admin.GET("/users", adminHandler.GetOrgUsers)
+			admin.GET("/employees", adminHandler.GetTeamEmployees)
+			admin.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 		}
 
 		users := v1.Group("/users")

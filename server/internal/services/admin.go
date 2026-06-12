@@ -139,3 +139,76 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 		Users:      users,
 	}, nil
 }
+
+func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search, teamFilter, roleFilter, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
+	parsedUserID := util.ParseUUID(userID)
+
+	// Convert "ALL" filter strings from React to empty strings for SQLC
+	if teamFilter == "ALL" {
+		teamFilter = ""
+	}
+	if roleFilter == "ALL" {
+		roleFilter = ""
+	}
+	if statusFilter == "ALL" {
+		statusFilter = ""
+	}
+
+	params := db.GetTeamEmployeesPaginatedParams{
+		UserID:       parsedUserID,
+		Limit:        limit,
+		Offset:       offset,
+		SearchTerm:   search,
+		TeamFilter:   teamFilter,
+		RoleFilter:   roleFilter,
+		StatusFilter: statusFilter,
+	}
+
+	dbUsers, err := s.queries.GetTeamEmployeesPaginated(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	var employees []schemas.TeamEmployeeResponse
+	var totalCount int64 = 0
+
+	for i, u := range dbUsers {
+		if i == 0 {
+			totalCount = u.TotalCount
+		}
+
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Unknown User"
+		}
+
+		employees = append(employees, schemas.TeamEmployeeResponse{
+			ID:       u.ID.String(),
+			FullName: fullName,
+			EmailID:  u.EmailID,
+			Status:   string(u.Status.UserStatus),
+			TeamName: u.TeamName,
+			TeamRole: u.TeamRole,
+		})
+	}
+
+	if employees == nil {
+		employees = []schemas.TeamEmployeeResponse{}
+	}
+
+	return &schemas.PaginatedEmployeesResponse{
+		TotalCount: totalCount,
+		Employees:  employees,
+	}, nil
+}
+
+func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string) ([]string, error) {
+	names, err := s.queries.GetAdminTeamNames(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+	if names == nil {
+		return []string{}, nil
+	}
+	return names, nil
+}

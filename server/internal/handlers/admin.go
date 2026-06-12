@@ -84,3 +84,38 @@ func (h *AdminHandler) GetOrgUsers(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *AdminHandler) GetTeamEmployees(c *gin.Context) {
+
+	userID := c.MustGet("user_id").(string)
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+
+	search := c.Query("search")
+	team := c.Query("team")
+	role := c.Query("role")
+	status := c.Query("status")
+
+	offset := (page - 1) * pageSize
+
+	response, err := h.adminService.GetTeamEmployees(c.Request.Context(), userID, int32(pageSize), int32(offset), search, team, role, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch team employees"})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *AdminHandler) GetAdminTeamOptions(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+
+	teams, err := h.adminService.GetAdminTeamNames(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+
+	c.JSON(http.StatusOK, teams)
+}

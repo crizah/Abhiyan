@@ -185,26 +185,24 @@ export default function AppLayout() {
           </CSidebarBrand>
         </CSidebarHeader>
 
-        <CSidebarNav>
+<CSidebarNav>
           <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}>
             <DashboardOutlined className="nav-icon" /> Dashboard
           </CNavItem>
 
-
+          {/* Super Admin gets 'Users' */}
           {activeRole === 'SUPER_ADMIN' && (
-            <CNavItem 
-              href="#" 
-              onClick={(e) => { 
-                e.preventDefault(); 
-                navigate('/user-management'); // <-- New path!
-              }} 
-              active={location.pathname === '/user-management'} // <-- Keeps the button highlighted when active
-            >
-              <TeamOutlined className="nav-icon" /> User Management
+            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}>
+              <TeamOutlined className="nav-icon" /> Users
             </CNavItem>
           )}
 
-         
+          {/* Admin gets 'Employees' */}
+          {activeRole === 'ADMIN' && (
+            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}>
+              <TeamOutlined className="nav-icon" /> Employees
+            </CNavItem>
+          )}
 
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}>

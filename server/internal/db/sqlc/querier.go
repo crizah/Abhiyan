@@ -17,6 +17,7 @@ type Querier interface {
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
@@ -24,7 +25,9 @@ type Querier interface {
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
+	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
+	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error)
@@ -39,8 +42,10 @@ type Querier interface {
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }
 
 var _ Querier = (*Queries)(nil)

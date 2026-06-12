@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag, List, Button, Tooltip } from 'antd';
+
 import { 
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined, CheckOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined, CheckOutlined, ApartmentOutlined
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -254,6 +255,9 @@ export default function AppLayout() {
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}><TeamOutlined className="nav-icon" /> Users</CNavItem>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/onboarding'); }} active={location.pathname === '/onboarding'}><UserAddOutlined className="nav-icon" /> User Onboarding</CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/teams'); }} active={location.pathname === '/teams'}>
+                <ApartmentOutlined className="nav-icon" /> Teams
+              </CNavItem>
             </>
           )}
           {activeRole === 'ADMIN' && (

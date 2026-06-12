@@ -38,3 +38,27 @@ LEFT JOIN team_members tm ON t.id = tm.team_id
 WHERE t.org_id = $1
 GROUP BY t.id
 ORDER BY t.name ASC;
+
+
+-- name: CreateTeam :one
+INSERT INTO teams (org_id, name) VALUES ($1, $2) RETURNING id;
+
+-- name: GetTeamMembersDetails :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, tm.team_role::text
+FROM team_members tm
+JOIN users u ON tm.user_id = u.id
+WHERE tm.team_id = $1
+ORDER BY tm.team_role DESC, u.first_name ASC;
+
+-- name: GetTeamAdminCount :one
+SELECT COUNT(*) FROM team_members 
+WHERE team_id = $1 AND team_role = 'TEAM_ADMIN';
+
+-- name: UpsertTeamMember :exec
+INSERT INTO team_members (team_id, user_id, team_role) 
+VALUES ($1, $2, $3)
+ON CONFLICT (team_id, user_id) 
+DO UPDATE SET team_role = EXCLUDED.team_role;
+
+-- name: RemoveTeamMember :exec
+DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;

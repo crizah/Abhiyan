@@ -134,3 +134,67 @@ func (h *AdminHandler) GetUnassignedUsers(c *gin.Context) {
 
 	c.JSON(http.StatusOK, users)
 }
+
+func (h *AdminHandler) CreateTeam(c *gin.Context) {
+	var req schemas.CreateTeamRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	orgID := c.MustGet("org_id").(string)
+	teamID, err := h.adminService.CreateTeam(c.Request.Context(), orgID, req.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Team created", "team_id": teamID})
+}
+
+func (h *AdminHandler) GetTeams(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+	teams, err := h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+	c.JSON(http.StatusOK, teams)
+}
+
+func (h *AdminHandler) GetTeamMembers(c *gin.Context) {
+	teamID := c.Param("team_id")
+	members, err := h.adminService.GetTeamMembers(c.Request.Context(), teamID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch members"})
+		return
+	}
+	c.JSON(http.StatusOK, members)
+}
+
+func (h *AdminHandler) AssignTeamMember(c *gin.Context) {
+	teamID := c.Param("team_id")
+	var req schemas.AssignTeamMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, req.UserID, req.TeamRole, false)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func (h *AdminHandler) RemoveTeamMember(c *gin.Context) {
+	teamID := c.Param("team_id")
+	userID := c.Param("user_id")
+
+	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, userID, "", true)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}

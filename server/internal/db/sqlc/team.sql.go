@@ -12,6 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const createTeam = `-- name: CreateTeam :one
+INSERT INTO teams (org_id, name) VALUES ($1, $2) RETURNING id
+`
+
+type CreateTeamParams struct {
+	OrgID uuid.UUID `json:"org_id"`
+	Name  string    `json:"name"`
+}
+
+func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, createTeam, arg.OrgID, arg.Name)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getAdminTeamNames = `-- name: GetAdminTeamNames :many
 SELECT t.name 
 FROM teams t
@@ -79,6 +95,18 @@ func (q *Queries) GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTea
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTeamAdminCount = `-- name: GetTeamAdminCount :one
+SELECT COUNT(*) FROM team_members 
+WHERE team_id = $1 AND team_role = 'TEAM_ADMIN'
+`
+
+func (q *Queries) GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTeamAdminCount, teamID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const getTeamEmployeesPaginated = `-- name: GetTeamEmployeesPaginated :many
@@ -161,6 +189,51 @@ func (q *Queries) GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmpl
 	return items, nil
 }
 
+const getTeamMembersDetails = `-- name: GetTeamMembersDetails :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, tm.team_role::text
+FROM team_members tm
+JOIN users u ON tm.user_id = u.id
+WHERE tm.team_id = $1
+ORDER BY tm.team_role DESC, u.first_name ASC
+`
+
+type GetTeamMembersDetailsRow struct {
+	ID         uuid.UUID      `json:"id"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	EmailID    string         `json:"email_id"`
+	TmTeamRole string         `json:"tm_team_role"`
+}
+
+func (q *Queries) GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamMembersDetails, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTeamMembersDetailsRow
+	for rows.Next() {
+		var i GetTeamMembersDetailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.TmTeamRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTotalUsersInAdminTeams = `-- name: GetTotalUsersInAdminTeams :one
 SELECT COUNT(DISTINCT tm2.user_id)
 FROM team_members tm1
@@ -173,4 +246,36 @@ func (q *Queries) GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUI
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const removeTeamMember = `-- name: RemoveTeamMember :exec
+DELETE FROM team_members WHERE team_id = $1 AND user_id = $2
+`
+
+type RemoveTeamMemberParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error {
+	_, err := q.db.ExecContext(ctx, removeTeamMember, arg.TeamID, arg.UserID)
+	return err
+}
+
+const upsertTeamMember = `-- name: UpsertTeamMember :exec
+INSERT INTO team_members (team_id, user_id, team_role) 
+VALUES ($1, $2, $3)
+ON CONFLICT (team_id, user_id) 
+DO UPDATE SET team_role = EXCLUDED.team_role
+`
+
+type UpsertTeamMemberParams struct {
+	TeamID   uuid.UUID    `json:"team_id"`
+	UserID   uuid.UUID    `json:"user_id"`
+	TeamRole TeamRoleEnum `json:"team_role"`
+}
+
+func (q *Queries) UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTeamMember, arg.TeamID, arg.UserID, arg.TeamRole)
+	return err
 }

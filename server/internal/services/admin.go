@@ -252,3 +252,99 @@ func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) 
 
 	return users, nil
 }
+
+func (s *AdminService) CreateTeam(ctx context.Context, orgID, name string) (string, error) {
+	teamID, err := s.queries.CreateTeam(ctx, db.CreateTeamParams{
+		OrgID: util.ParseUUID(orgID),
+		Name:  name,
+	})
+	if err != nil {
+		return "", errors.New("a team with this name may already exist")
+	}
+	return teamID.String(), nil
+}
+
+func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetOrgTeams(ctx, util.ParseUUID(orgID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:          t.ID.String(),
+			Name:        t.Name,
+			MemberCount: t.MemberCount,
+		})
+	}
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
+}
+
+func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string) ([]schemas.TeamMemberResponse, error) {
+	dbMembers, err := s.queries.GetTeamMembersDetails(ctx, util.ParseUUID(teamID))
+	if err != nil {
+		return nil, err
+	}
+
+	var members []schemas.TeamMemberResponse
+	for _, m := range dbMembers {
+		fullName := strings.TrimSpace(m.FirstName.String + " " + m.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance"
+		}
+
+		members = append(members, schemas.TeamMemberResponse{
+			ID:       m.ID.String(),
+			FullName: fullName,
+			EmailID:  m.EmailID,
+			TeamRole: m.TmTeamRole,
+		})
+	}
+	if members == nil {
+		members = []schemas.TeamMemberResponse{}
+	}
+	return members, nil
+}
+
+func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool) error {
+	tID := util.ParseUUID(teamID)
+	uID := util.ParseUUID(userID)
+
+	// Security Rule: Prevent removing/demoting the LAST admin
+	if isRemoval || role == "MEMBER" {
+		adminCount, err := s.queries.GetTeamAdminCount(ctx, tID)
+		if err != nil {
+			return err
+		}
+
+		// We need to check if the user we are modifying is currently an admin
+		// For safety, if admin count is 1, and we are trying to remove/demote, we block it.
+		// (A more robust check would verify if THIS specific user is that 1 admin, but this is a safe catch-all)
+		if adminCount <= 1 {
+			// Let's verify if the person being removed/demoted is an admin
+			members, _ := s.GetTeamMembers(ctx, teamID)
+			for _, m := range members {
+				if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
+					return errors.New("cannot remove or demote the last Team Admin. Promote someone else first")
+				}
+			}
+		}
+	}
+
+	if isRemoval {
+		return s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
+			TeamID: tID,
+			UserID: uID,
+		})
+	}
+
+	return s.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+		TeamID:   tID,
+		UserID:   uID,
+		TeamRole: db.TeamRoleEnum(role),
+	})
+}

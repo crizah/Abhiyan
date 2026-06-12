@@ -12,6 +12,7 @@ import AppLayout from './layouts/AppLayout';
 import UserProfilePage from './features/users/UserProfilePage'
 import TeamEmployeesPage from './features/users/TeamEmployeesPage'
 import UserOnboardingPage from './features/users/UserOnboardingPage';
+import TeamsPage from './features/users/TeamsPage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="users" element={<UsersPage/>} />
                 <Route path="employees" element={<TeamEmployeesPage />} />
                 <Route path="onboarding" element={<UserOnboardingPage />} />
+                <Route path="teams" element={<TeamsPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

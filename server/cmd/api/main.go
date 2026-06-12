@@ -102,6 +102,11 @@ func main() {
 			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
 			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
 			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers)
+			superAdminGroup.POST("/teams", adminHandler.CreateTeam)
+			superAdminGroup.GET("/teams", adminHandler.GetTeams)
+			superAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
+			superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
+			superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge } from 'antd';
+import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag } from 'antd';
 import { 
   DashboardOutlined, 
   TeamOutlined, 
@@ -54,20 +54,38 @@ const GlobalHeader = ({ user, token, navigate }) => (
       <Badge dot>
         <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
       </Badge>
-      
-      {/* CoreUI Dropdown Integration */}
+
+     {/* CoreUI Dropdown Integration */}
       <CDropdown variant="nav-item" style={{ listStyle: 'none' }}>
+        
+        {/* The Toggle */}
         <CDropdownToggle placement="bottom-end" className="py-0 pe-0" caret={false} style={{ background: 'transparent', border: 'none' }}>
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
-            <Text strong>{user?.email}</Text>
+            
+            {/* Stacked Email and Active Role Tag */}
+            <Flex vertical align="flex-start" justify="center">
+              <Text strong style={{ lineHeight: '1.2' }}>{user?.email}</Text>
+              <Tag color="blue" bordered={false} style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}>
+                {(user?.role || '').replace('_', ' ')}
+              </Tag>
+            </Flex>
+
           </Flex>
         </CDropdownToggle>
+
+        {/* The Dropdown Menu */}
         <CDropdownMenu className="pt-0" placement="bottom-end">
           <CDropdownItem onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }}>
             User Profile
           </CDropdownItem>
+          
+          {/* Settings Placeholder */}
+          <CDropdownItem onClick={(e) => e.preventDefault()} style={{ cursor: 'pointer' }}>
+            Settings
+          </CDropdownItem>
         </CDropdownMenu>
+
       </CDropdown>
 
     </Flex>
@@ -111,7 +129,7 @@ export default function AppLayout() {
     try {
       await apiClient.post('/auth/switch-role', { target_role: targetRole });
       message.success(`Switched context to ${targetRole}`);
-      window.location.reload(); 
+      window.location.href = '/dashboard';
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Failed to switch roles";
       message.error(errorMessage);

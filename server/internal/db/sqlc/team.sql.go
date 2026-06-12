@@ -7,9 +7,121 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
+
+const getAdminTeamNames = `-- name: GetAdminTeamNames :many
+SELECT t.name 
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name
+`
+
+func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminTeamNames, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeamEmployeesPaginated = `-- name: GetTeamEmployeesPaginated :many
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.status,
+    t.name as team_name, tm_target.team_role::text as team_role,
+    COUNT(*) OVER() AS total_count
+FROM team_members tm_admin
+JOIN teams t ON tm_admin.team_id = t.id
+JOIN team_members tm_target ON t.id = tm_target.team_id
+JOIN users u ON tm_target.user_id = u.id
+WHERE tm_admin.user_id = $1 
+  AND tm_admin.team_role = 'TEAM_ADMIN'
+  AND ($4::text = '' OR u.email_id ILIKE '%' || $4 || '%' OR u.first_name ILIKE '%' || $4 || '%' OR u.last_name ILIKE '%' || $4 || '%')
+  AND ($5::text = '' OR t.name = $5)
+  AND ($6::text = '' OR tm_target.team_role::text = $6)
+  AND ($7::text = '' OR u.status::text = $7)
+ORDER BY t.name ASC, u.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetTeamEmployeesPaginatedParams struct {
+	UserID       uuid.UUID `json:"user_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+	SearchTerm   string    `json:"search_term"`
+	TeamFilter   string    `json:"team_filter"`
+	RoleFilter   string    `json:"role_filter"`
+	StatusFilter string    `json:"status_filter"`
+}
+
+type GetTeamEmployeesPaginatedRow struct {
+	ID         uuid.UUID      `json:"id"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	EmailID    string         `json:"email_id"`
+	Status     NullUserStatus `json:"status"`
+	TeamName   string         `json:"team_name"`
+	TeamRole   string         `json:"team_role"`
+	TotalCount int64          `json:"total_count"`
+}
+
+func (q *Queries) GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamEmployeesPaginated,
+		arg.UserID,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchTerm,
+		arg.TeamFilter,
+		arg.RoleFilter,
+		arg.StatusFilter,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTeamEmployeesPaginatedRow
+	for rows.Next() {
+		var i GetTeamEmployeesPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+			&i.TeamName,
+			&i.TeamRole,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const getTotalUsersInAdminTeams = `-- name: GetTotalUsersInAdminTeams :one
 SELECT COUNT(DISTINCT tm2.user_id)

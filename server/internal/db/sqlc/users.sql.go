@@ -278,6 +278,131 @@ func (q *Queries) GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) 
 	return items, nil
 }
 
+const getUsersByOrg = `-- name: GetUsersByOrg :many
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.status,
+    COALESCE(
+        (SELECT array_agg(role)::text[] 
+         FROM user_system_roles 
+         WHERE user_id = u.id), 
+    '{}') AS roles
+FROM users u
+WHERE u.org_id = $1
+ORDER BY u.created_at DESC
+`
+
+type GetUsersByOrgRow struct {
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+	Status    NullUserStatus `json:"status"`
+	Roles     interface{}    `json:"roles"`
+}
+
+func (q *Queries) GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsersByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersByOrgRow
+	for rows.Next() {
+		var i GetUsersByOrgRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+			&i.Roles,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsersByOrgPaginated = `-- name: GetUsersByOrgPaginated :many
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.status,
+    COALESCE(
+        (SELECT array_agg(role)::text[] 
+         FROM user_system_roles 
+         WHERE user_id = u.id), 
+    '{}') AS roles,
+    COUNT(*) OVER() AS total_count
+FROM users u
+WHERE u.org_id = $1
+  -- If search_term is empty, it returns everything. Otherwise, it searches email and name.
+  AND ($4::text = '' OR 
+       u.email_id ILIKE '%' || $4 || '%' OR 
+       u.first_name ILIKE '%' || $4 || '%' OR 
+       u.last_name ILIKE '%' || $4 || '%')
+ORDER BY u.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetUsersByOrgPaginatedParams struct {
+	OrgID      uuid.UUID `json:"org_id"`
+	Limit      int32     `json:"limit"`
+	Offset     int32     `json:"offset"`
+	SearchTerm string    `json:"search_term"`
+}
+
+type GetUsersByOrgPaginatedRow struct {
+	ID         uuid.UUID      `json:"id"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	EmailID    string         `json:"email_id"`
+	Status     NullUserStatus `json:"status"`
+	Roles      interface{}    `json:"roles"`
+	TotalCount int64          `json:"total_count"`
+}
+
+func (q *Queries) GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsersByOrgPaginated,
+		arg.OrgID,
+		arg.Limit,
+		arg.Offset,
+		arg.SearchTerm,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersByOrgPaginatedRow
+	for rows.Next() {
+		var i GetUsersByOrgPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+			&i.Roles,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 

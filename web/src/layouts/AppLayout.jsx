@@ -13,8 +13,8 @@ import {
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
+import { ROLE_COLORS } from '../utils/colorMaps'; // <-- Import the color map here
 
-// Removed CoreUI Dropdown imports to keep it entirely standardized!
 import {
   CSidebar,
   CSidebarBrand,
@@ -50,7 +50,6 @@ const StandardMenuItem = ({ label, icon, onClick, token }) => {
         background: 'transparent'
       }}
     >
-      {/* If an icon is passed, render it and sync its color with the hover state */}
       {icon && (
         <span style={{ color: isHovered ? token.colorPrimary : token.colorTextSecondary, display: 'flex', alignItems: 'center' }}>
           {icon}
@@ -64,7 +63,6 @@ const StandardMenuItem = ({ label, icon, onClick, token }) => {
 // 2. Reusable Top Header
 const GlobalHeader = ({ user, token, navigate }) => {
   
-  // Standardized Ant Design Dropdown Box
   const customHeaderDropdown = (
     <div style={{
       backgroundColor: token.colorBgElevated,
@@ -110,14 +108,17 @@ const GlobalHeader = ({ user, token, navigate }) => {
           <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
         </Badge>
 
-        {/* Replaced CoreUI Dropdown with Ant Design Dropdown for 100% consistency */}
         <Dropdown dropdownRender={() => customHeaderDropdown} placement="bottomRight" trigger={['click']}>
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
             
             <Flex vertical align="flex-start" justify="center">
               <Text strong style={{ lineHeight: '1.2' }}>{user?.email}</Text>
-              <Tag color="blue" bordered={false} style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}>
+              <Tag 
+                color={ROLE_COLORS[user?.role] || 'blue'} // Dynamic color mapping!
+                bordered={false} 
+                style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}
+              >
                 {(user?.role || '').replace('_', ' ')}
               </Tag>
             </Flex>
@@ -150,7 +151,6 @@ export default function AppLayout() {
     }
   };
 
-  // Uses the exact same style container and StandardMenuItem as the Header!
   const customRoleDropdown = (
     <div style={{
       backgroundColor: token.colorBgElevated,
@@ -185,18 +185,25 @@ export default function AppLayout() {
           </CSidebarBrand>
         </CSidebarHeader>
 
-        <CSidebarNav>
+<CSidebarNav>
           <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}>
             <DashboardOutlined className="nav-icon" /> Dashboard
           </CNavItem>
 
+          {/* Super Admin gets 'Users' */}
           {activeRole === 'SUPER_ADMIN' && (
             <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}>
-              <TeamOutlined className="nav-icon" /> User Management
+              <TeamOutlined className="nav-icon" /> Users
             </CNavItem>
           )}
 
-          {/* Ant Design Dropdown wrapper for Role Switching */}
+          {/* Admin gets 'Employees' */}
+          {activeRole === 'ADMIN' && (
+            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}>
+              <TeamOutlined className="nav-icon" /> Employees
+            </CNavItem>
+          )}
+
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}>
                <UserSwitchOutlined className="nav-icon" /> Switch Roles

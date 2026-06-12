@@ -49,7 +49,7 @@ export default function SuperAdminDashboard() {
           }}>
             <Text style={{ fontSize: '14px', color: token.colorTextSecondary, fontWeight: 500 }}>
               <TeamOutlined style={{ marginRight: '8px' }} />
-              Total Employees
+              Total Users
             </Text>
             <Text style={{ fontSize: '36px', color: token.colorTextHeading, fontWeight: 600, lineHeight: 1 }}>
               {totalEmployees}

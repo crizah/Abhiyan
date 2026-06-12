@@ -86,6 +86,9 @@ func main() {
 			admin.POST("/users/invite", adminHandler.InviteUser)
 			admin.GET("/stats", adminHandler.GetDashboardStats)
 			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
+			admin.GET("/users", adminHandler.GetOrgUsers)
+			admin.GET("/employees", adminHandler.GetTeamEmployees)
+			admin.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 		}
 
 		users := v1.Group("/users")
@@ -93,7 +96,7 @@ func main() {
 		// Every route in this block requires a valid login
 		users.Use(middleware.RequireAuth(s_byte))
 		{
-			// Note: These match the exact endpoints React is calling
+
 			users.GET("/me/profile", userHandler.GetMyProfile)
 			users.PUT("/me/profile", userHandler.UpdateMyProfile)
 		}

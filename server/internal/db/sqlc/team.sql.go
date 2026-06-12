@@ -43,6 +43,44 @@ func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]st
 	return items, nil
 }
 
+const getOrgTeams = `-- name: GetOrgTeams :many
+SELECT t.id, t.name, COUNT(tm.user_id) AS member_count
+FROM teams t
+LEFT JOIN team_members tm ON t.id = tm.team_id
+WHERE t.org_id = $1
+GROUP BY t.id
+ORDER BY t.name ASC
+`
+
+type GetOrgTeamsRow struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	MemberCount int64     `json:"member_count"`
+}
+
+func (q *Queries) GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgTeams, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrgTeamsRow
+	for rows.Next() {
+		var i GetOrgTeamsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.MemberCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTeamEmployeesPaginated = `-- name: GetTeamEmployeesPaginated :many
 SELECT 
     u.id, u.first_name, u.last_name, u.email_id, u.status,

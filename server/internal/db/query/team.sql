@@ -30,3 +30,11 @@ FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
 WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
 ORDER BY t.name;
+
+-- name: GetOrgTeams :many
+SELECT t.id, t.name, COUNT(tm.user_id) AS member_count
+FROM teams t
+LEFT JOIN team_members tm ON t.id = tm.team_id
+WHERE t.org_id = $1
+GROUP BY t.id
+ORDER BY t.name ASC;

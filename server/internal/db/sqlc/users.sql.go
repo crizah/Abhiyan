@@ -171,6 +171,52 @@ func (q *Queries) GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int6
 	return count, err
 }
 
+const getUnassignedOrgUsers = `-- name: GetUnassignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+LEFT JOIN team_members tm ON u.id = tm.user_id
+WHERE u.org_id = $1 
+  AND tm.team_id IS NULL
+ORDER BY u.created_at DESC
+`
+
+type GetUnassignedOrgUsersRow struct {
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+	Status    NullUserStatus `json:"status"`
+}
+
+func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUnassignedOrgUsers, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUnassignedOrgUsersRow
+	for rows.Next() {
+		var i GetUnassignedOrgUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, org_id, status, first_name, last_name, email_id, phone_number, created_at FROM users 
 WHERE email_id = $1 LIMIT 1

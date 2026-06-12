@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/handlers"
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
@@ -40,6 +41,8 @@ func main() {
 		panic(err)
 	}
 
+	queries := db.New(dbConn)
+
 	// --- 1. Initialize Services ---
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
@@ -49,6 +52,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	adminHandler := handlers.NewAdminHandler(adminService)
 	userHandler := handlers.NewUserHandler(userService)
+	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -73,6 +77,17 @@ func main() {
 			auth.POST("/switch-role", middleware.RequireAuth(s_byte), authHandler.SwitchRole)
 		}
 
+		// GENERAL AUTHENTICATED DOMAIN (All Roles)
+
+		general := v1.Group("")
+		general.Use(middleware.RequireAuth(s_byte))
+		{
+			// Everyone can hit these, but the handler decides WHAT they see
+			general.GET("/notifications", notificationHandler.GetMyNotifications)
+			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
+			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
+		}
+
 		// ADMIN DOMAIN
 		admin := v1.Group("/admin")
 		admin.Use(middleware.RequireAuth(s_byte)) // Everyone here needs a valid token
@@ -85,6 +100,7 @@ func main() {
 			superAdminGroup.POST("/users/invite", adminHandler.InviteUser)
 			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
 			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
+			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---
@@ -95,7 +111,7 @@ func main() {
 
 			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
 			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
-			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
+			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions) // when tf am i hitting this??
 		}
 
 		users := v1.Group("/users")

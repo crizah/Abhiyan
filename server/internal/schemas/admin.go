@@ -26,3 +26,10 @@ type PaginatedEmployeesResponse struct {
 	TotalCount int64                  `json:"total_count"`
 	Employees  []TeamEmployeeResponse `json:"employees"`
 }
+
+type UnassignedUserResponse struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	EmailID  string `json:"email_id"`
+	Status   string `json:"status"`
+}

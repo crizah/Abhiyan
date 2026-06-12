@@ -221,3 +221,34 @@ func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string) ([]
 	}
 	return names, nil
 }
+
+func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) ([]schemas.UnassignedUserResponse, error) {
+	parsedOrgID := util.ParseUUID(orgID)
+
+	dbUsers, err := s.queries.GetUnassignedOrgUsers(ctx, parsedOrgID)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []schemas.UnassignedUserResponse
+	for _, u := range dbUsers {
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance" // Good default for invited users who haven't set a name
+		}
+
+		users = append(users, schemas.UnassignedUserResponse{
+			ID:       u.ID.String(),
+			FullName: fullName,
+			EmailID:  u.EmailID,
+			Status:   string(u.Status.UserStatus),
+		})
+	}
+
+	// Always return an empty array instead of null for the frontend map function
+	if users == nil {
+		users = []schemas.UnassignedUserResponse{}
+	}
+
+	return users, nil
+}

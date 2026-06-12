@@ -1,122 +1,106 @@
-import React, { useState } from 'react';
-import { Typography, Card, Form, Input, Select, Button, message, Flex, Divider, Alert } from 'antd';
-import { MailOutlined, SafetyCertificateOutlined, TeamOutlined, PlusOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Typography, Card, Form, Input, Select, Button, message, Flex, Divider, List, Avatar, Badge } from 'antd';
+import { MailOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 
 const { Title, Text, Paragraph } = Typography;
 
 export default function UserOnboardingPage() {
   const [isInviting, setIsInviting] = useState(false);
+  const [unassignedUsers, setUnassignedUsers] = useState([]);
+  const [loadingQueue, setLoadingQueue] = useState(true);
   const [inviteForm] = Form.useForm();
 
-  // Handle System Level Invites
+  useEffect(() => {
+    fetchUnassignedQueue();
+  }, []);
+
+  const fetchUnassignedQueue = async () => {
+    setLoadingQueue(true);
+    try {
+      const response = await apiClient.get('/admin/users/unassigned');
+      setUnassignedUsers(response.data || []);
+    } catch (error) {
+      setUnassignedUsers([]);
+    } finally {
+      setLoadingQueue(false);
+    }
+  };
+
   const handleInviteSubmit = async (values) => {
     setIsInviting(true);
     try {
-      await apiClient.post('/admin/users/invite', {
-        email: values.email,
-        role: values.role
-      });
-      
+      await apiClient.post('/admin/users/invite', values);
       message.success(`System invite sent to ${values.email}`);
       inviteForm.resetFields();
+      fetchUnassignedQueue(); // Refresh queue immediately
     } catch (error) {
-      const errorMsg = error.response?.data?.error || "Failed to send invite";
-      message.error(errorMsg);
+      message.error(error.response?.data?.error || "Failed to send invite");
     } finally {
       setIsInviting(false);
     }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={3} style={{ marginBottom: '8px' }}>User Onboarding</Title>
-      <Paragraph type="secondary" style={{ marginBottom: '32px' }}>
-        Invite new employees to the workspace and manage their initial access levels.
-      </Paragraph>
+    <div style={{ display: 'flex', height: 'calc(100vh - 112px)', overflow: 'hidden' }}>
+      
+      {/* CENTER: Main Invite Area */}
+      <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto' }}>
+        <div style={{ maxWidth: '500px', width: '100%', marginTop: '4vh' }}>
+          <Title level={3} style={{ textAlign: 'center', marginBottom: '8px' }}>Invite Colleague</Title>
+          <Paragraph type="secondary" style={{ textAlign: 'center', marginBottom: '32px' }}>
+            Grant system access to a new user. They will receive an email to set up their profile.
+          </Paragraph>
 
-      <Flex gap="large" align="flex-start" wrap="wrap">
-        
-        {/* --- STEP 1: SYSTEM ONBOARDING --- */}
-        <Card 
-          title={<><SafetyCertificateOutlined style={{ marginRight: '8px' }} /> System Access</>} 
-          style={{ flex: 1, minWidth: '400px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-        >
-          <Alert 
-            message="Step 1: Invite to Organization" 
-            description="Send an email invitation. The user will be prompted to set up their password and profile." 
-            type="info" 
-            showIcon 
-            style={{ marginBottom: '24px' }}
-          />
-
-          <Form
-            form={inviteForm}
-            layout="vertical"
-            onFinish={handleInviteSubmit}
-            initialValues={{ role: 'EMPLOYEE' }}
-          >
-            <Form.Item
-              label={<Text strong>Email Address</Text>}
-              name="email"
-              rules={[
-                { required: true, message: 'Please enter an email' },
-                { type: 'email', message: 'Please enter a valid email' }
-              ]}
-            >
-              <Input size="large" prefix={<MailOutlined />} placeholder="colleague@company.com" />
-            </Form.Item>
-
-            <Form.Item
-              label={<Text strong>System Role</Text>}
-              name="role"
-              rules={[{ required: true }]}
-              extra="Determines their base level of access across the entire organization."
-            >
-              <Select size="large">
-                <Select.Option value="SUPER_ADMIN">Super Admin (Full Org Access)</Select.Option>
-                <Select.Option value="ADMIN">Admin (Team Management)</Select.Option>
-                <Select.Option value="EMPLOYEE">Employee (Standard Access)</Select.Option>
-              </Select>
-            </Form.Item>
-
-            <Divider />
-
-            <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="primary" htmlType="submit" size="large" block loading={isInviting}>
-                Send Invitation Email
+          <Card style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: '12px' }}>
+            <Form form={inviteForm} layout="vertical" onFinish={handleInviteSubmit} initialValues={{ role: 'EMPLOYEE' }}>
+              <Form.Item label={<Text strong>Email Address</Text>} name="email" rules={[{ required: true, type: 'email' }]}>
+                <Input size="large" prefix={<MailOutlined />} placeholder="colleague@company.com" />
+              </Form.Item>
+              <Form.Item label={<Text strong>System Role</Text>} name="role" rules={[{ required: true }]}>
+                <Select size="large">
+                  <Select.Option value="SUPER_ADMIN">Super Admin (Full Access)</Select.Option>
+                  <Select.Option value="ADMIN">Admin (Team Management)</Select.Option>
+                  <Select.Option value="EMPLOYEE">Employee (Standard)</Select.Option>
+                </Select>
+              </Form.Item>
+              <Divider />
+              <Button type="primary" htmlType="submit" size="large" block loading={isInviting} icon={<SafetyCertificateOutlined />}>
+                Send Invitation
               </Button>
-            </Form.Item>
-          </Form>
-        </Card>
+            </Form>
+          </Card>
+        </div>
+      </div>
 
-        {/* --- STEP 2: TEAM ONBOARDING (Placeholder for next step) --- */}
-        <Card 
-          title={<><TeamOutlined style={{ marginRight: '8px' }} /> Team Assignment</>} 
-          style={{ flex: 1, minWidth: '400px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-        >
-          <Alert 
-            message="Step 2: Assign to Teams" 
-            description="Assign active or invited users to specific teams." 
-            type="warning" 
-            showIcon 
-            style={{ marginBottom: '24px' }}
+      {/* RIGHT CORNER: Scrollable Queue Sidebar */}
+      <div style={{ width: '350px', borderLeft: '1px solid #f0f0f0', backgroundColor: '#fafafa', padding: '24px', display: 'flex', flexDirection: 'column' }}>
+        <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
+          <Title level={5} style={{ margin: 0 }}>Unassigned Queue</Title>
+          <Badge count={unassignedUsers.length} style={{ backgroundColor: '#fa8c16' }} />
+        </Flex>
+        <Text type="secondary" style={{ fontSize: '12px', marginBottom: '16px', display: 'block' }}>
+          Users requiring team assignment
+        </Text>
+
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
+          <List
+            size="small"
+            loading={loadingQueue}
+            dataSource={unassignedUsers}
+            renderItem={(user) => (
+              <List.Item style={{ backgroundColor: '#fff', marginBottom: '8px', padding: '12px', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+                <List.Item.Meta
+                  avatar={<Avatar icon={<UserOutlined />} />}
+                  title={<Text strong style={{ fontSize: '13px' }}>{user.full_name || 'Pending Acceptance'}</Text>}
+                  description={<Text type="secondary" style={{ fontSize: '12px' }}>{user.email_id}</Text>}
+                />
+              </List.Item>
+            )}
           />
+        </div>
+      </div>
 
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <TeamOutlined style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }} />
-            <Title level={5} style={{ color: '#8c8c8c' }}>Team Management Endpoints Required</Title>
-            <Text type="secondary">
-              We will build the endpoints to create teams and assign members here next!
-            </Text>
-            <br />
-            <Button type="dashed" icon={<PlusOutlined />} style={{ marginTop: '24px' }} disabled>
-              Create New Team
-            </Button>
-          </div>
-        </Card>
-
-      </Flex>
     </div>
   );
 }

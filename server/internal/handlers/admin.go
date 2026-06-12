@@ -121,3 +121,16 @@ func (h *AdminHandler) GetAdminTeamOptions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, teams)
 }
+
+func (h *AdminHandler) GetUnassignedUsers(c *gin.Context) {
+	// Super Admins operate at the Org level
+	orgID := c.MustGet("org_id").(string)
+
+	users, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch unassigned users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}

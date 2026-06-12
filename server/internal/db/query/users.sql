@@ -58,3 +58,33 @@ RETURNING *;
 -- name: GetTotalUsersByOrg :one
 SELECT COUNT(*) FROM users 
 WHERE org_id = $1;
+
+-- name: GetFullUserProfile :one
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,
+    o.name as org_name
+FROM users u
+JOIN organizations o ON u.org_id = o.id
+WHERE u.id = $1 LIMIT 1;
+
+
+-- name: GetUserTeamsWithAdmins :many
+SELECT 
+    t.name as team_name,
+    tm.team_role as user_team_role,
+    COALESCE(
+        (SELECT array_agg(u2.email_id)::text[]
+         FROM team_members tm2
+         JOIN users u2 ON tm2.user_id = u2.id
+         WHERE tm2.team_id = t.id AND tm2.team_role = 'TEAM_ADMIN'
+        ), '{}'
+    ) as team_admin_emails
+FROM team_members tm
+JOIN teams t ON tm.team_id = t.id
+WHERE tm.user_id = $1;
+
+-- name: UpdateUserProfile :one
+UPDATE users 
+SET first_name = $2, last_name = $3, phone_number = $4
+WHERE id = $1
+RETURNING id, first_name, last_name, phone_number;

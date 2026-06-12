@@ -125,6 +125,40 @@ func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCrede
 	return i, err
 }
 
+const getFullUserProfile = `-- name: GetFullUserProfile :one
+SELECT 
+    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,
+    o.name as org_name
+FROM users u
+JOIN organizations o ON u.org_id = o.id
+WHERE u.id = $1 LIMIT 1
+`
+
+type GetFullUserProfileRow struct {
+	ID          uuid.UUID      `json:"id"`
+	FirstName   sql.NullString `json:"first_name"`
+	LastName    sql.NullString `json:"last_name"`
+	EmailID     string         `json:"email_id"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+	Status      NullUserStatus `json:"status"`
+	OrgName     string         `json:"org_name"`
+}
+
+func (q *Queries) GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, getFullUserProfile, id)
+	var i GetFullUserProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.EmailID,
+		&i.PhoneNumber,
+		&i.Status,
+		&i.OrgName,
+	)
+	return i, err
+}
+
 const getTotalUsersByOrg = `-- name: GetTotalUsersByOrg :one
 SELECT COUNT(*) FROM users 
 WHERE org_id = $1
@@ -199,6 +233,51 @@ func (q *Queries) GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]S
 	return items, nil
 }
 
+const getUserTeamsWithAdmins = `-- name: GetUserTeamsWithAdmins :many
+SELECT 
+    t.name as team_name,
+    tm.team_role as user_team_role,
+    COALESCE(
+        (SELECT array_agg(u2.email_id)::text[]
+         FROM team_members tm2
+         JOIN users u2 ON tm2.user_id = u2.id
+         WHERE tm2.team_id = t.id AND tm2.team_role = 'TEAM_ADMIN'
+        ), '{}'
+    ) as team_admin_emails
+FROM team_members tm
+JOIN teams t ON tm.team_id = t.id
+WHERE tm.user_id = $1
+`
+
+type GetUserTeamsWithAdminsRow struct {
+	TeamName        string       `json:"team_name"`
+	UserTeamRole    TeamRoleEnum `json:"user_team_role"`
+	TeamAdminEmails interface{}  `json:"team_admin_emails"`
+}
+
+func (q *Queries) GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTeamsWithAdmins, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserTeamsWithAdminsRow
+	for rows.Next() {
+		var i GetUserTeamsWithAdminsRow
+		if err := rows.Scan(&i.TeamName, &i.UserTeamRole, &i.TeamAdminEmails); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 
@@ -235,6 +314,44 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 		&i.EmailID,
 		&i.PhoneNumber,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users 
+SET first_name = $2, last_name = $3, phone_number = $4
+WHERE id = $1
+RETURNING id, first_name, last_name, phone_number
+`
+
+type UpdateUserProfileParams struct {
+	ID          uuid.UUID      `json:"id"`
+	FirstName   sql.NullString `json:"first_name"`
+	LastName    sql.NullString `json:"last_name"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+}
+
+type UpdateUserProfileRow struct {
+	ID          uuid.UUID      `json:"id"`
+	FirstName   sql.NullString `json:"first_name"`
+	LastName    sql.NullString `json:"last_name"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, updateUserProfile,
+		arg.ID,
+		arg.FirstName,
+		arg.LastName,
+		arg.PhoneNumber,
+	)
+	var i UpdateUserProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PhoneNumber,
 	)
 	return i, err
 }

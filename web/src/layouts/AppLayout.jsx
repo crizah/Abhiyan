@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge } from 'antd';
+import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag } from 'antd';
 import { 
   DashboardOutlined, 
   TeamOutlined, 
@@ -7,12 +7,14 @@ import {
   LogoutOutlined,
   UserSwitchOutlined,
   UserOutlined,
-  SafetyOutlined
+  SafetyOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 
+// Removed CoreUI Dropdown imports to keep it entirely standardized!
 import {
   CSidebar,
   CSidebarBrand,
@@ -28,38 +30,8 @@ const { Text } = Typography;
 
 // --- REUSABLE COMPONENTS ---
 
-// 1. Reusable Top Header
-const GlobalHeader = ({ user, token }) => (
-  <Header style={{ 
-    height: '64px',           // Explicitly set height here
-    background: token.colorBgContainer, 
-    padding: '0 24px', 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    borderBottom: `1px solid ${token.colorBorderSecondary}`,
-    position: 'sticky',
-    top: 0,
-    zIndex: 10
-  }}>
-    <Text strong style={{ fontSize: '16px', color: token.colorTextHeading }}>
-      {user?.org_name || 'Organization Workspace'}
-    </Text>
-
-    <Flex align="center" gap="large">
-      <Badge dot>
-        <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
-      </Badge>
-      <Flex align="center" gap="small" style={{ marginLeft: '8px' }}>
-        <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
-        <Text strong>{user?.email}</Text>
-      </Flex>
-    </Flex>
-  </Header>
-);
-
-// 2. Custom Role Menu Item
-const RoleMenuItem = ({ label, onClick, token }) => {
+// 1. Universal Menu Item (Used for both Roles and Header Dropdowns)
+const StandardMenuItem = ({ label, icon, onClick, token }) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
     <div
@@ -72,12 +44,88 @@ const RoleMenuItem = ({ label, onClick, token }) => {
         color: isHovered ? token.colorPrimary : token.colorText,
         transition: 'color 0.2s ease-in-out',
         fontWeight: 500,
-        textAlign: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
         background: 'transparent'
       }}
     >
+      {/* If an icon is passed, render it and sync its color with the hover state */}
+      {icon && (
+        <span style={{ color: isHovered ? token.colorPrimary : token.colorTextSecondary, display: 'flex', alignItems: 'center' }}>
+          {icon}
+        </span>
+      )}
       {label}
     </div>
+  );
+};
+
+// 2. Reusable Top Header
+const GlobalHeader = ({ user, token, navigate }) => {
+  
+  // Standardized Ant Design Dropdown Box
+  const customHeaderDropdown = (
+    <div style={{
+      backgroundColor: token.colorBgElevated,
+      borderRadius: token.borderRadiusLG,
+      boxShadow: token.boxShadowSecondary,
+      padding: '8px 0',
+      minWidth: '160px'
+    }}>
+      <StandardMenuItem 
+        label="User Profile" 
+        icon={<UserOutlined />} 
+        onClick={() => navigate('/profile')} 
+        token={token} 
+      />
+      <StandardMenuItem 
+        label="Settings" 
+        icon={<SettingOutlined />} 
+        onClick={(e) => e.preventDefault()} 
+        token={token} 
+      />
+    </div>
+  );
+
+  return (
+    <Header style={{ 
+      height: '64px',
+      background: token.colorBgContainer, 
+      padding: '0 24px', 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      borderBottom: `1px solid ${token.colorBorderSecondary}`,
+      position: 'sticky',
+      top: 0,
+      zIndex: 10
+    }}>
+      <Text strong style={{ fontSize: '16px', color: token.colorTextHeading }}>
+        {user?.org_name || 'Organization Workspace'}
+      </Text>
+
+      <Flex align="center" gap="large">
+        <Badge dot>
+          <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
+        </Badge>
+
+        {/* Replaced CoreUI Dropdown with Ant Design Dropdown for 100% consistency */}
+        <Dropdown dropdownRender={() => customHeaderDropdown} placement="bottomRight" trigger={['click']}>
+          <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
+            <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
+            
+            <Flex vertical align="flex-start" justify="center">
+              <Text strong style={{ lineHeight: '1.2' }}>{user?.email}</Text>
+              <Tag color="blue" bordered={false} style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}>
+                {(user?.role || '').replace('_', ' ')}
+              </Tag>
+            </Flex>
+          </Flex>
+        </Dropdown>
+
+      </Flex>
+    </Header>
   );
 };
 
@@ -95,13 +143,14 @@ export default function AppLayout() {
     try {
       await apiClient.post('/auth/switch-role', { target_role: targetRole });
       message.success(`Switched context to ${targetRole}`);
-      window.location.reload(); 
+      window.location.href = '/dashboard';
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Failed to switch roles";
       message.error(errorMessage);
     }
   };
 
+  // Uses the exact same style container and StandardMenuItem as the Header!
   const customRoleDropdown = (
     <div style={{
       backgroundColor: token.colorBgElevated,
@@ -110,9 +159,9 @@ export default function AppLayout() {
       padding: '8px 0',
       minWidth: '140px'
     }}>
-      <RoleMenuItem label="Super Admin" onClick={() => handleRoleSwitch('SUPER_ADMIN')} token={token} />
-      <RoleMenuItem label="Admin" onClick={() => handleRoleSwitch('ADMIN')} token={token} />
-      <RoleMenuItem label="Employee" onClick={() => handleRoleSwitch('EMPLOYEE')} token={token} />
+      <StandardMenuItem label="Super Admin" onClick={() => handleRoleSwitch('SUPER_ADMIN')} token={token} />
+      <StandardMenuItem label="Admin" onClick={() => handleRoleSwitch('ADMIN')} token={token} />
+      <StandardMenuItem label="Employee" onClick={() => handleRoleSwitch('EMPLOYEE')} token={token} />
     </div>
   );
 
@@ -122,19 +171,19 @@ export default function AppLayout() {
       {/* CORE UI SIDEBAR */}
       <CSidebar className="border-end" unfoldable style={{ background: token.colorBgContainer, position: 'fixed', zIndex: 1000, height: '100vh' }}>
         <CSidebarHeader 
-  className="border-bottom" 
-  style={{ 
-    height: '64px',            // Force exact match with Ant Design
-    display: 'flex', 
-    alignItems: 'center',      // Vertically center the Avatar
-    justifyContent: 'center',  // Horizontally center the Avatar
-    padding: 0                 // Strip out CoreUI's default padding that alters height
-  }}
->
-  <CSidebarBrand>
-    <Avatar shape="square" size={40} style={{ backgroundColor: token.colorPrimary }} icon={<SafetyOutlined />} />
-  </CSidebarBrand>
-</CSidebarHeader>
+          className="border-bottom" 
+          style={{ 
+            height: '64px',
+            display: 'flex', 
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0
+          }}
+        >
+          <CSidebarBrand>
+            <Avatar shape="square" size={40} style={{ backgroundColor: token.colorPrimary }} icon={<SafetyOutlined />} />
+          </CSidebarBrand>
+        </CSidebarHeader>
 
         <CSidebarNav>
           <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}>
@@ -147,6 +196,7 @@ export default function AppLayout() {
             </CNavItem>
           )}
 
+          {/* Ant Design Dropdown wrapper for Role Switching */}
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}>
                <UserSwitchOutlined className="nav-icon" /> Switch Roles
@@ -161,16 +211,14 @@ export default function AppLayout() {
 
       {/* ANT DESIGN MAIN CONTENT CONTAINER */}
       <Layout style={{ 
-        marginLeft: '64px', // Keeps it permanently shifted past the narrow sidebar
+        marginLeft: '64px', 
         transition: 'all 0.3s ease-in-out', 
         flexGrow: 1, 
         minHeight: '100vh' 
       }}>
         
-        {/* Render our newly extracted Global Header */}
-        <GlobalHeader user={user} token={token} />
+        <GlobalHeader user={user} token={token} navigate={navigate} />
 
-        {/* Dynamic Page Content */}
         <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>
           <Outlet /> 
         </Content>

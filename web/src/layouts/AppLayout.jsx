@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag, List, Button } from 'antd'; // Added List, Button
+import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag, List, Button, Tooltip } from 'antd';
 import { 
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined, CheckOutlined
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,20 @@ import '@coreui/coreui/dist/css/coreui.min.css';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
+
+// Pure math relative time formatter
+const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return `${Math.max(seconds, 1)}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
 
 const StandardMenuItem = ({ label, icon, onClick, token }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -36,63 +50,129 @@ const StandardMenuItem = ({ label, icon, onClick, token }) => {
 };
 
 const GlobalHeader = ({ user, token, navigate }) => {
-  // --- NOTIFICATION STATE ---
   const [notifications, setNotifications] = useState([]);
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-useEffect(() => {
-    // 1. Fetch immediately when the app first loads
+  useEffect(() => {
     fetchNotifications();
-
-    // 2. Set up the polling interval (Checks every 60 seconds)
-    const intervalId = setInterval(() => {
-      fetchNotifications();
-    }, 60000); // 60000 milliseconds = 1 minute
-
-    // 3. CRITICAL: Cleanup function to stop the timer if the component unmounts
+    const intervalId = setInterval(fetchNotifications, 60000);
     return () => clearInterval(intervalId);
   }, []);
 
   const fetchNotifications = async () => {
     try {
-
       const res = await apiClient.get('/notifications');
-      setNotifications(res.data);
+      setNotifications(res.data || []);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to load notifications", e);
     }
   };
 
   const markAllRead = async () => {
-    // await apiClient.post('/notifications/read');
-    setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+    try {
+      await apiClient.put('/notifications/read');
+      setNotifications(notifications.map(n => n.is_system ? n : { ...n, is_read: true }));
+    } catch (e) {
+      message.error("Failed to mark all as read");
+    }
+  };
+
+  const markOneRead = async (e, id) => {
+    e.stopPropagation(); 
+    try {
+      await apiClient.put(`/notifications/${id}/read`);
+      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch (err) {
+      message.error("Failed to mark read");
+    }
+  };
+
+  const getNotificationStyle = (item) => {
+    if (item.is_system) return { bg: '#fffbe6', border: '#fa8c16' }; 
+    if (item.is_read) return { bg: 'transparent', border: 'transparent' };
+    
+    switch(item.type) {
+      case 'SUCCESS': return { bg: '#f6ffed', border: '#52c41a' }; 
+      case 'WARNING': return { bg: '#fff2f0', border: '#f5222d' }; 
+      default: return { bg: '#e6f7ff', border: '#1890ff' }; 
+    }
   };
 
   const notificationDropdown = (
-    <div style={{ width: '320px', backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, overflow: 'hidden' }}>
-      <div style={{ padding: '16px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between' }}>
-        <Text strong>Notifications</Text>
-        <Text style={{ fontSize: '12px', color: token.colorPrimary, cursor: 'pointer' }} onClick={markAllRead}>Mark all read</Text>
+    <div style={{ width: '350px', backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, overflow: 'hidden' }}>
+      
+      {/* Compact Header */}
+      <div style={{ padding: '8px 16px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fafafa' }}>
+        <Text strong style={{ fontSize: '13px' }}>Notifications</Text>
+        {unreadCount > 0 && (
+          <Button type="link" size="small" onClick={markAllRead} style={{ padding: 0, fontSize: '12px' }}>
+            Mark all read
+          </Button>
+        )}
       </div>
-      <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+      
+      {/* Scrollable Body */}
+      <div style={{ maxHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
         {notifications.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center' }}><Text type="secondary">No new notifications</Text></div>
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <BellOutlined style={{ fontSize: '24px', color: token.colorTextQuaternary, marginBottom: '8px' }} />
+            <br />
+            <Text type="secondary" style={{ fontSize: '13px' }}>You're all caught up!</Text>
+          </div>
         ) : (
           <List
+            itemLayout="horizontal"
             dataSource={notifications}
-            renderItem={item => (
-              <List.Item style={{ padding: '12px 16px', backgroundColor: item.is_read ? 'transparent' : '#fffbe6', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-                <List.Item.Meta
-                  title={
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Text strong style={{ fontSize: '13px' }}>{item.title}</Text>
-                      {item.is_system && <Tag color="orange" style={{ margin: 0 }}>System</Tag>}
-                    </div>
-                  }
-                  description={<Text style={{ fontSize: '12px' }}>{item.message}</Text>}
-                />
-              </List.Item>
-            )}
+            renderItem={item => {
+              const style = getNotificationStyle(item);
+              return (
+                <List.Item 
+                  style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: style.bg,
+                    borderLeft: `4px solid ${style.border}`,
+                    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  <Flex gap="middle" align="flex-start" style={{ width: '100%' }}>
+                    
+                    {/* Text Content */}
+                    <Flex vertical style={{ flex: 1, minWidth: 0 }}>
+                      <Flex justify="space-between" align="flex-start">
+                        <Flex align="center" gap="small" wrap="wrap">
+                          <Text strong style={{ fontSize: '13px', color: token.colorText, lineHeight: '1.2' }}>
+                            {item.title}
+                          </Text>
+                          {item.is_system && <Tag color="orange" style={{ margin: 0, fontSize: '10px', lineHeight: '14px', padding: '0 4px' }}>System</Tag>}
+                        </Flex>
+                       <Text type="secondary" style={{ fontSize: '11px', color: 'green', whiteSpace: 'nowrap', marginLeft: '8px' }}>
+  {item.is_system ? 'Live Queue' : formatTimeAgo(item.created_at)}
+</Text>
+                      </Flex>
+                      <Text style={{ fontSize: '12px', color: token.colorTextSecondary, marginTop: '4px', lineHeight: '1.4' }}>
+                        {item.message}
+                      </Text>
+                    </Flex>
+
+                    {/* Fixed Action Button */}
+                    {!item.is_read && !item.is_system && (
+                      <Tooltip title="Mark as read">
+                        <Button 
+                          type="text" 
+                          shape="circle" 
+                          icon={<CheckOutlined />} 
+                          size="small" 
+                          onClick={(e) => markOneRead(e, item.id)}
+                          style={{ color: token.colorPrimary, backgroundColor: 'rgba(24, 144, 255, 0.05)', flexShrink: 0, marginTop: '2px' }}
+                        />
+                      </Tooltip>
+                    )}
+                    
+                  </Flex>
+                </List.Item>
+              );
+            }}
           />
         )}
       </div>
@@ -112,14 +192,12 @@ useEffect(() => {
 
       <Flex align="center" gap="large">
         
-        {/* The Notification Bell */}
         <Dropdown dropdownRender={() => notificationDropdown} placement="bottomRight" trigger={['click']}>
-          <Badge dot={unreadCount > 0} offset={[-2, 4]}>
+          <Badge count={unreadCount} overflowCount={99} size="small" style={{ backgroundColor: '#fa8c16' }}>
             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
           </Badge>
         </Dropdown>
 
-        {/* The Profile Dropdown */}
         <Dropdown dropdownRender={() => customHeaderDropdown} placement="bottomRight" trigger={['click']}>
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />

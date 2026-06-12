@@ -74,3 +74,17 @@ func (q *Queries) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) e
 	_, err := q.db.ExecContext(ctx, markNotificationsRead, userID)
 	return err
 }
+
+const markOneNotificationRead = `-- name: MarkOneNotificationRead :exec
+UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2
+`
+
+type MarkOneNotificationReadParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error {
+	_, err := q.db.ExecContext(ctx, markOneNotificationRead, arg.ID, arg.UserID)
+	return err
+}

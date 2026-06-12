@@ -3,10 +3,12 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/services"
+	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,7 +43,7 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 				Message:   fmt.Sprintf("You have %d user(s) waiting to be assigned to teams.", len(unassigned)),
 				IsRead:    false, // System alerts are always unread until resolved
 				IsSystem:  true,
-				CreatedAt: "Just now",
+				CreatedAt: time.Now().Format(time.RFC3339),
 			}
 			notifications = append([]schemas.NotificationResponse{sysAlert}, notifications...)
 		}
@@ -57,5 +59,23 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 
 func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	// Execute h.db.ClearNotifications
+	c.Status(http.StatusOK)
+}
+
+func (h *NotificationHandler) MarkOneRead(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+	notifID := c.Param("id")
+
+	// Pass both to ensure a user can only mark their OWN notifications as read
+	err := h.db.MarkOneNotificationRead(c.Request.Context(), db.MarkOneNotificationReadParams{
+		ID:     util.ParseUUID(notifID),
+		UserID: util.ParseUUID(userID),
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notification read"})
+		return
+	}
+
 	c.Status(http.StatusOK)
 }

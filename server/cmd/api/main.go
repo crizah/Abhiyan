@@ -86,6 +86,7 @@ func main() {
 			general.GET("/notifications", notificationHandler.GetMyNotifications)
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
+			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
 		}
 
 		// ADMIN DOMAIN

@@ -10,3 +10,6 @@ UPDATE notifications SET is_read = TRUE WHERE user_id = $1;
 
 -- name: ClearNotifications :exec
 DELETE FROM notifications WHERE user_id = $1;
+
+-- name: MarkOneNotificationRead :exec
+UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;

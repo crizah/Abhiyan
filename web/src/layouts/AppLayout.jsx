@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Flex, Tooltip, message, theme, Typography, Badge } from 'antd';
+import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge } from 'antd';
 import { 
   DashboardOutlined, 
   TeamOutlined, 
@@ -13,39 +13,23 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 
-const { Header, Sider, Content } = Layout;
+import {
+  CSidebar,
+  CSidebarBrand,
+  CSidebarHeader,
+  CSidebarNav,
+  CNavItem,
+} from '@coreui/react';
+
+// Required for CoreUI styling to work
+import '@coreui/coreui/dist/css/coreui.min.css'; 
+
+const { Header, Content } = Layout;
 const { Text } = Typography;
 
 // --- Custom Components ---
 
-// 1. The SVG Action Icon (For Sidebar)
-const ActionIcon = ({ icon: Icon, defaultColor, hoverColor, onClick, tooltip }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  const iconMarkup = (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        cursor: 'pointer',
-        padding: '16px 0',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        color: isHovered ? hoverColor : defaultColor,
-        transition: 'color 0.2s ease-in-out',
-        width: '100%',
-      }}
-    >
-      <Icon style={{ fontSize: '20px' }} />
-    </div>
-  );
-
-  return tooltip ? <Tooltip title={tooltip} placement="right">{iconMarkup}</Tooltip> : iconMarkup;
-};
-
-// 2. The Custom Role Menu Item (Text color change only, no background fill)
+// The Custom Role Menu Item (Unchanged)
 const RoleMenuItem = ({ label, onClick, token }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -61,14 +45,13 @@ const RoleMenuItem = ({ label, onClick, token }) => {
         transition: 'color 0.2s ease-in-out',
         fontWeight: 500,
         textAlign: 'center',
-        background: 'transparent' // Strictly prevents ghost boxes
+        background: 'transparent'
       }}
     >
       {label}
     </div>
   );
 };
-
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -78,36 +61,17 @@ export default function AppLayout() {
 
   const activeRole = (user?.role || '').toUpperCase();
 
-  const getMenuItems = () => {
-    const items = [
-      { key: '/dashboard', icon: <DashboardOutlined style={{ fontSize: '20px' }} />, label: 'Dashboard' }
-    ];
-
-    if (activeRole === 'SUPER_ADMIN') {
-      items.push({ key: '/users', icon: <TeamOutlined style={{ fontSize: '20px' }} />, label: 'User Management' });
-    }
-
-    return items;
-  };
-
   const handleRoleSwitch = async (targetRole) => {
     try {
-      // Actually hit the Go backend to mint and set the new JWT cookie
       await apiClient.post('/auth/switch-role', { target_role: targetRole });
-      
       message.success(`Switched context to ${targetRole}`);
-      
-      // Reloading the window forces React to mount again, hit the /me endpoint, 
-      // read the brand new cookie, and route you to the correct dashboard!
       window.location.reload(); 
     } catch (err) {
-      // Show the actual error from the Go backend if it fails
       const errorMessage = err.response?.data?.error || "Failed to switch roles";
       message.error(errorMessage);
     }
   };
 
-  // Custom Dropdown UI to bypass Ant Design's forced background hovers
   const customRoleDropdown = (
     <div style={{
       backgroundColor: token.colorBgElevated,
@@ -123,93 +87,84 @@ export default function AppLayout() {
   );
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider 
-        trigger={null}
-        collapsible 
-        collapsed={true} 
-        width={240}
-        collapsedWidth={80} 
-        style={{ 
-          background: token.colorBgContainer, 
-          borderRight: `1px solid ${token.colorBorderSecondary}`,
-          position: 'fixed', 
-          left: 0, top: 0, bottom: 0, 
-          zIndex: 1001 
-        }}
-      >
-        <Flex vertical justify="space-between" style={{ height: '100%' }}>
-          
-          {/* TOP SECTION */}
-          <div>
-            <Flex justify="center" align="center" style={{ height: '64px', margin: '16px 0' }}>
-              <Avatar 
-                shape="square" 
-                size={40} 
-                style={{ backgroundColor: token.colorPrimary }} 
-                icon={<SafetyOutlined />} 
-              />
-            </Flex>
-            
-            <Menu 
-              theme="light" 
-              mode="inline" 
-              selectedKeys={[location.pathname]} 
-              items={getMenuItems()} 
-              onClick={({ key }) => navigate(key)}
-              style={{ borderRight: 'none' }}
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      
+      {/* --- CORE UI SIDEBAR START --- */}
+      {/* The 'unfoldable' prop makes it narrow by default and expand on hover */}
+      <CSidebar className="border-end" unfoldable style={{ background: token.colorBgContainer }}>
+        
+        <CSidebarHeader className="border-bottom" style={{ justifyContent: 'center' }}>
+          <CSidebarBrand>
+            <Avatar 
+              shape="square" 
+              size={40} 
+              style={{ backgroundColor: token.colorPrimary }} 
+              icon={<SafetyOutlined />} 
             />
-          </div>
+          </CSidebarBrand>
+        </CSidebarHeader>
 
-          {/* BOTTOM SECTION */}
-          <Flex vertical align="center" style={{ paddingBottom: '16px' }}>
-            
-            {/* Role Switcher - SVG Trigger with Custom Dropdown */}
-            <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
-              <div style={{ width: '100%' }}>
-                <ActionIcon 
-                  icon={UserSwitchOutlined} 
-                  defaultColor={token.colorTextSecondary} 
-                  hoverColor={token.colorPrimary} 
-                  tooltip="Switch Roles"
-                />
-              </div>
-            </Dropdown>
+        <CSidebarNav>
+          {/* Main Navigation Items */}
+          <CNavItem 
+            href="#" 
+            onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}
+            active={location.pathname === '/dashboard'}
+          >
+            {/* Adding className="nav-icon" tells CoreUI to keep this visible when narrow */}
+            <DashboardOutlined className="nav-icon" /> 
+            Dashboard
+          </CNavItem>
 
-            {/* Visual Divider */}
-            <div style={{ width: '40px', borderTop: `1px solid ${token.colorBorderSecondary}`, margin: '4px 0' }} />
+          {activeRole === 'SUPER_ADMIN' && (
+            <CNavItem 
+              href="#" 
+              onClick={(e) => { e.preventDefault(); navigate('/users'); }}
+              active={location.pathname === '/users'}
+            >
+              <TeamOutlined className="nav-icon" /> 
+              User Management
+            </CNavItem>
+          )}
 
-            {/* Logout Button */}
-            <div style={{ width: '100%' }}>
-              <ActionIcon 
-                icon={LogoutOutlined} 
-                defaultColor={token.colorTextSecondary} 
-                hoverColor={token.colorError} 
-                tooltip="Sign Out"
-                onClick={logout}
-              />
-            </div>
+          {/* BOTTOM ACTIONS (Replaces the Download / Try Pro buttons) */}
+          {/* mt-auto pushes everything below it to the bottom of the sidebar */}
+          <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
+            <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}>
+               <UserSwitchOutlined className="nav-icon" /> 
+               Switch Roles
+            </CNavItem>
+          </Dropdown>
 
-          </Flex>
-        </Flex>
-      </Sider>
+          <CNavItem href="#" onClick={logout} style={{ cursor: 'pointer', color: token.colorError }}>
+            <LogoutOutlined className="nav-icon" /> 
+            Sign Out
+          </CNavItem>
 
-      <Layout style={{ marginLeft: 80, transition: 'margin-left 0.2s' }}>
+        </CSidebarNav>
+      </CSidebar>
+      {/* --- CORE UI SIDEBAR END --- */}
+
+      {/* --- ANT DESIGN MAIN CONTENT --- */}
+      {/* --- ANT DESIGN MAIN CONTENT --- */}
+{/* Added marginLeft: '64px' (CoreUI's default narrow width) and a smooth transition */}
+<Layout style={{ 
+  marginLeft: '64px', 
+  transition: 'all 0.3s ease-in-out', 
+  flexGrow: 1, 
+  minHeight: '100vh' 
+}}>
         
         {/* HEADER */}
         <Header style={{ background: token.colorBgContainer, padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-          
           <Text strong style={{ fontSize: '16px', color: token.colorTextHeading }}>
             {user?.org_name || 'Organization Workspace'}
           </Text>
 
           <Flex align="center" gap="large">
             <Badge dot>
-              <ActionIcon 
-                icon={BellOutlined} 
-                defaultColor={token.colorTextSecondary} 
-                hoverColor={token.colorPrimary} 
-              />
+              {/* Note: I removed ActionIcon here and just used a simple mapped icon to keep it clean */}
+              <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
             </Badge>
             <Flex align="center" gap="small" style={{ marginLeft: '8px' }}>
               <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
@@ -223,6 +178,6 @@ export default function AppLayout() {
         </Content>
 
       </Layout>
-    </Layout>
+    </div>
   );
 }

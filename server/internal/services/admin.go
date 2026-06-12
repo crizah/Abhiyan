@@ -149,7 +149,7 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 	}, nil
 }
 
-func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search, teamFilter, roleFilter, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
+func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search string, teamFilter string, roleFilter string, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
 	parsedUserID := util.ParseUUID(userID)
 
 	// Convert "ALL" filter strings from React to empty strings for SQLC

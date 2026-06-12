@@ -84,6 +84,7 @@ func main() {
 		{
 			superAdminGroup.POST("/users/invite", adminHandler.InviteUser)
 			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
+			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---
@@ -91,7 +92,8 @@ func main() {
 		teamAdminGroup := admin.Group("")
 		teamAdminGroup.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
 		{
-			teamAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
+
+			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
 			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
 			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 		}

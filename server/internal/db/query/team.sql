@@ -17,10 +17,10 @@ JOIN team_members tm_target ON t.id = tm_target.team_id
 JOIN users u ON tm_target.user_id = u.id
 WHERE tm_admin.user_id = $1 
   AND tm_admin.team_role = 'TEAM_ADMIN'
-  AND (@search_term::text = '' OR u.email_id ILIKE '%' || @search_term || '%' OR u.first_name ILIKE '%' || @search_term || '%' OR u.last_name ILIKE '%' || @search_term || '%')
-  AND (@team_filter::text = '' OR t.name = @team_filter)
-  AND (@role_filter::text = '' OR tm_target.team_role::text = @role_filter)
-  AND (@status_filter::text = '' OR u.status::text = @status_filter)
+  AND (sqlc.arg('search_term')::text = '' OR u.email_id ILIKE '%' || sqlc.arg('search_term') || '%' OR u.first_name ILIKE '%' || sqlc.arg('search_term') || '%' OR u.last_name ILIKE '%' || sqlc.arg('search_term') || '%')
+  AND (sqlc.arg('team_filter')::text = '' OR t.name = sqlc.arg('team_filter'))
+  AND (sqlc.arg('role_filter')::text = '' OR tm_target.team_role::text = sqlc.arg('role_filter'))
+  AND (sqlc.arg('status_filter')::text = '' OR u.status::text = sqlc.arg('status_filter'))
 ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3;
 

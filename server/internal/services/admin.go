@@ -79,14 +79,23 @@ func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, 
 func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string) (int64, error) {
 	return s.queries.GetTotalUsersInAdminTeams(ctx, util.ParseUUID(userID))
 }
-func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string) (*schemas.PaginatedUsersResponse, error) {
+func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string, roleFilter string, statusFilter string) (*schemas.PaginatedUsersResponse, error) {
 	parsedOrgID := util.ParseUUID(orgID)
 
+	if roleFilter == "ALL" {
+		roleFilter = ""
+	}
+	if statusFilter == "ALL" {
+		statusFilter = ""
+	}
+
 	params := db.GetUsersByOrgPaginatedParams{
-		OrgID:      parsedOrgID,
-		Limit:      limit,
-		Offset:     offset,
-		SearchTerm: searchTerm,
+		OrgID:        parsedOrgID,
+		Limit:        limit,
+		Offset:       offset,
+		SearchTerm:   searchTerm,
+		RoleFilter:   roleFilter,
+		StatusFilter: statusFilter,
 	}
 
 	dbUsers, err := s.queries.GetUsersByOrgPaginated(ctx, params)

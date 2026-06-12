@@ -72,11 +72,13 @@ func (h *AdminHandler) GetOrgUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
 	searchTerm := c.Query("search")
+	roleFilter := c.Query("role")
+	statusFilter := c.Query("status")
 
 	// Calculate SQL Offset
 	offset := (page - 1) * pageSize
 
-	response, err := h.adminService.GetOrgUsers(c.Request.Context(), orgID, int32(pageSize), int32(offset), searchTerm)
+	response, err := h.adminService.GetOrgUsers(c.Request.Context(), orgID, int32(pageSize), int32(offset), searchTerm, roleFilter, statusFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return

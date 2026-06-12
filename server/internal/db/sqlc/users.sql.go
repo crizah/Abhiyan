@@ -341,20 +341,22 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM users u
 WHERE u.org_id = $1
-  -- If search_term is empty, it returns everything. Otherwise, it searches email and name.
-  AND ($4::text = '' OR 
-       u.email_id ILIKE '%' || $4 || '%' OR 
-       u.first_name ILIKE '%' || $4 || '%' OR 
-       u.last_name ILIKE '%' || $4 || '%')
+  AND ($4::text = '' OR u.email_id ILIKE '%' || $4 || '%' OR u.first_name ILIKE '%' || $4 || '%' OR u.last_name ILIKE '%' || $4 || '%')
+  AND ($5::text = '' OR u.status::text = $5)
+  AND ($6::text = '' OR EXISTS (
+        SELECT 1 FROM user_system_roles WHERE user_id = u.id AND role::text = $6
+      ))
 ORDER BY u.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type GetUsersByOrgPaginatedParams struct {
-	OrgID      uuid.UUID `json:"org_id"`
-	Limit      int32     `json:"limit"`
-	Offset     int32     `json:"offset"`
-	SearchTerm string    `json:"search_term"`
+	OrgID        uuid.UUID `json:"org_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+	SearchTerm   string    `json:"search_term"`
+	StatusFilter string    `json:"status_filter"`
+	RoleFilter   string    `json:"role_filter"`
 }
 
 type GetUsersByOrgPaginatedRow struct {
@@ -373,6 +375,8 @@ func (q *Queries) GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgP
 		arg.Limit,
 		arg.Offset,
 		arg.SearchTerm,
+		arg.StatusFilter,
+		arg.RoleFilter,
 	)
 	if err != nil {
 		return nil, err

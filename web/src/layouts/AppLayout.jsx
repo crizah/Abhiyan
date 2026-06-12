@@ -21,18 +21,46 @@ import {
   CNavItem,
 } from '@coreui/react';
 
-// Required for CoreUI styling to work
 import '@coreui/coreui/dist/css/coreui.min.css'; 
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
 
-// --- Custom Components ---
+// --- REUSABLE COMPONENTS ---
 
-// The Custom Role Menu Item (Unchanged)
+// 1. Reusable Top Header
+const GlobalHeader = ({ user, token }) => (
+  <Header style={{ 
+    height: '64px',           // Explicitly set height here
+    background: token.colorBgContainer, 
+    padding: '0 24px', 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    position: 'sticky',
+    top: 0,
+    zIndex: 10
+  }}>
+    <Text strong style={{ fontSize: '16px', color: token.colorTextHeading }}>
+      {user?.org_name || 'Organization Workspace'}
+    </Text>
+
+    <Flex align="center" gap="large">
+      <Badge dot>
+        <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
+      </Badge>
+      <Flex align="center" gap="small" style={{ marginLeft: '8px' }}>
+        <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
+        <Text strong>{user?.email}</Text>
+      </Flex>
+    </Flex>
+  </Header>
+);
+
+// 2. Custom Role Menu Item
 const RoleMenuItem = ({ label, onClick, token }) => {
   const [isHovered, setIsHovered] = useState(false);
-
   return (
     <div
       onClick={onClick}
@@ -52,6 +80,8 @@ const RoleMenuItem = ({ label, onClick, token }) => {
     </div>
   );
 };
+
+// --- MAIN LAYOUT ---
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -87,93 +117,61 @@ export default function AppLayout() {
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: token.colorBgLayout }}>
       
-      {/* --- CORE UI SIDEBAR START --- */}
-      {/* The 'unfoldable' prop makes it narrow by default and expand on hover */}
-      <CSidebar className="border-end" unfoldable style={{ background: token.colorBgContainer }}>
-        
-        <CSidebarHeader className="border-bottom" style={{ justifyContent: 'center' }}>
-          <CSidebarBrand>
-            <Avatar 
-              shape="square" 
-              size={40} 
-              style={{ backgroundColor: token.colorPrimary }} 
-              icon={<SafetyOutlined />} 
-            />
-          </CSidebarBrand>
-        </CSidebarHeader>
+      {/* CORE UI SIDEBAR */}
+      <CSidebar className="border-end" unfoldable style={{ background: token.colorBgContainer, position: 'fixed', zIndex: 1000, height: '100vh' }}>
+        <CSidebarHeader 
+  className="border-bottom" 
+  style={{ 
+    height: '64px',            // Force exact match with Ant Design
+    display: 'flex', 
+    alignItems: 'center',      // Vertically center the Avatar
+    justifyContent: 'center',  // Horizontally center the Avatar
+    padding: 0                 // Strip out CoreUI's default padding that alters height
+  }}
+>
+  <CSidebarBrand>
+    <Avatar shape="square" size={40} style={{ backgroundColor: token.colorPrimary }} icon={<SafetyOutlined />} />
+  </CSidebarBrand>
+</CSidebarHeader>
 
         <CSidebarNav>
-          {/* Main Navigation Items */}
-          <CNavItem 
-            href="#" 
-            onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}
-            active={location.pathname === '/dashboard'}
-          >
-            {/* Adding className="nav-icon" tells CoreUI to keep this visible when narrow */}
-            <DashboardOutlined className="nav-icon" /> 
-            Dashboard
+          <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}>
+            <DashboardOutlined className="nav-icon" /> Dashboard
           </CNavItem>
 
           {activeRole === 'SUPER_ADMIN' && (
-            <CNavItem 
-              href="#" 
-              onClick={(e) => { e.preventDefault(); navigate('/users'); }}
-              active={location.pathname === '/users'}
-            >
-              <TeamOutlined className="nav-icon" /> 
-              User Management
+            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}>
+              <TeamOutlined className="nav-icon" /> User Management
             </CNavItem>
           )}
 
-          {/* BOTTOM ACTIONS (Replaces the Download / Try Pro buttons) */}
-          {/* mt-auto pushes everything below it to the bottom of the sidebar */}
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}>
-               <UserSwitchOutlined className="nav-icon" /> 
-               Switch Roles
+               <UserSwitchOutlined className="nav-icon" /> Switch Roles
             </CNavItem>
           </Dropdown>
 
           <CNavItem href="#" onClick={logout} style={{ cursor: 'pointer', color: token.colorError }}>
-            <LogoutOutlined className="nav-icon" /> 
-            Sign Out
+            <LogoutOutlined className="nav-icon" /> Sign Out
           </CNavItem>
-
         </CSidebarNav>
       </CSidebar>
-      {/* --- CORE UI SIDEBAR END --- */}
 
-      {/* --- ANT DESIGN MAIN CONTENT --- */}
-      {/* --- ANT DESIGN MAIN CONTENT --- */}
-{/* Added marginLeft: '64px' (CoreUI's default narrow width) and a smooth transition */}
-<Layout style={{ 
-  marginLeft: '64px', 
-  transition: 'all 0.3s ease-in-out', 
-  flexGrow: 1, 
-  minHeight: '100vh' 
-}}>
+      {/* ANT DESIGN MAIN CONTENT CONTAINER */}
+      <Layout style={{ 
+        marginLeft: '64px', // Keeps it permanently shifted past the narrow sidebar
+        transition: 'all 0.3s ease-in-out', 
+        flexGrow: 1, 
+        minHeight: '100vh' 
+      }}>
         
-        {/* HEADER */}
-        <Header style={{ background: token.colorBgContainer, padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-          <Text strong style={{ fontSize: '16px', color: token.colorTextHeading }}>
-            {user?.org_name || 'Organization Workspace'}
-          </Text>
+        {/* Render our newly extracted Global Header */}
+        <GlobalHeader user={user} token={token} />
 
-          <Flex align="center" gap="large">
-            <Badge dot>
-              {/* Note: I removed ActionIcon here and just used a simple mapped icon to keep it clean */}
-              <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
-            </Badge>
-            <Flex align="center" gap="small" style={{ marginLeft: '8px' }}>
-              <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
-              <Text strong>{user?.email}</Text>
-            </Flex>
-          </Flex>
-        </Header>
-
-        <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px', minHeight: 280 }}>
+        {/* Dynamic Page Content */}
+        <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>
           <Outlet /> 
         </Content>
 

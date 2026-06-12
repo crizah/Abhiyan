@@ -10,7 +10,8 @@ import LoginPage from './features/auth/pages/LoginPage';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 import AppLayout from './layouts/AppLayout';
 import UserProfilePage from './features/users/UserProfilePage'
-import TeamEmployeesPage from './features/users/TeamEmployeesPage';
+import TeamEmployeesPage from './features/users/TeamEmployeesPage'
+import UserOnboardingPage from './features/users/UserOnboardingPage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="profile" element={<UserProfilePage />} />
                 <Route path="users" element={<UsersPage/>} />
                 <Route path="employees" element={<TeamEmployeesPage />} />
+                <Route path="onboarding" element={<UserOnboardingPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

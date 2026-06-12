@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag } from 'antd';
+import { UserAddOutlined } from '@ant-design/icons';
 import { 
   DashboardOutlined, 
   TeamOutlined, 
@@ -190,11 +191,17 @@ export default function AppLayout() {
             <DashboardOutlined className="nav-icon" /> Dashboard
           </CNavItem>
 
-          {/* Super Admin gets 'Users' */}
+          {/* Super Admin gets 'Users' AND 'Onboarding' */}
           {activeRole === 'SUPER_ADMIN' && (
-            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}>
-              <TeamOutlined className="nav-icon" /> Users
-            </CNavItem>
+            <>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}>
+                <TeamOutlined className="nav-icon" /> Users
+              </CNavItem>
+            
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/onboarding'); }} active={location.pathname === '/onboarding'}>
+                <UserAddOutlined className="nav-icon" /> User Onboarding
+              </CNavItem>
+            </>
           )}
 
           {/* Admin gets 'Employees' */}

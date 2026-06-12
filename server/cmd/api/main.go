@@ -75,20 +75,25 @@ func main() {
 
 		// ADMIN DOMAIN
 		admin := v1.Group("/admin")
+		admin.Use(middleware.RequireAuth(s_byte)) // Everyone here needs a valid token
 
-		// Block 1: Require Valid Token
-		admin.Use(middleware.RequireAuth(s_byte))
-
-		// Block 2: Require Admin or Super Admin Role
-		admin.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
+		// SUPER ADMIN ONLY ---
+		// Org-wide destructive/creation actions
+		superAdminGroup := admin.Group("")
+		superAdminGroup.Use(middleware.RequireRole("SUPER_ADMIN"))
 		{
-			// Fully secured endpoints using the new AdminHandler
-			admin.POST("/users/invite", adminHandler.InviteUser)
-			admin.GET("/stats", adminHandler.GetDashboardStats)
-			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
-			admin.GET("/users", adminHandler.GetOrgUsers)
-			admin.GET("/employees", adminHandler.GetTeamEmployees)
-			admin.GET("/teams/options", adminHandler.GetAdminTeamOptions)
+			superAdminGroup.POST("/users/invite", adminHandler.InviteUser)
+			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
+		}
+
+		// TEAM ADMINS & SUPER ADMINS ---
+		// Team-scoped actions
+		teamAdminGroup := admin.Group("")
+		teamAdminGroup.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
+		{
+			teamAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
+			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
+			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 		}
 
 		users := v1.Group("/users")

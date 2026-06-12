@@ -79,14 +79,23 @@ func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, 
 func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string) (int64, error) {
 	return s.queries.GetTotalUsersInAdminTeams(ctx, util.ParseUUID(userID))
 }
-func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string) (*schemas.PaginatedUsersResponse, error) {
+func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string, roleFilter string, statusFilter string) (*schemas.PaginatedUsersResponse, error) {
 	parsedOrgID := util.ParseUUID(orgID)
 
+	if roleFilter == "ALL" {
+		roleFilter = ""
+	}
+	if statusFilter == "ALL" {
+		statusFilter = ""
+	}
+
 	params := db.GetUsersByOrgPaginatedParams{
-		OrgID:      parsedOrgID,
-		Limit:      limit,
-		Offset:     offset,
-		SearchTerm: searchTerm,
+		OrgID:        parsedOrgID,
+		Limit:        limit,
+		Offset:       offset,
+		SearchTerm:   searchTerm,
+		RoleFilter:   roleFilter,
+		StatusFilter: statusFilter,
 	}
 
 	dbUsers, err := s.queries.GetUsersByOrgPaginated(ctx, params)
@@ -140,7 +149,7 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 	}, nil
 }
 
-func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search, teamFilter, roleFilter, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
+func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search string, teamFilter string, roleFilter string, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
 	parsedUserID := util.ParseUUID(userID)
 
 	// Convert "ALL" filter strings from React to empty strings for SQLC
@@ -211,4 +220,230 @@ func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string) ([]
 		return []string{}, nil
 	}
 	return names, nil
+}
+
+func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) ([]schemas.UnassignedUserResponse, error) {
+	parsedOrgID := util.ParseUUID(orgID)
+
+	dbUsers, err := s.queries.GetUnassignedOrgUsers(ctx, parsedOrgID)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []schemas.UnassignedUserResponse
+	for _, u := range dbUsers {
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance" // Good default for invited users who haven't set a name
+		}
+
+		users = append(users, schemas.UnassignedUserResponse{
+			ID:       u.ID.String(),
+			FullName: fullName,
+			EmailID:  u.EmailID,
+			Status:   string(u.Status.UserStatus),
+		})
+	}
+
+	// Always return an empty array instead of null for the frontend map function
+	if users == nil {
+		users = []schemas.UnassignedUserResponse{}
+	}
+
+	return users, nil
+}
+
+func (s *AdminService) CreateTeam(ctx context.Context, orgID, name string) (string, error) {
+	teamID, err := s.queries.CreateTeam(ctx, db.CreateTeamParams{
+		OrgID: util.ParseUUID(orgID),
+		Name:  name,
+	})
+	if err != nil {
+		return "", errors.New("a team with this name may already exist")
+	}
+	return teamID.String(), nil
+}
+
+func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetOrgTeams(ctx, util.ParseUUID(orgID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:          t.ID.String(),
+			Name:        t.Name,
+			MemberCount: t.MemberCount,
+		})
+	}
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
+}
+
+func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string) ([]schemas.TeamMemberResponse, error) {
+	dbMembers, err := s.queries.GetTeamMembersDetails(ctx, util.ParseUUID(teamID))
+	if err != nil {
+		return nil, err
+	}
+
+	var members []schemas.TeamMemberResponse
+	for _, m := range dbMembers {
+		fullName := strings.TrimSpace(m.FirstName.String + " " + m.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance"
+		}
+
+		members = append(members, schemas.TeamMemberResponse{
+			ID:       m.ID.String(),
+			FullName: fullName,
+			EmailID:  m.EmailID,
+			TeamRole: m.TmTeamRole,
+		})
+	}
+	if members == nil {
+		members = []schemas.TeamMemberResponse{}
+	}
+	return members, nil
+}
+func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool) error {
+	tID := util.ParseUUID(teamID)
+	uID := util.ParseUUID(userID)
+
+	// GUARD 1: SYSTEM ROLE CHECK FOR TEAM ADMINS
+	if !isRemoval && role == "TEAM_ADMIN" {
+		sysRoles, err := s.queries.GetUserSystemRoles(ctx, uID)
+		if err != nil {
+			return err
+		}
+
+		isSystemAdmin := false
+		for _, r := range sysRoles {
+			if r == "ADMIN" || r == "SUPER_ADMIN" {
+				isSystemAdmin = true
+				break
+			}
+		}
+
+		if !isSystemAdmin {
+			return errors.New("action blocked: Only System Admins or Super Admins can be made Team Admins")
+		}
+	}
+
+	// GUARD 2: PREVENT REMOVING THE LAST ADMIN
+	if isRemoval || role == "MEMBER" {
+		adminCount, err := s.queries.GetTeamAdminCount(ctx, tID)
+		if err != nil {
+			return err
+		}
+
+		if adminCount <= 1 {
+			members, _ := s.GetTeamMembers(ctx, teamID)
+			for _, m := range members {
+				if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
+					return errors.New("cannot remove or demote the last Team Admin. Promote someone else first")
+				}
+			}
+		}
+	}
+
+	// Execute DB Transaction
+	if isRemoval {
+		return s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
+			TeamID: tID,
+			UserID: uID,
+		})
+	}
+
+	return s.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+		TeamID:   tID,
+		UserID:   uID,
+		TeamRole: db.TeamRoleEnum(role),
+	})
+}
+
+func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTeamID, userID string) error {
+	fID := util.ParseUUID(fromTeamID)
+	tID := util.ParseUUID(toTeamID)
+	uID := util.ParseUUID(userID)
+
+	// Enforce safety rule: Prevent moving the last admin out of the current team
+	adminCount, err := s.queries.GetTeamAdminCount(ctx, fID)
+	if err != nil {
+		return err
+	}
+
+	if adminCount <= 1 {
+		members, _ := s.GetTeamMembers(ctx, fromTeamID)
+		for _, m := range members {
+			if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
+				return errors.New("cannot transfer the last Team Admin. Promote someone else on this team first")
+			}
+		}
+	}
+
+	// Remove from old team
+	err = s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
+		TeamID: fID,
+		UserID: uID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Insert into new team (defaults to MEMBER role)
+	return s.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+		TeamID:   tID,
+		UserID:   uID,
+		TeamRole: "MEMBER",
+	})
+}
+
+func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string) ([]schemas.AssignedUserResponse, error) {
+	dbUsers, err := s.queries.GetAssignedOrgUsers(ctx, util.ParseUUID(orgID))
+	if err != nil {
+		return nil, err
+	}
+
+	var users []schemas.AssignedUserResponse
+	for _, u := range dbUsers {
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance"
+		}
+
+		users = append(users, schemas.AssignedUserResponse{
+			ID:       u.ID.String(),
+			FullName: fullName,
+			EmailID:  u.EmailID,
+			Status:   string(u.Status.UserStatus),
+		})
+	}
+	if users == nil {
+		users = []schemas.AssignedUserResponse{}
+	}
+	return users, nil
+}
+
+func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schemas.UserTeamResponse, error) {
+	dbTeams, err := s.queries.GetUserTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.UserTeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.UserTeamResponse{
+			TeamID:   t.ID.String(),
+			TeamName: t.Name,
+			TeamRole: t.TmTeamRole,
+		})
+	}
+	if teams == nil {
+		teams = []schemas.UserTeamResponse{}
+	}
+	return teams, nil
 }

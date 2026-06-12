@@ -125,6 +125,51 @@ func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCrede
 	return i, err
 }
 
+const getAssignedOrgUsers = `-- name: GetAssignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+WHERE u.org_id = $1 
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.created_at DESC
+`
+
+type GetAssignedOrgUsersRow struct {
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+	Status    NullUserStatus `json:"status"`
+}
+
+func (q *Queries) GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAssignedOrgUsers, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignedOrgUsersRow
+	for rows.Next() {
+		var i GetAssignedOrgUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFullUserProfile = `-- name: GetFullUserProfile :one
 SELECT 
     u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,
@@ -169,6 +214,52 @@ func (q *Queries) GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int6
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getUnassignedOrgUsers = `-- name: GetUnassignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+LEFT JOIN team_members tm ON u.id = tm.user_id
+WHERE u.org_id = $1 
+  AND tm.team_id IS NULL
+ORDER BY u.created_at DESC
+`
+
+type GetUnassignedOrgUsersRow struct {
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+	Status    NullUserStatus `json:"status"`
+}
+
+func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUnassignedOrgUsers, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUnassignedOrgUsersRow
+	for rows.Next() {
+		var i GetUnassignedOrgUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -341,20 +432,22 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM users u
 WHERE u.org_id = $1
-  -- If search_term is empty, it returns everything. Otherwise, it searches email and name.
-  AND ($4::text = '' OR 
-       u.email_id ILIKE '%' || $4 || '%' OR 
-       u.first_name ILIKE '%' || $4 || '%' OR 
-       u.last_name ILIKE '%' || $4 || '%')
+  AND ($4::text = '' OR u.email_id ILIKE '%' || $4 || '%' OR u.first_name ILIKE '%' || $4 || '%' OR u.last_name ILIKE '%' || $4 || '%')
+  AND ($5::text = '' OR u.status::text = $5)
+  AND ($6::text = '' OR EXISTS (
+        SELECT 1 FROM user_system_roles WHERE user_id = u.id AND role::text = $6
+      ))
 ORDER BY u.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type GetUsersByOrgPaginatedParams struct {
-	OrgID      uuid.UUID `json:"org_id"`
-	Limit      int32     `json:"limit"`
-	Offset     int32     `json:"offset"`
-	SearchTerm string    `json:"search_term"`
+	OrgID        uuid.UUID `json:"org_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+	SearchTerm   string    `json:"search_term"`
+	StatusFilter string    `json:"status_filter"`
+	RoleFilter   string    `json:"role_filter"`
 }
 
 type GetUsersByOrgPaginatedRow struct {
@@ -373,6 +466,8 @@ func (q *Queries) GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgP
 		arg.Limit,
 		arg.Offset,
 		arg.SearchTerm,
+		arg.StatusFilter,
+		arg.RoleFilter,
 	)
 	if err != nil {
 		return nil, err

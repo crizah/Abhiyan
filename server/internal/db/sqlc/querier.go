@@ -13,28 +13,41 @@ import (
 type Querier interface {
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
+	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
+	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
+	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
+	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
+	GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
+	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
+	GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error)
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
+	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
+	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }
 
 var _ Querier = (*Queries)(nil)

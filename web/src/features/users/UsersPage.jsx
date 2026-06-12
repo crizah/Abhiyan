@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select, Space, Typography, Tag, Avatar, Dropdown, Flex, message } from 'antd';
+import { Table, Input, Select, Typography, Tag, Avatar, Dropdown, Flex, message, ConfigProvider } from 'antd';
 import { UserOutlined, SearchOutlined, MoreOutlined, EditOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
-import { ConfigProvider } from 'antd';
 
 const { Title, Text } = Typography;
 
@@ -13,29 +12,29 @@ export default function UsersPage() {
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [totalUsers, setTotalUsers] = useState(0); // <-- NEW
-  const [currentPage, setCurrentPage] = useState(1); // <-- NEW
-  const [pageSize, setPageSize] = useState(10); // <-- NEW
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
-   // Add a slight debounce to the search so we don't spam the backend on every keystroke
     const timer = setTimeout(() => {
       fetchUsers();
     }, 300);
     return () => clearTimeout(timer);
-  }, [currentPage, pageSize, searchText]);
+  }, [currentPage, pageSize, searchText, roleFilter, statusFilter]);
 
-const fetchUsers = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
       const response = await apiClient.get('/admin/users', {
         params: {
           page: currentPage,
           pageSize: pageSize,
-          search: searchText
+          search: searchText,
+          role: roleFilter,
+          status: statusFilter
         }
       });
-      // Update state with the new paginated wrapper
       setUsers(response.data.users);
       setTotalUsers(response.data.total_count);
     } catch (error) {
@@ -45,7 +44,6 @@ const fetchUsers = async () => {
     }
   };
 
-  // Action Menu for the 3 dots
   const getActionMenu = (record) => (
     <div style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px' }}>
       <div 
@@ -115,26 +113,11 @@ const fetchUsers = async () => {
     },
   ];
 
-  // Frontend Filtering Logic
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.full_name.toLowerCase().includes(searchText.toLowerCase()) || 
-      user.email_id.toLowerCase().includes(searchText.toLowerCase());
-    
-    const matchesRole = roleFilter === 'ALL' || user.roles.includes(roleFilter);
-    const matchesStatus = statusFilter === 'ALL' || user.status === statusFilter;
-
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Title level={3}>Users</Title>
 
-      {/* Filters & Search Bar */}
-     <Flex gap="middle" style={{ marginBottom: '24px' }}>
-        
-        {/* Wrap ONLY the Input in a ConfigProvider to force the orange hover/focus states */}
+      <Flex gap="middle" style={{ marginBottom: '24px' }}>
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#fa8c16', hoverBorderColor: '#fa8c16' } } }}>
           <Input 
             placeholder="Search by name or email..." 
@@ -143,8 +126,6 @@ const fetchUsers = async () => {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </ConfigProvider>
-        
-      
         
         <Select 
           defaultValue="ALL" 
@@ -171,24 +152,17 @@ const fetchUsers = async () => {
         />
       </Flex>
 
-      {/* Custom Styled Table Wrapper: 
-        Sharp edges (borderRadius: 0), thin orange border (#fa8c16 is Ant's standard orange) 
-      */}
-      <div style={{ 
-        // border: '1px solid #fa8c16', 
-        // borderRadius: '0', 
-        overflow: 'hidden' // Keeps the table header from clipping the sharp corners
-      }}>
+      <div style={{ overflow: 'hidden' }}>
         <Table 
           columns={columns} 
-          dataSource={users} // Notice we aren't using filteredUsers anymore, backend does the work!
+          dataSource={users} 
           rowKey="id" 
           loading={loading}
-          onChange={handleTableChange} // Hooks into user clicks
+          onChange={handleTableChange}
           pagination={{ 
             current: currentPage,
             pageSize: pageSize,
-            total: totalUsers, // Tells Ant Design how many pages to draw
+            total: totalUsers, 
             showSizeChanger: true 
           }}
           style={{ borderRadius: 0 }}

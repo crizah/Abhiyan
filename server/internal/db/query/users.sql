@@ -113,10 +113,25 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM users u
 WHERE u.org_id = $1
-  -- If search_term is empty, it returns everything. Otherwise, it searches email and name.
-  AND (@search_term::text = '' OR 
-       u.email_id ILIKE '%' || @search_term || '%' OR 
-       u.first_name ILIKE '%' || @search_term || '%' OR 
-       u.last_name ILIKE '%' || @search_term || '%')
+  AND (@search_term::text = '' OR u.email_id ILIKE '%' || @search_term || '%' OR u.first_name ILIKE '%' || @search_term || '%' OR u.last_name ILIKE '%' || @search_term || '%')
+  AND (@status_filter::text = '' OR u.status::text = @status_filter)
+  AND (@role_filter::text = '' OR EXISTS (
+        SELECT 1 FROM user_system_roles WHERE user_id = u.id AND role::text = @role_filter
+      ))
 ORDER BY u.created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: GetUnassignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+LEFT JOIN team_members tm ON u.id = tm.user_id
+WHERE u.org_id = $1 
+  AND tm.team_id IS NULL
+ORDER BY u.created_at DESC;
+
+-- name: GetAssignedOrgUsers :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
+FROM users u
+WHERE u.org_id = $1 
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.created_at DESC;

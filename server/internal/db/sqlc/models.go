@@ -352,6 +352,15 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type Notification struct {
+	ID        uuid.UUID    `json:"id"`
+	UserID    uuid.UUID    `json:"user_id"`
+	Title     string       `json:"title"`
+	Message   string       `json:"message"`
+	IsRead    sql.NullBool `json:"is_read"`
+	CreatedAt sql.NullTime `json:"created_at"`
+}
+
 type Organization struct {
 	ID        uuid.UUID      `json:"id"`
 	Name      string         `json:"name"`

@@ -17,10 +17,10 @@ JOIN team_members tm_target ON t.id = tm_target.team_id
 JOIN users u ON tm_target.user_id = u.id
 WHERE tm_admin.user_id = $1 
   AND tm_admin.team_role = 'TEAM_ADMIN'
-  AND (@search_term::text = '' OR u.email_id ILIKE '%' || @search_term || '%' OR u.first_name ILIKE '%' || @search_term || '%' OR u.last_name ILIKE '%' || @search_term || '%')
-  AND (@team_filter::text = '' OR t.name = @team_filter)
-  AND (@role_filter::text = '' OR tm_target.team_role::text = @role_filter)
-  AND (@status_filter::text = '' OR u.status::text = @status_filter)
+  AND (sqlc.arg('search_term')::text = '' OR u.email_id ILIKE '%' || sqlc.arg('search_term') || '%' OR u.first_name ILIKE '%' || sqlc.arg('search_term') || '%' OR u.last_name ILIKE '%' || sqlc.arg('search_term') || '%')
+  AND (sqlc.arg('team_filter')::text = '' OR t.name = sqlc.arg('team_filter'))
+  AND (sqlc.arg('role_filter')::text = '' OR tm_target.team_role::text = sqlc.arg('role_filter'))
+  AND (sqlc.arg('status_filter')::text = '' OR u.status::text = sqlc.arg('status_filter'))
 ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3;
 
@@ -30,3 +30,42 @@ FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
 WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
 ORDER BY t.name;
+
+-- name: GetOrgTeams :many
+SELECT t.id, t.name, COUNT(tm.user_id) AS member_count
+FROM teams t
+LEFT JOIN team_members tm ON t.id = tm.team_id
+WHERE t.org_id = $1
+GROUP BY t.id
+ORDER BY t.name ASC;
+
+
+-- name: CreateTeam :one
+INSERT INTO teams (org_id, name) VALUES ($1, $2) RETURNING id;
+
+-- name: GetTeamMembersDetails :many
+SELECT u.id, u.first_name, u.last_name, u.email_id, tm.team_role::text
+FROM team_members tm
+JOIN users u ON tm.user_id = u.id
+WHERE tm.team_id = $1
+ORDER BY tm.team_role DESC, u.first_name ASC;
+
+-- name: GetTeamAdminCount :one
+SELECT COUNT(*) FROM team_members 
+WHERE team_id = $1 AND team_role = 'TEAM_ADMIN';
+
+-- name: UpsertTeamMember :exec
+INSERT INTO team_members (team_id, user_id, team_role) 
+VALUES ($1, $2, $3)
+ON CONFLICT (team_id, user_id) 
+DO UPDATE SET team_role = EXCLUDED.team_role;
+
+-- name: RemoveTeamMember :exec
+DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;
+
+-- name: GetUserTeams :many
+SELECT t.id, t.name, tm.team_role::text
+FROM team_members tm
+JOIN teams t ON tm.team_id = t.id
+WHERE tm.user_id = $1
+ORDER BY t.name ASC;

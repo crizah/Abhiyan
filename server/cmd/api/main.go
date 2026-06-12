@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/handlers"
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
@@ -40,6 +41,8 @@ func main() {
 		panic(err)
 	}
 
+	queries := db.New(dbConn)
+
 	// --- 1. Initialize Services ---
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
@@ -49,6 +52,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	adminHandler := handlers.NewAdminHandler(adminService)
 	userHandler := handlers.NewUserHandler(userService)
+	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -73,22 +77,50 @@ func main() {
 			auth.POST("/switch-role", middleware.RequireAuth(s_byte), authHandler.SwitchRole)
 		}
 
+		// GENERAL AUTHENTICATED DOMAIN (All Roles)
+
+		general := v1.Group("")
+		general.Use(middleware.RequireAuth(s_byte))
+		{
+			// Everyone can hit these, but the handler decides WHAT they see
+			general.GET("/notifications", notificationHandler.GetMyNotifications)
+			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
+			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
+			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
+		}
+
 		// ADMIN DOMAIN
 		admin := v1.Group("/admin")
+		admin.Use(middleware.RequireAuth(s_byte)) // Everyone here needs a valid token
 
-		// Block 1: Require Valid Token
-		admin.Use(middleware.RequireAuth(s_byte))
-
-		// Block 2: Require Admin or Super Admin Role
-		admin.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
+		// SUPER ADMIN ONLY ---
+		// Org-wide destructive/creation actions
+		superAdminGroup := admin.Group("")
+		superAdminGroup.Use(middleware.RequireRole("SUPER_ADMIN"))
 		{
-			// Fully secured endpoints using the new AdminHandler
-			admin.POST("/users/invite", adminHandler.InviteUser)
-			admin.GET("/stats", adminHandler.GetDashboardStats)
-			admin.GET("/team-stats", adminHandler.GetAdminTeamStats)
-			admin.GET("/users", adminHandler.GetOrgUsers)
-			admin.GET("/employees", adminHandler.GetTeamEmployees)
-			admin.GET("/teams/options", adminHandler.GetAdminTeamOptions)
+			superAdminGroup.POST("/users/invite", adminHandler.InviteUser)
+			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
+			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
+			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers)
+			superAdminGroup.POST("/teams", adminHandler.CreateTeam)
+			superAdminGroup.GET("/teams", adminHandler.GetTeams)
+			superAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
+			superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
+			superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
+			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
+			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers)
+			superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
+		}
+
+		// TEAM ADMINS & SUPER ADMINS ---
+		// Team-scoped actions
+		teamAdminGroup := admin.Group("")
+		teamAdminGroup.Use(middleware.RequireRole("ADMIN", "SUPER_ADMIN"))
+		{
+
+			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
+			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
+			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions) // when tf am i hitting this??
 		}
 
 		users := v1.Group("/users")

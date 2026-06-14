@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
-	"github.com/google/uuid"
 )
 
 type TaskService struct {
@@ -42,12 +42,14 @@ func CalculateNextReminder(currentScheduledAt time.Time, value int, unit string)
 	}
 }
 
-func (s *TaskService) CreateTask(ctx context.Context, adminID uuid.UUID, req schemas.CreateTaskRequest) (db.Task, error) {
+func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schemas.CreateTaskRequest) (db.Task, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return db.Task{}, err
 	}
 	defer tx.Rollback()
+
+	aID := util.ParseUUID(adminID)
 
 	qtx := s.queries.WithTx(tx)
 	teamID := util.ParseUUID(req.TeamID)
@@ -57,7 +59,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID uuid.UUID, req sch
 		TeamID:      teamID,
 		Title:       req.Title,
 		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
-		CreatedBy:   adminID,
+		CreatedBy:   aID,
 	}
 	if req.DueDate != nil {
 		taskParams.DueDate = sql.NullTime{Time: *req.DueDate, Valid: true}
@@ -121,8 +123,47 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID uuid.UUID, req sch
 	return task, nil
 }
 
-func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]db.GetTeamTasksRow, error) {
-	return s.queries.GetTeamTasks(ctx, util.ParseUUID(teamID))
+func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schemas.TaskResponse, error) {
+	dbTasks, err := s.queries.GetTeamTasks(ctx, util.ParseUUID(teamID))
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []schemas.TaskResponse
+	for _, t := range dbTasks {
+		// Safely unwrap nullable dates
+		var dueDate *time.Time
+		if t.DueDate.Valid {
+			dueDate = &t.DueDate.Time
+		}
+
+		var createdAt *time.Time
+		if t.CreatedAt.Valid {
+			createdAt = &t.CreatedAt.Time
+		}
+
+		creatorName := strings.TrimSpace(t.FirstName.String + " " + t.LastName.String)
+
+		tasks = append(tasks, schemas.TaskResponse{
+			ID:                t.ID.String(),
+			TeamID:            t.TeamID.String(),
+			Title:             t.Title,
+			Description:       t.Description.String, // will be "" if not valid
+			Status:            string(t.Status.TaskStatus),
+			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			CreatedBy:         t.CreatedBy.String(),
+			CreatorName:       creatorName,
+			DueDate:           dueDate,
+			CreatedAt:         createdAt,
+		})
+	}
+
+	// Prevent returning a null JSON object if the slice is empty
+	if tasks == nil {
+		tasks = []schemas.TaskResponse{}
+	}
+
+	return tasks, nil
 }
 
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {

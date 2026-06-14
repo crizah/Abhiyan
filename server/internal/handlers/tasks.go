@@ -6,7 +6,6 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type TaskHandler struct {
@@ -24,8 +23,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	adminIDVal, _ := c.Get("user_id")
-	adminID := adminIDVal.(uuid.UUID)
+	adminID := c.MustGet("user_id").(string)
 
 	task, err := h.taskService.CreateTask(c.Request.Context(), adminID, req)
 	if err != nil {

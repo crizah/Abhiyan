@@ -51,3 +51,16 @@ type UpdateTaskStatusRequest struct {
 type UpdateFulfillmentRequest struct {
 	FulfillmentStatus string `json:"fulfillment_status" binding:"required,oneof=PENDING COMPLETED"`
 }
+
+type TaskResponse struct {
+	ID                string     `json:"id"`
+	TeamID            string     `json:"team_id"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description"`
+	Status            string     `json:"status"`
+	FulfillmentStatus string     `json:"fulfillment_status"`
+	CreatedBy         string     `json:"created_by"`
+	CreatorName       string     `json:"creator_name"`
+	DueDate           *time.Time `json:"due_date"`
+	CreatedAt         *time.Time `json:"created_at"`
+}

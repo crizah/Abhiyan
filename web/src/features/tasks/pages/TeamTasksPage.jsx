@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Space, Timeline, Divider, Popconfirm } from 'antd';
+import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import dayjs from 'dayjs';
@@ -31,6 +31,7 @@ export default function TeamTasksPage() {
     fetchTeams();
   }, []);
 
+  // Fetch new data when team changes
   useEffect(() => {
     if (activeTeamId) {
       fetchTasks(activeTeamId);
@@ -41,9 +42,14 @@ export default function TeamTasksPage() {
     }
   }, [activeTeamId]);
 
-const fetchTeams = async () => {
+  // FIX: Force form to completely reset if the active team changes
+  // so leftover users from another team aren't stuck in the dropdown state
+  useEffect(() => {
+    form.resetFields();
+  }, [activeTeamId, form]);
+
+  const fetchTeams = async () => {
     try {
-    
       const res = await apiClient.get('/admin/my-teams'); 
       setTeams(res.data || []);
       if (res.data?.length > 0) setActiveTeamId(res.data[0].id);
@@ -102,6 +108,11 @@ const fetchTeams = async () => {
     }
   };
 
+  const openCreateModal = () => {
+    form.resetFields(); // Ensure fresh form state before opening
+    setIsCreateModalOpen(true);
+  };
+
   // --- TASK DRAWER & UPDATES ---
   const openTaskDrawer = async (task) => {
     setSelectedTask(task);
@@ -111,7 +122,6 @@ const fetchTeams = async () => {
 
   const fetchTaskUpdates = async (taskId) => {
     try {
-      // Assuming you will wire up a quick GET /tasks/:id/updates endpoint
       const res = await apiClient.get(`/admin/tasks/${taskId}/updates`);
       setTaskUpdates(res.data || []);
     } catch (err) {
@@ -122,7 +132,6 @@ const fetchTeams = async () => {
   const postTaskUpdate = async () => {
     if (!newUpdateText.trim()) return;
     try {
-      // Assuming a POST /tasks/:id/updates endpoint
       await apiClient.post(`/admin/tasks/${selectedTask.id}/updates`, { content: newUpdateText });
       setNewUpdateText('');
       fetchTaskUpdates(selectedTask.id);
@@ -131,11 +140,24 @@ const fetchTeams = async () => {
     }
   };
 
-  const changeTaskStatus = async (newStatus) => {
+const changeTaskStatus = async (newStatus) => {
     try {
       await apiClient.put(`/admin/tasks/${selectedTask.id}/status`, { status: newStatus });
       message.success(`Task marked as ${newStatus}`);
+      
+      // OPTIMISTIC UI UPDATE: Update the state immediately so the tag flips
+      setTasks(prevTasks => prevTasks.map(t => 
+        t.id === selectedTask.id 
+          ? { ...t, status: newStatus } 
+          : t
+      ));
+      
+      // Update the drawer display as well so the status tag inside reflects the change
+      setSelectedTask(prev => ({ ...prev, status: newStatus }));
+      
       setIsDrawerOpen(false);
+      
+      // Background sync
       fetchTasks(activeTeamId);
     } catch (err) {
       message.error("Failed to update status.");
@@ -179,7 +201,7 @@ const fetchTeams = async () => {
             options={teams.map(t => ({ label: t.name, value: t.id }))}
             placeholder="Select a Team"
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalOpen(true)} disabled={!activeTeamId}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal} disabled={!activeTeamId}>
             Assign New Task
           </Button>
         </Flex>
@@ -190,9 +212,13 @@ const fetchTeams = async () => {
       </Card>
 
       {/* --- CREATE TASK MODAL --- */}
+      {/* FIX: destroyOnClose completely removes the DOM element and resets internal state when closed */}
       <Modal 
-        title="Assign New Task" open={isCreateModalOpen} 
-        onCancel={() => setIsCreateModalOpen(false)} width={700}
+        destroyOnClose 
+        title="Assign New Task" 
+        open={isCreateModalOpen} 
+        onCancel={() => setIsCreateModalOpen(false)} 
+        width={700}
         footer={[
           <Button key="back" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>,
           <Button key="submit" type="primary" onClick={() => form.submit()}>Create Task</Button>

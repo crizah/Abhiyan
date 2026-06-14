@@ -166,7 +166,7 @@ func (h *AdminHandler) GetTeams(c *gin.Context) {
 
 func (h *AdminHandler) GetTeamMembers(c *gin.Context) {
 	teamID := c.Param("team_id")
-	userID := c.Param("user_id")
+	userID := c.MustGet("user_id").(string)
 	roleVal, exists := c.Get("role")
 	role := ""
 	if exists {

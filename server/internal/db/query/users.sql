@@ -135,3 +135,15 @@ FROM users u
 WHERE u.org_id = $1 
   AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
 ORDER BY u.created_at DESC;
+
+-- name: DeleteUserSystemRoles :exec
+DELETE FROM user_system_roles WHERE user_id = $1;
+
+-- name: InsertUserSystemRole :exec
+INSERT INTO user_system_roles (user_id, role) VALUES ($1, $2);
+
+-- name: UpdateUserStatus :exec
+UPDATE users SET status = $1 WHERE id = $2;
+
+-- name: GetUserStatus :one
+SELECT status FROM users WHERE id = $1;

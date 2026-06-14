@@ -43,6 +43,7 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 	user, err := qtx.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
 		OrgID:   util.ParseUUID(adminOrgID),
 		EmailID: req.Email,
+		// status already invited
 	})
 	if err != nil {
 		return "", errors.New("user with this email may already exist")
@@ -446,4 +447,36 @@ func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schem
 		teams = []schemas.UserTeamResponse{}
 	}
 	return teams, nil
+}
+
+func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID string, role string, status string) error {
+	if status == "INVITED" {
+		return errors.New("invalid operation: cannot manually revert a user's status to INVITED")
+	}
+	uID := util.ParseUUID(userID)
+
+	if err := s.queries.UpdateUserStatus(ctx, db.UpdateUserStatusParams{
+		Status: db.NullUserStatus{
+			UserStatus: db.UserStatus(status),
+			Valid:      true, // <-- THIS FIXES THE BUG
+		},
+		ID: uID,
+	}); err != nil {
+		return err
+	}
+
+	// 2. Wipe old system roles
+	if err := s.queries.DeleteUserSystemRoles(ctx, uID); err != nil {
+		return err
+	}
+
+	// 3. Insert the new system role
+	if err := s.queries.InsertUserSystemRole(ctx, db.InsertUserSystemRoleParams{
+		UserID: uID,
+		Role:   db.SystemRole(role),
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

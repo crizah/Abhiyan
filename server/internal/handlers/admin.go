@@ -233,3 +233,24 @@ func (h *AdminHandler) GetUserTeams(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, teams)
 }
+
+func (h *AdminHandler) UpdateUserSystemProfile(c *gin.Context) {
+	userID := c.Param("user_id")
+	var payload struct {
+		Role   string `json:"role" binding:"required"`
+		Status string `json:"status" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.adminService.UpdateUserSystemProfile(c.Request.Context(), userID, payload.Role, payload.Status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User profile updated successfully"})
+}

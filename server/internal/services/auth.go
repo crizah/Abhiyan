@@ -67,6 +67,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+		Status:      db.NullUserStatus{UserStatus: db.UserStatusACTIVE},
 	})
 	if err != nil {
 		return err
@@ -247,6 +248,7 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
 		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
 		EmailID:     claims.Email, // Extracted safely from the signed JWT, not user input!
+		// status already active here
 	})
 	if err != nil {
 		return errors.New("failed to update user profile or invite already accepted")

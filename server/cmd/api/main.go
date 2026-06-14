@@ -61,9 +61,7 @@ func main() {
 	// --- 3. Define Routes ---
 	v1 := r.Group("/api/v1")
 	{
-		// ==========================================
 		// AUTHENTICATION DOMAIN
-		// ==========================================
 		auth := v1.Group("/auth")
 		{
 			// Public
@@ -81,6 +79,7 @@ func main() {
 
 		general := v1.Group("")
 		general.Use(middleware.RequireAuth(s_byte))
+		// general.Use(middleware.BlockSuspendedUsers(queries))
 		{
 			// Everyone can hit these, but the handler decides WHAT they see
 			general.GET("/notifications", notificationHandler.GetMyNotifications)
@@ -92,6 +91,7 @@ func main() {
 		// ADMIN DOMAIN
 		admin := v1.Group("/admin")
 		admin.Use(middleware.RequireAuth(s_byte)) // Everyone here needs a valid token
+		// admin.Use(middleware.BlockSuspendedUsers(queries))
 
 		// SUPER ADMIN ONLY ---
 		// Org-wide destructive/creation actions
@@ -110,6 +110,7 @@ func main() {
 			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
 			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers)
 			superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
+			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---
@@ -127,6 +128,7 @@ func main() {
 
 		// Every route in this block requires a valid login
 		users.Use(middleware.RequireAuth(s_byte))
+		// users.Use(middleware.BlockSuspendedUsers(queries))
 		{
 
 			users.GET("/me/profile", userHandler.GetMyProfile)

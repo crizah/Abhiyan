@@ -74,3 +74,8 @@ type UserTeamResponse struct {
 	TeamName string `json:"team_name"`
 	TeamRole string `json:"team_role"`
 }
+
+type UpdateUserManagementPayload struct {
+	Role   string `json:"role"`
+	Status string `json:"status"`
+}

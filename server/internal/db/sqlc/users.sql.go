@@ -125,6 +125,15 @@ func (q *Queries) CreateUserCredentials(ctx context.Context, arg CreateUserCrede
 	return i, err
 }
 
+const deleteUserSystemRoles = `-- name: DeleteUserSystemRoles :exec
+DELETE FROM user_system_roles WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteUserSystemRoles, userID)
+	return err
+}
+
 const getAssignedOrgUsers = `-- name: GetAssignedOrgUsers :many
 SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
 FROM users u
@@ -293,6 +302,17 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	var i UserCredential
 	err := row.Scan(&i.UserID, &i.PasswordHash, &i.UpdatedAt)
 	return i, err
+}
+
+const getUserStatus = `-- name: GetUserStatus :one
+SELECT status FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserStatus(ctx context.Context, id uuid.UUID) (NullUserStatus, error) {
+	row := q.db.QueryRowContext(ctx, getUserStatus, id)
+	var status NullUserStatus
+	err := row.Scan(&status)
+	return status, err
 }
 
 const getUserSystemRoles = `-- name: GetUserSystemRoles :many
@@ -498,6 +518,20 @@ func (q *Queries) GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgP
 	return items, nil
 }
 
+const insertUserSystemRole = `-- name: InsertUserSystemRole :exec
+INSERT INTO user_system_roles (user_id, role) VALUES ($1, $2)
+`
+
+type InsertUserSystemRoleParams struct {
+	UserID uuid.UUID  `json:"user_id"`
+	Role   SystemRole `json:"role"`
+}
+
+func (q *Queries) InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error {
+	_, err := q.db.ExecContext(ctx, insertUserSystemRole, arg.UserID, arg.Role)
+	return err
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 
@@ -574,4 +608,18 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.PhoneNumber,
 	)
 	return i, err
+}
+
+const updateUserStatus = `-- name: UpdateUserStatus :exec
+UPDATE users SET status = $1 WHERE id = $2
+`
+
+type UpdateUserStatusParams struct {
+	Status NullUserStatus `json:"status"`
+	ID     uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserStatus, arg.Status, arg.ID)
+	return err
 }

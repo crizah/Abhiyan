@@ -20,6 +20,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
@@ -35,18 +36,21 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
+	GetUserStatus(ctx context.Context, id uuid.UUID) (NullUserStatus, error)
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
 	GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error)
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
+	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }
 

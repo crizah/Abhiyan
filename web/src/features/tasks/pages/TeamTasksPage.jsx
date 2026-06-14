@@ -28,10 +28,14 @@ export default function TeamTasksPage() {
 
   useEffect(() => { fetchTeams(); }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (activeTeamId) {
       fetchTasks(activeTeamId);
-      fetchTeamMembers(activeTeamId);
+      if (activeTeamId !== 'ALL') {
+        fetchTeamMembers(activeTeamId);
+      } else {
+        setTeamMembers([]); // Clear assignments when viewing global
+      }
     } else {
       setTasks([]);
       setTeamMembers([]);
@@ -50,10 +54,12 @@ export default function TeamTasksPage() {
     }
   };
 
-  const fetchTasks = async (teamId) => {
+const fetchTasks = async (teamId) => {
     setLoading(true);
     try {
-      const res = await apiClient.get(`/admin/teams/${teamId}/tasks`);
+      // If ALL is selected, hit the global endpoint. Otherwise, hit the specific team endpoint.
+      const endpoint = teamId === 'ALL' ? '/admin/tasks' : `/admin/teams/${teamId}/tasks`;
+      const res = await apiClient.get(endpoint);
       setTasks(res.data || []);
     } catch (err) {
       message.error("Failed to load tasks.");
@@ -196,7 +202,7 @@ export default function TeamTasksPage() {
     }
   };
 
-  const columns = [
+  const baseColumns = [
     { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
     { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
@@ -204,13 +210,34 @@ export default function TeamTasksPage() {
     { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View details</Button> }
   ];
 
+  // Inject the Team column at the beginning if viewing ALL teams
+  const columns = activeTeamId === 'ALL' 
+    ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns]
+    : baseColumns;
+
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
         <Flex gap="small">
-          <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 200 }} options={teams.map(t => ({ label: t.name, value: t.id }))} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }} disabled={!activeTeamId}>Assign New Task</Button>
+          <Select 
+            value={activeTeamId} 
+            onChange={setActiveTeamId} 
+            style={{ width: 200 }}
+            options={[
+              { label: 'All My Teams', value: 'ALL' }, // <-- NEW OPTION
+              ...teams.map(t => ({ label: t.name, value: t.id }))
+            ]}
+            placeholder="Select a Team"
+          />
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }} 
+            disabled={!activeTeamId || activeTeamId === 'ALL'} // <-- Prevent global task creation
+          >
+            Assign New Task
+          </Button>
         </Flex>
       </Flex>
 

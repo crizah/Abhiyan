@@ -45,6 +45,7 @@ type TaskResponse struct {
 	TeamID            string     `json:"team_id"`
 	Title             string     `json:"title"`
 	Description       string     `json:"description"`
+	TeamName          string     `json:"team_name,omitempty"`
 	Status            string     `json:"status"`
 	FulfillmentStatus string     `json:"fulfillment_status"`
 	CreatedBy         string     `json:"created_by"`

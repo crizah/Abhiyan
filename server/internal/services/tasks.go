@@ -420,3 +420,40 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 
 	return tx.Commit()
 }
+
+func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]schemas.TaskResponse, error) {
+	dbTasks, err := s.queries.GetAdminAllTasks(ctx, util.ParseUUID(adminID))
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []schemas.TaskResponse
+	for _, t := range dbTasks {
+		var dueDate *time.Time
+		if t.DueDate.Valid {
+			dueDate = &t.DueDate.Time
+		}
+		var createdAt *time.Time
+		if t.CreatedAt.Valid {
+			createdAt = &t.CreatedAt.Time
+		}
+
+		tasks = append(tasks, schemas.TaskResponse{
+			ID:                t.ID.String(),
+			TeamID:            t.TeamID.String(),
+			TeamName:          t.TeamName, // Map the team name
+			Title:             t.Title,
+			Description:       t.Description.String,
+			Status:            string(t.Status.TaskStatus),
+			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			CreatedBy:         t.CreatedBy.String(),
+			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
+			DueDate:           dueDate,
+			CreatedAt:         createdAt,
+		})
+	}
+	if tasks == nil {
+		tasks = []schemas.TaskResponse{}
+	}
+	return tasks, nil
+}

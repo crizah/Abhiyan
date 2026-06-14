@@ -28,6 +28,7 @@ type Querier interface {
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
+	GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error)
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)

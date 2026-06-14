@@ -146,6 +146,71 @@ func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) err
 	return err
 }
 
+const getAdminAllTasks = `-- name: GetAdminAllTasks :many
+SELECT 
+    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+    t.created_by, t.due_date, t.created_at, 
+    u.first_name, u.last_name, 
+    tm.name as team_name
+FROM tasks t
+JOIN users u ON t.created_by = u.id
+JOIN teams tm ON t.team_id = tm.id
+JOIN team_members tmem ON tm.id = tmem.team_id
+WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+ORDER BY t.created_at DESC
+`
+
+type GetAdminAllTasksRow struct {
+	ID                uuid.UUID                 `json:"id"`
+	TeamID            uuid.UUID                 `json:"team_id"`
+	Title             string                    `json:"title"`
+	Description       sql.NullString            `json:"description"`
+	Status            NullTaskStatus            `json:"status"`
+	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	CreatedBy         uuid.UUID                 `json:"created_by"`
+	DueDate           sql.NullTime              `json:"due_date"`
+	CreatedAt         sql.NullTime              `json:"created_at"`
+	FirstName         sql.NullString            `json:"first_name"`
+	LastName          sql.NullString            `json:"last_name"`
+	TeamName          string                    `json:"team_name"`
+}
+
+func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAdminAllTasksRow
+	for rows.Next() {
+		var i GetAdminAllTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.FulfillmentStatus,
+			&i.CreatedBy,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+			&i.TeamName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at FROM tasks
 WHERE id = $1 LIMIT 1

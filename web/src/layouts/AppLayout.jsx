@@ -89,6 +89,17 @@ const GlobalHeader = ({ user, token, navigate }) => {
     }
   };
 
+  const clearAllNotifications = async () => {
+    try {
+      await apiClient.delete('/notifications/clear');
+      // Keep real-time system alerts, but clear all DB notifications from the UI
+      setNotifications(prev => prev.filter(n => n.is_system));
+      message.success("Notifications cleared");
+    } catch (err) {
+      message.error("Failed to clear notifications");
+    }
+  };
+
   const getNotificationStyle = (item) => {
     if (item.is_system) return { bg: '#fffbe6', border: '#fa8c16' }; 
     if (item.is_read) return { bg: 'transparent', border: 'transparent' };
@@ -103,14 +114,22 @@ const GlobalHeader = ({ user, token, navigate }) => {
   const notificationDropdown = (
     <div style={{ width: '350px', backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, overflow: 'hidden' }}>
       
-      {/* Compact Header */}
+{/* Compact Header */}
       <div style={{ padding: '8px 16px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fafafa' }}>
         <Text strong style={{ fontSize: '13px' }}>Notifications</Text>
-        {unreadCount > 0 && (
-          <Button type="link" size="small" onClick={markAllRead} style={{ padding: 0, fontSize: '12px' }}>
-            Mark all read
-          </Button>
-        )}
+        <Flex gap="middle" align="center">
+          {unreadCount > 0 && (
+            <Button type="link" size="small" onClick={markAllRead} style={{ padding: 0, fontSize: '12px' }}>
+              Mark all read
+            </Button>
+          )}
+          {/* Only show Clear if there are actually clearable non-system notifications */}
+          {notifications.some(n => !n.is_system) && (
+            <Button type="link" danger size="small" onClick={clearAllNotifications} style={{ padding: 0, fontSize: '12px' }}>
+              Clear
+            </Button>
+          )}
+        </Flex>
       </div>
       
       {/* Scrollable Body */}

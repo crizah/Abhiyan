@@ -118,3 +118,15 @@ func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task updated"})
 }
+
+func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+
+	tasks, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, tasks)
+}

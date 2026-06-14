@@ -653,26 +653,6 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 	return tx.Commit()
 }
 
-// 1. Fetch teams the employee belongs to
-func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
-	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
-	if err != nil {
-		return nil, err
-	}
-
-	var teams []schemas.TeamResponse
-	for _, t := range dbTeams {
-		teams = append(teams, schemas.TeamResponse{
-			ID:   t.ID.String(),
-			Name: t.Name,
-		})
-	}
-	if teams == nil {
-		teams = []schemas.TeamResponse{}
-	}
-	return teams, nil
-}
-
 // 2. Fetch tasks where the employee is an Assignee or Subscriber
 func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string) ([]schemas.TaskResponse, error) {
 	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
@@ -845,4 +825,26 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	}
 
 	return tx.Commit()
+}
+
+func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:          t.ID.String(),
+			Name:        t.Name,
+			MemberCount: int(t.MemberCount),
+			Role:        string(t.TeamRole),
+		})
+	}
+
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
 }

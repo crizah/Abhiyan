@@ -37,7 +37,8 @@ type UnassignedUserResponse struct {
 type TeamResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	MemberCount int64  `json:"member_count"`
+	MemberCount int    `json:"member_count,omitempty"`
+	Role        string `json:"role,omitempty"`
 }
 
 type TeamMemberResponse struct {

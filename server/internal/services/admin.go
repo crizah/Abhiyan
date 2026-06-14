@@ -300,7 +300,7 @@ func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]sche
 		teams = append(teams, schemas.TeamResponse{
 			ID:          t.ID.String(),
 			Name:        t.Name,
-			MemberCount: t.MemberCount,
+			MemberCount: int(t.MemberCount),
 		})
 	}
 	if teams == nil {

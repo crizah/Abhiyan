@@ -115,7 +115,11 @@ func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]st
 }
 
 const getEmployeeTeams = `-- name: GetEmployeeTeams :many
-SELECT t.id, t.name, tm.team_role 
+SELECT 
+    t.id, 
+    t.name, 
+    tm.team_role,
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) AS member_count
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
 WHERE tm.user_id = $1
@@ -123,9 +127,10 @@ ORDER BY t.name ASC
 `
 
 type GetEmployeeTeamsRow struct {
-	ID       uuid.UUID    `json:"id"`
-	Name     string       `json:"name"`
-	TeamRole TeamRoleEnum `json:"team_role"`
+	ID          uuid.UUID    `json:"id"`
+	Name        string       `json:"name"`
+	TeamRole    TeamRoleEnum `json:"team_role"`
+	MemberCount int64        `json:"member_count"`
 }
 
 func (q *Queries) GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error) {
@@ -137,7 +142,12 @@ func (q *Queries) GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]Get
 	var items []GetEmployeeTeamsRow
 	for rows.Next() {
 		var i GetEmployeeTeamsRow
-		if err := rows.Scan(&i.ID, &i.Name, &i.TeamRole); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.TeamRole,
+			&i.MemberCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -62,6 +62,7 @@ type Querier interface {
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
+	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error
 	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error

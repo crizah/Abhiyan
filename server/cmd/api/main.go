@@ -134,6 +134,7 @@ func main() {
 			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
 			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
+			teamAdminGroup.PUT("/tasks/:task_id/reopen", taskHandler.ReopenTask)
 		}
 
 		users := v1.Group("/users")

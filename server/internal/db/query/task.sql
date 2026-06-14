@@ -89,3 +89,6 @@ JOIN teams tm ON t.team_id = tm.id
 JOIN team_members tmem ON tm.id = tmem.team_id
 WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
 ORDER BY t.created_at DESC;
+
+-- name: UpdateTaskDeadline :exec
+UPDATE tasks SET due_date = $2 WHERE id = $1;

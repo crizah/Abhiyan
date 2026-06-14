@@ -469,6 +469,20 @@ func (q *Queries) ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task
 	return items, nil
 }
 
+const updateTaskDeadline = `-- name: UpdateTaskDeadline :exec
+UPDATE tasks SET due_date = $2 WHERE id = $1
+`
+
+type UpdateTaskDeadlineParams struct {
+	ID      uuid.UUID    `json:"id"`
+	DueDate sql.NullTime `json:"due_date"`
+}
+
+func (q *Queries) UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskDeadline, arg.ID, arg.DueDate)
+	return err
+}
+
 const updateTaskDetails = `-- name: UpdateTaskDetails :exec
 UPDATE tasks 
 SET title = $1, 

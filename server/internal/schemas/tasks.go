@@ -86,3 +86,9 @@ type FullTaskDetailsResponse struct {
 	Participants []TaskParticipantResponse `json:"participants"`
 	Reminders    []ReminderResponse        `json:"reminders"`
 }
+
+type ReopenTaskRequest struct {
+	Note      string                  `json:"note"`
+	DueDate   *time.Time              `json:"due_date"`
+	Reminders []CreateReminderPayload `json:"reminders"`
+}

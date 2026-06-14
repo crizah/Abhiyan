@@ -25,6 +25,8 @@ export default function TeamTasksPage() {
   const [taskDetails, setTaskDetails] = useState(null); // Holds assignees/reminders
   const [taskUpdates, setTaskUpdates] = useState([]);
   const [newUpdateText, setNewUpdateText] = useState('');
+  const [reopenForm] = Form.useForm();
+  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
 
   useEffect(() => { fetchTeams(); }, []);
 
@@ -176,6 +178,50 @@ const fetchTasks = async (teamId) => {
     }
   };
 
+  const openReopenModal = () => {
+    reopenForm.setFieldsValue({
+      note: '',
+      due_date: selectedTask.due_date ? dayjs(selectedTask.due_date) : null,
+      reminders: (taskDetails?.reminders || []).map(r => ({
+        channel: r.channel,
+        scheduled_at: dayjs(r.scheduled_at),
+        recurrence_value: r.recurrence_value,
+        recurrence_unit: r.recurrence_unit
+      }))
+    });
+    setIsReopenModalOpen(true);
+  };
+
+  const handleReopenTask = async (values) => {
+    try {
+      const payload = {
+        note: values.note,
+        due_date: values.due_date ? values.due_date.toISOString() : null,
+        reminders: (values.reminders || []).map(r => ({
+          channel: r.channel,
+          scheduled_at: r.scheduled_at.toISOString(),
+          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value) : undefined,
+          recurrence_unit: r.recurrence_unit || undefined
+        }))
+      };
+
+      await apiClient.put(`/admin/tasks/${selectedTask.id}/reopen`, payload);
+      message.success("Task reopened successfully!");
+      
+      setIsReopenModalOpen(false);
+      
+      // Real-time UI sync
+      setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, status: 'OPEN' } : t));
+      setSelectedTask(prev => ({ ...prev, status: 'OPEN' }));
+      window.dispatchEvent(new Event('refresh-notifications'));
+      
+      fetchTasks(activeTeamId);
+      openTaskDrawer(selectedTask); // Refresh drawer timeline
+    } catch (err) {
+      message.error("Failed to reopen task.");
+    }
+  };
+
   const postTaskUpdate = async () => {
     if (!newUpdateText.trim()) return;
     try {
@@ -306,16 +352,58 @@ const fetchTasks = async (teamId) => {
             )}
           </Form.List>
         </Form>
+        
+      </Modal>
+      {/* REOPEN MODAL */}
+      <Modal destroyOnClose title="Reopen Task" open={isReopenModalOpen} onCancel={() => setIsReopenModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsReopenModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => reopenForm.submit()}>Confirm Reopen</Button>]}>
+        <Form form={reopenForm} layout="vertical" onFinish={handleReopenTask}>
+          <Form.Item name="note" label="Reopen Note (Optional)" tooltip="This will be posted to the timeline so the team knows why it was reopened.">
+            <TextArea rows={2} placeholder="Explain what is missing or needs revision..." />
+          </Form.Item>
+          
+          <Form.Item name="due_date" label="Updated Deadline">
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Divider orientation="left">Automated Reminders</Divider>
+          
+          <Form.List name="reminders">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
+                    <Flex gap="small" align="flex-end">
+                      <Form.Item {...restField} name={[name, 'channel']} label="Channel" rules={[{ required: true }]} style={{ margin: 0, width: 120 }}><Select options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                      <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
+                      <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
+                      <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
+                      <Button danger onClick={() => remove(name)}>X</Button>
+                    </Flex>
+                  </Card>
+                ))}
+                <Button type="dashed" onClick={() => add()} block icon={<ClockCircleOutlined />}>Add Scheduled Reminder</Button>
+              </>
+            )}
+          </Form.List>
+        </Form>
       </Modal>
 
       {/* DRAWER */}
       <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={600} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
-        extra={selectedTask?.status === 'OPEN' && (
+        extra={
           <Flex gap="small">
-            <Button icon={<EditOutlined />} onClick={openEditModal}>Edit</Button>
-            <Popconfirm title="Close task?" onConfirm={() => changeTaskStatus('CLOSED')}><Button type="primary" danger>Close Task</Button></Popconfirm>
+            {selectedTask?.status === 'OPEN' ? (
+              <>
+                <Button icon={<EditOutlined />} onClick={openEditModal}>Edit</Button>
+                <Popconfirm title="Close task?" onConfirm={() => changeTaskStatus('CLOSED')}>
+                  <Button type="primary" danger>Close Task</Button>
+                </Popconfirm>
+              </>
+            ) : (
+              <Button type="primary" onClick={openReopenModal}>Reopen Task</Button>
+            )}
           </Flex>
-        )}
+        }
       >
         {selectedTask && (
           <Flex vertical gap="large" style={{ height: '100%' }}>

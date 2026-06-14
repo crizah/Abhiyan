@@ -457,3 +457,86 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 	}
 	return tasks, nil
 }
+
+func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ReopenTaskRequest) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	// 1. Change Status back to OPEN
+	err = qtx.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
+		Status: db.NullTaskStatus{TaskStatus: db.TaskStatusOPEN, Valid: true},
+		ID:     tID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// change fullfillment status to PENDING
+	err = qtx.UpdateTaskFulfillment(ctx, db.UpdateTaskFulfillmentParams{
+		FulfillmentStatus: db.NullTaskFulfillmentStatus{TaskFulfillmentStatus: db.TaskFulfillmentStatusPENDING, Valid: true},
+		ID:                tID,
+	})
+
+	// 2. Update Deadline safely
+	var safeDueDate sql.NullTime
+	if req.DueDate != nil {
+		safeDueDate = sql.NullTime{Time: *req.DueDate, Valid: true}
+	}
+	_ = qtx.UpdateTaskDeadline(ctx, db.UpdateTaskDeadlineParams{
+		ID:      tID,
+		DueDate: safeDueDate,
+	})
+
+	// 3. Handle the optional Note as a Timeline Update
+	if strings.TrimSpace(req.Note) != "" {
+		qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+			TaskID:  tID,
+			UserID:  uuid.NullUUID{UUID: uID, Valid: true},
+			Content: fmt.Sprintf("TASK REOPENED: %s", req.Note),
+		})
+	}
+
+	// // 4. Reset & Apply Reminders
+	// _ = qtx.DeleteTaskReminders(ctx, tID)
+	// s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
+
+	// for _, rem := range req.Reminders {
+	// 	remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
+	// 	isRecurring := rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil
+	// 	if isRecurring {
+	// 		remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
+	// 		remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
+	// 	}
+	// 	rRow, _ := qtx.CreateReminder(ctx, remParams)
+
+	// 	payload := map[string]any{"task_id": tID.String(), "reminder_id": rRow.ID.String(), "channel": rem.Channel}
+	// 	if isRecurring {
+	// 		payload["cron"] = generateCronString(rem.ScheduledAt.Minute(), rem.ScheduledAt.Hour(), *rem.RecurrenceValue, *rem.RecurrenceUnit)
+	// 		s.onionApp.Enqueue(ctx, "send_recurring_task_reminder", payload)
+	// 	} else {
+	// 		s.onionApp.Enqueue(ctx, "send_task_reminder", payload)
+	// 	}
+	// }
+
+	// 5. Mass-Notify Participants
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	participants, _ := qtx.GetTaskParticipants(ctx, tID)
+
+	for _, p := range participants {
+		// We notify EVERYONE, even the admin doing it, so it's a clear system record
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID:  p.ID,
+			Title:   "Task Reopened",
+			Message: fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
+		})
+	}
+
+	return tx.Commit()
+}

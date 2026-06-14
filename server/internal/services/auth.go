@@ -67,7 +67,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
-		Status:      db.NullUserStatus{UserStatus: db.UserStatusACTIVE},
+		Status:      db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
 	})
 	if err != nil {
 		return err

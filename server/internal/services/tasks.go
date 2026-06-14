@@ -167,8 +167,27 @@ func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schema
 }
 
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
+	tID := util.ParseUUID(taskID)
+
+	// Prepare status update
+	statusParam := db.NullTaskStatus{
+		TaskStatus: db.TaskStatus(status),
+		Valid:      true,
+	}
+
+	// Logic: If status is CLOSED, force Fulfillment to COMPLETED
+	if status == "CLOSED" {
+		_ = s.queries.UpdateTaskFulfillment(ctx, db.UpdateTaskFulfillmentParams{
+			FulfillmentStatus: db.NullTaskFulfillmentStatus{
+				TaskFulfillmentStatus: db.TaskFulfillmentStatusCOMPLETED,
+				Valid:                 true,
+			},
+			ID: tID,
+		})
+	}
+
 	return s.queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
-		Status: db.NullTaskStatus{TaskStatus: db.TaskStatus(status)},
-		ID:     util.ParseUUID(taskID),
+		Status: statusParam,
+		ID:     tID,
 	})
 }

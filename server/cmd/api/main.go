@@ -88,6 +88,15 @@ func main() {
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
 			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
+			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)
+			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks)
+			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)
+
+			// Re-use existing comment/update routes for employees
+			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
+			general.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
+			general.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
+			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 		}
 
 		// ADMIN DOMAIN

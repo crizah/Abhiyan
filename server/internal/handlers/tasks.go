@@ -168,3 +168,37 @@ func (h *TaskHandler) ReopenTask(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Task reopened successfully"})
 }
+
+func (h *TaskHandler) GetEmployeeTeams(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+	teams, err := h.taskService.GetEmployeeTeams(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+	c.JSON(http.StatusOK, teams)
+}
+
+func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
+	teamID := c.Param("team_id")
+	userID := c.MustGet("user_id").(string)
+
+	tasks, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		return
+	}
+	c.JSON(http.StatusOK, tasks)
+}
+
+func (h *TaskHandler) SubmitTask(c *gin.Context) {
+	taskID := c.Param("task_id")
+	userID := c.MustGet("user_id").(string)
+
+	err := h.taskService.SubmitTaskForReview(c.Request.Context(), taskID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Task submitted for review"})
+}

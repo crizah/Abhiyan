@@ -239,7 +239,7 @@ const handleCreateTask = async (values) => {
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
     { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
     { title: 'Admin Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
-    { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View details</Button> }
+    { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View Task</Button> }
   ];
   const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
 
@@ -372,7 +372,7 @@ const handleCreateTask = async (values) => {
             </Card>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              <Title level={5}>Activity & Updates</Title>
+              <Title level={5}>Activity</Title>
               {taskUpdates.length === 0 ? <Text type="secondary">No updates yet.</Text> : (
                 <Timeline 
                   items={taskUpdates.map(u => ({ 

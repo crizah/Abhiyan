@@ -660,3 +660,131 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 
 	return tx.Commit()
 }
+
+// 1. Fetch teams the employee belongs to
+func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:   t.ID.String(),
+			Name: t.Name,
+		})
+	}
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
+}
+
+// 2. Fetch tasks where the employee is an Assignee or Subscriber
+func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string) ([]schemas.TaskResponse, error) {
+	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
+		TeamID: util.ParseUUID(teamID),
+		UserID: util.ParseUUID(userID),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []schemas.TaskResponse
+	for _, t := range dbTasks {
+		var dueDate *time.Time
+		if t.DueDate.Valid {
+			dueDate = &t.DueDate.Time
+		}
+		var createdAt *time.Time
+		if t.CreatedAt.Valid {
+			createdAt = &t.CreatedAt.Time
+		}
+
+		tasks = append(tasks, schemas.TaskResponse{
+			ID:                t.ID.String(),
+			TeamID:            t.TeamID.String(),
+			Title:             t.Title,
+			Description:       t.Description.String,
+			Status:            string(t.Status.TaskStatus),
+			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			CreatedBy:         t.CreatedBy.String(),
+			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
+			DueDate:           dueDate,
+			CreatedAt:         createdAt,
+		})
+	}
+	if tasks == nil {
+		tasks = []schemas.TaskResponse{}
+	}
+	return tasks, nil
+}
+func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	// 1. Flip Fulfillment to COMPLETED
+	err = qtx.UpdateTaskFulfillment(ctx, db.UpdateTaskFulfillmentParams{
+		FulfillmentStatus: db.NullTaskFulfillmentStatus{
+			TaskFulfillmentStatus: db.TaskFulfillmentStatusCOMPLETED,
+			Valid:                 true,
+		},
+		ID: tID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update fulfillment: %w", err)
+	}
+
+	// 2. Fetch details for notification
+	taskTitle, err := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to get task title: %w", err)
+	}
+
+	userRec, err := qtx.GetUserNameByID(ctx, uID)
+	if err != nil {
+		return fmt.Errorf("failed to get user name: %w", err)
+	}
+
+	userName := strings.TrimSpace(userRec.FirstName.String + " " + userRec.LastName.String)
+	if userName == "" {
+		userName = "A team member"
+	}
+
+	// 3. Post a System Update to the timeline
+	_, err = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+		TaskID:  tID,
+		UserID:  uuid.NullUUID{UUID: uID, Valid: true},
+		Content: "Task submitted for Admin review.",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to post timeline update: %w", err)
+	}
+
+	// 4. Notify all Team Admins
+	admins, err := qtx.GetTeamAdminsByTask(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to get team admins: %w", err)
+	}
+
+	for _, adminID := range admins {
+		err = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID:  adminID,
+			Title:   "Task Ready for Review",
+			Message: fmt.Sprintf("%s has completed and submitted: %s", userName, taskTitle),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create notification: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}

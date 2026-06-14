@@ -229,6 +229,70 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 	return items, nil
 }
 
+const getEmployeeTasks = `-- name: GetEmployeeTasks :many
+SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+       t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
+FROM tasks t
+JOIN users u ON t.created_by = u.id
+JOIN task_participants tp ON t.id = tp.task_id
+WHERE t.team_id = $1 AND tp.user_id = $2
+ORDER BY t.created_at DESC
+`
+
+type GetEmployeeTasksParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type GetEmployeeTasksRow struct {
+	ID                uuid.UUID                 `json:"id"`
+	TeamID            uuid.UUID                 `json:"team_id"`
+	Title             string                    `json:"title"`
+	Description       sql.NullString            `json:"description"`
+	Status            NullTaskStatus            `json:"status"`
+	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	CreatedBy         uuid.UUID                 `json:"created_by"`
+	DueDate           sql.NullTime              `json:"due_date"`
+	CreatedAt         sql.NullTime              `json:"created_at"`
+	FirstName         sql.NullString            `json:"first_name"`
+	LastName          sql.NullString            `json:"last_name"`
+}
+
+func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getEmployeeTasks, arg.TeamID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEmployeeTasksRow
+	for rows.Next() {
+		var i GetEmployeeTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.FulfillmentStatus,
+			&i.CreatedBy,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at FROM tasks
 WHERE id = $1 LIMIT 1

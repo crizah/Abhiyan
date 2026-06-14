@@ -14,6 +14,7 @@ import TeamEmployeesPage from './features/users/TeamEmployeesPage';
 import UserOnboardingPage from './features/users/UserOnboardingPage';
 import TeamsPage from './features/users/TeamsPage';
 import TeamTasksPage from './features/tasks/pages/TeamTasksPage'; 
+import EmployeeTasksPage from './features/tasks/pages/EmployeeTasksPage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -58,7 +59,10 @@ export default function App() {
                 <Route path="employees" element={<TeamEmployeesPage />} />
                 <Route path="onboarding" element={<UserOnboardingPage />} />
                 <Route path="teams" element={<TeamsPage />} />
-                <Route path="tasks" element={<TeamTasksPage />} />
+                
+                <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
+                <Route path="employee-tasks" element={<EmployeeTasksPage />} />
+                
                 
               </Route>
 

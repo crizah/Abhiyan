@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const checkTeamAdminStatus = `-- name: CheckTeamAdminStatus :one
+SELECT EXISTS (
+    SELECT 1 FROM team_members 
+    WHERE team_id = $1 AND user_id = $2 AND team_role = 'TEAM_ADMIN'
+)
+`
+
+type CheckTeamAdminStatusParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkTeamAdminStatus, arg.TeamID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (org_id, name) VALUES ($1, $2) RETURNING id
 `
@@ -26,6 +45,42 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UU
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getAdminManagedTeams = `-- name: GetAdminManagedTeams :many
+SELECT t.id, t.name 
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC
+`
+
+type GetAdminManagedTeamsRow struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+func (q *Queries) GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminManagedTeams, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAdminManagedTeamsRow
+	for rows.Next() {
+		var i GetAdminManagedTeamsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAdminTeamNames = `-- name: GetAdminTeamNames :many

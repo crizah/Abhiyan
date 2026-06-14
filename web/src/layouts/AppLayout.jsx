@@ -3,7 +3,8 @@ import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag,
 
 import { 
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined, CheckOutlined, ApartmentOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, 
+  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -88,6 +89,17 @@ const GlobalHeader = ({ user, token, navigate }) => {
     }
   };
 
+  const clearAllNotifications = async () => {
+    try {
+      await apiClient.delete('/notifications/clear');
+      // Keep real-time system alerts, but clear all DB notifications from the UI
+      setNotifications(prev => prev.filter(n => n.is_system));
+      message.success("Notifications cleared");
+    } catch (err) {
+      message.error("Failed to clear notifications");
+    }
+  };
+
   const getNotificationStyle = (item) => {
     if (item.is_system) return { bg: '#fffbe6', border: '#fa8c16' }; 
     if (item.is_read) return { bg: 'transparent', border: 'transparent' };
@@ -102,14 +114,22 @@ const GlobalHeader = ({ user, token, navigate }) => {
   const notificationDropdown = (
     <div style={{ width: '350px', backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, overflow: 'hidden' }}>
       
-      {/* Compact Header */}
+{/* Compact Header */}
       <div style={{ padding: '8px 16px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fafafa' }}>
         <Text strong style={{ fontSize: '13px' }}>Notifications</Text>
-        {unreadCount > 0 && (
-          <Button type="link" size="small" onClick={markAllRead} style={{ padding: 0, fontSize: '12px' }}>
-            Mark all read
-          </Button>
-        )}
+        <Flex gap="middle" align="center">
+          {unreadCount > 0 && (
+            <Button type="link" size="small" onClick={markAllRead} style={{ padding: 0, fontSize: '12px' }}>
+              Mark all read
+            </Button>
+          )}
+          {/* Only show Clear if there are actually clearable non-system notifications */}
+          {notifications.some(n => !n.is_system) && (
+            <Button type="link" danger size="small" onClick={clearAllNotifications} style={{ padding: 0, fontSize: '12px' }}>
+              Clear
+            </Button>
+          )}
+        </Flex>
       </div>
       
       {/* Scrollable Body */}
@@ -251,6 +271,8 @@ export default function AppLayout() {
 
         <CSidebarNav>
           <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}><DashboardOutlined className="nav-icon" /> Dashboard</CNavItem>
+          
+          {/* SUPER ADMIN SPECIFIC ITEMS */}
           {activeRole === 'SUPER_ADMIN' && (
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}><TeamOutlined className="nav-icon" /> Users</CNavItem>
@@ -260,9 +282,16 @@ export default function AppLayout() {
               </CNavItem>
             </>
           )}
+
+          {/* ADMIN SPECIFIC ITEMS */}
           {activeRole === 'ADMIN' && (
-            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
+            <>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/tasks'); }} active={location.pathname === '/tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
+            </>
           )}
+
+          {/* COMMON BOTTOM ITEMS */}
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}><UserSwitchOutlined className="nav-icon" /> Switch Roles</CNavItem>
           </Dropdown>

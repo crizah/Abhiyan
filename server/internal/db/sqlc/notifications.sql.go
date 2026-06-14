@@ -21,6 +21,22 @@ func (q *Queries) ClearNotifications(ctx context.Context, userID uuid.UUID) erro
 	return err
 }
 
+const createNotification = `-- name: CreateNotification :exec
+INSERT INTO notifications (user_id, title, message) 
+VALUES ($1, $2, $3)
+`
+
+type CreateNotificationParams struct {
+	UserID  uuid.UUID `json:"user_id"`
+	Title   string    `json:"title"`
+	Message string    `json:"message"`
+}
+
+func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
+	_, err := q.db.ExecContext(ctx, createNotification, arg.UserID, arg.Title, arg.Message)
+	return err
+}
+
 const getUserNotifications = `-- name: GetUserNotifications :many
 SELECT id, title, message, is_read, created_at
 FROM notifications

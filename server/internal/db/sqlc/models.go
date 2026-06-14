@@ -55,6 +55,51 @@ func (ns NullParticipantRole) Value() (driver.Value, error) {
 	return string(ns.ParticipantRole), nil
 }
 
+type RecurrenceUnit string
+
+const (
+	RecurrenceUnitMINUTES RecurrenceUnit = "MINUTES"
+	RecurrenceUnitHOURS   RecurrenceUnit = "HOURS"
+	RecurrenceUnitDAYS    RecurrenceUnit = "DAYS"
+	RecurrenceUnitWEEKS   RecurrenceUnit = "WEEKS"
+	RecurrenceUnitMONTHS  RecurrenceUnit = "MONTHS"
+)
+
+func (e *RecurrenceUnit) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RecurrenceUnit(s)
+	case string:
+		*e = RecurrenceUnit(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RecurrenceUnit: %T", src)
+	}
+	return nil
+}
+
+type NullRecurrenceUnit struct {
+	RecurrenceUnit RecurrenceUnit `json:"recurrence_unit"`
+	Valid          bool           `json:"valid"` // Valid is true if RecurrenceUnit is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRecurrenceUnit) Scan(value interface{}) error {
+	if value == nil {
+		ns.RecurrenceUnit, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RecurrenceUnit.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRecurrenceUnit) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RecurrenceUnit), nil
+}
+
 type ReminderChannel string
 
 const (
@@ -369,12 +414,14 @@ type Organization struct {
 }
 
 type Reminder struct {
-	ID          uuid.UUID          `json:"id"`
-	TaskID      uuid.UUID          `json:"task_id"`
-	ScheduledAt time.Time          `json:"scheduled_at"`
-	Channel     ReminderChannel    `json:"channel"`
-	Status      NullReminderStatus `json:"status"`
-	CreatedAt   sql.NullTime       `json:"created_at"`
+	ID              uuid.UUID          `json:"id"`
+	TaskID          uuid.UUID          `json:"task_id"`
+	ScheduledAt     time.Time          `json:"scheduled_at"`
+	Channel         ReminderChannel    `json:"channel"`
+	Status          NullReminderStatus `json:"status"`
+	RecurrenceValue sql.NullInt32      `json:"recurrence_value"`
+	RecurrenceUnit  NullRecurrenceUnit `json:"recurrence_unit"`
+	CreatedAt       sql.NullTime       `json:"created_at"`
 }
 
 type Task struct {
@@ -401,6 +448,14 @@ type TaskUpdate struct {
 	UserID    uuid.NullUUID `json:"user_id"`
 	Content   string        `json:"content"`
 	CreatedAt sql.NullTime  `json:"created_at"`
+}
+
+type TaskUpdateComment struct {
+	ID           uuid.UUID     `json:"id"`
+	TaskUpdateID uuid.UUID     `json:"task_update_id"`
+	UserID       uuid.NullUUID `json:"user_id"`
+	Content      string        `json:"content"`
+	CreatedAt    sql.NullTime  `json:"created_at"`
 }
 
 type Team struct {

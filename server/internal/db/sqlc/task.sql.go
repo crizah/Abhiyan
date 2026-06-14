@@ -8,27 +8,119 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
 
+const addTaskParticipant = `-- name: AddTaskParticipant :exec
+INSERT INTO task_participants (task_id, user_id, role)
+VALUES ($1, $2, $3)
+ON CONFLICT (task_id, user_id, role) DO NOTHING
+`
+
+type AddTaskParticipantParams struct {
+	TaskID uuid.UUID       `json:"task_id"`
+	UserID uuid.UUID       `json:"user_id"`
+	Role   ParticipantRole `json:"role"`
+}
+
+func (q *Queries) AddTaskParticipant(ctx context.Context, arg AddTaskParticipantParams) error {
+	_, err := q.db.ExecContext(ctx, addTaskParticipant, arg.TaskID, arg.UserID, arg.Role)
+	return err
+}
+
+const addTaskUpdate = `-- name: AddTaskUpdate :one
+INSERT INTO task_updates (task_id, user_id, content)
+VALUES ($1, $2, $3)
+RETURNING id, task_id, user_id, content, created_at
+`
+
+type AddTaskUpdateParams struct {
+	TaskID  uuid.UUID     `json:"task_id"`
+	UserID  uuid.NullUUID `json:"user_id"`
+	Content string        `json:"content"`
+}
+
+func (q *Queries) AddTaskUpdate(ctx context.Context, arg AddTaskUpdateParams) (TaskUpdate, error) {
+	row := q.db.QueryRowContext(ctx, addTaskUpdate, arg.TaskID, arg.UserID, arg.Content)
+	var i TaskUpdate
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.UserID,
+		&i.Content,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const addUpdateComment = `-- name: AddUpdateComment :one
+INSERT INTO task_update_comments (task_update_id, user_id, content)
+VALUES ($1, $2, $3) RETURNING id
+`
+
+type AddUpdateCommentParams struct {
+	TaskUpdateID uuid.UUID     `json:"task_update_id"`
+	UserID       uuid.NullUUID `json:"user_id"`
+	Content      string        `json:"content"`
+}
+
+func (q *Queries) AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, addUpdateComment, arg.TaskUpdateID, arg.UserID, arg.Content)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const createReminder = `-- name: CreateReminder :one
+INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at
+`
+
+type CreateReminderParams struct {
+	TaskID          uuid.UUID          `json:"task_id"`
+	ScheduledAt     time.Time          `json:"scheduled_at"`
+	Channel         ReminderChannel    `json:"channel"`
+	RecurrenceValue sql.NullInt32      `json:"recurrence_value"`
+	RecurrenceUnit  NullRecurrenceUnit `json:"recurrence_unit"`
+}
+
+func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error) {
+	row := q.db.QueryRowContext(ctx, createReminder,
+		arg.TaskID,
+		arg.ScheduledAt,
+		arg.Channel,
+		arg.RecurrenceValue,
+		arg.RecurrenceUnit,
+	)
+	var i Reminder
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.ScheduledAt,
+		&i.Channel,
+		&i.Status,
+		&i.RecurrenceValue,
+		&i.RecurrenceUnit,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (
-    team_id, title, description, status, fulfillment_status, created_by, due_date
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-)
+INSERT INTO tasks (team_id, title, description, created_by, due_date)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at
 `
 
 type CreateTaskParams struct {
-	TeamID            uuid.UUID                 `json:"team_id"`
-	Title             string                    `json:"title"`
-	Description       sql.NullString            `json:"description"`
-	Status            NullTaskStatus            `json:"status"`
-	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
-	CreatedBy         uuid.UUID                 `json:"created_by"`
-	DueDate           sql.NullTime              `json:"due_date"`
+	TeamID      uuid.UUID      `json:"team_id"`
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	CreatedBy   uuid.UUID      `json:"created_by"`
+	DueDate     sql.NullTime   `json:"due_date"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -36,8 +128,6 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.TeamID,
 		arg.Title,
 		arg.Description,
-		arg.Status,
-		arg.FulfillmentStatus,
 		arg.CreatedBy,
 		arg.DueDate,
 	)
@@ -54,6 +144,89 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteTaskParticipants = `-- name: DeleteTaskParticipants :exec
+DELETE FROM task_participants WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskParticipants, taskID)
+	return err
+}
+
+const deleteTaskReminders = `-- name: DeleteTaskReminders :exec
+DELETE FROM reminders WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskReminders, taskID)
+	return err
+}
+
+const getAdminAllTasks = `-- name: GetAdminAllTasks :many
+SELECT 
+    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+    t.created_by, t.due_date, t.created_at, 
+    u.first_name, u.last_name, 
+    tm.name as team_name
+FROM tasks t
+JOIN users u ON t.created_by = u.id
+JOIN teams tm ON t.team_id = tm.id
+JOIN team_members tmem ON tm.id = tmem.team_id
+WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+ORDER BY t.created_at DESC
+`
+
+type GetAdminAllTasksRow struct {
+	ID                uuid.UUID                 `json:"id"`
+	TeamID            uuid.UUID                 `json:"team_id"`
+	Title             string                    `json:"title"`
+	Description       sql.NullString            `json:"description"`
+	Status            NullTaskStatus            `json:"status"`
+	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	CreatedBy         uuid.UUID                 `json:"created_by"`
+	DueDate           sql.NullTime              `json:"due_date"`
+	CreatedAt         sql.NullTime              `json:"created_at"`
+	FirstName         sql.NullString            `json:"first_name"`
+	LastName          sql.NullString            `json:"last_name"`
+	TeamName          string                    `json:"team_name"`
+}
+
+func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAdminAllTasksRow
+	for rows.Next() {
+		var i GetAdminAllTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.FulfillmentStatus,
+			&i.CreatedBy,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+			&i.TeamName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
@@ -76,6 +249,265 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error) {
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getTaskDetailsForNotifications = `-- name: GetTaskDetailsForNotifications :one
+SELECT title FROM tasks WHERE id = $1
+`
+
+func (q *Queries) GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTaskDetailsForNotifications, id)
+	var title string
+	err := row.Scan(&title)
+	return title, err
+}
+
+const getTaskParticipants = `-- name: GetTaskParticipants :many
+SELECT tp.role::text, u.id, u.first_name, u.last_name, u.email_id
+FROM task_participants tp
+JOIN users u ON tp.user_id = u.id
+WHERE tp.task_id = $1
+`
+
+type GetTaskParticipantsRow struct {
+	TpRole    string         `json:"tp_role"`
+	ID        uuid.UUID      `json:"id"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	EmailID   string         `json:"email_id"`
+}
+
+func (q *Queries) GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskParticipants, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskParticipantsRow
+	for rows.Next() {
+		var i GetTaskParticipantsRow
+		if err := rows.Scan(
+			&i.TpRole,
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskReminders = `-- name: GetTaskReminders :many
+SELECT id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC
+`
+
+func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskReminders, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reminder
+	for rows.Next() {
+		var i Reminder
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.ScheduledAt,
+			&i.Channel,
+			&i.Status,
+			&i.RecurrenceValue,
+			&i.RecurrenceUnit,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskUpdateAuthor = `-- name: GetTaskUpdateAuthor :one
+SELECT user_id FROM task_updates WHERE id = $1
+`
+
+func (q *Queries) GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.NullUUID, error) {
+	row := q.db.QueryRowContext(ctx, getTaskUpdateAuthor, id)
+	var user_id uuid.NullUUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getTaskUpdateComments = `-- name: GetTaskUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+       u.first_name, u.last_name
+FROM task_update_comments c
+JOIN task_updates tu ON c.task_update_id = tu.id
+LEFT JOIN users u ON c.user_id = u.id
+WHERE tu.task_id = $1
+ORDER BY c.created_at ASC
+`
+
+type GetTaskUpdateCommentsRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskUpdateID uuid.UUID      `json:"task_update_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdateComments, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskUpdateCommentsRow
+	for rows.Next() {
+		var i GetTaskUpdateCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskUpdateID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskUpdates = `-- name: GetTaskUpdates :many
+SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at, u.first_name, u.last_name
+FROM task_updates tu
+JOIN users u ON tu.user_id = u.id
+WHERE tu.task_id = $1
+ORDER BY tu.created_at ASC
+`
+
+type GetTaskUpdatesRow struct {
+	ID        uuid.UUID      `json:"id"`
+	TaskID    uuid.UUID      `json:"task_id"`
+	UserID    uuid.NullUUID  `json:"user_id"`
+	Content   string         `json:"content"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdates, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskUpdatesRow
+	for rows.Next() {
+		var i GetTaskUpdatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeamTasks = `-- name: GetTeamTasks :many
+SELECT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.created_by, t.due_date, t.created_at, u.first_name, u.last_name 
+FROM tasks t
+JOIN users u ON t.created_by = u.id
+WHERE t.team_id = $1
+ORDER BY t.created_at DESC
+`
+
+type GetTeamTasksRow struct {
+	ID                uuid.UUID                 `json:"id"`
+	TeamID            uuid.UUID                 `json:"team_id"`
+	Title             string                    `json:"title"`
+	Description       sql.NullString            `json:"description"`
+	Status            NullTaskStatus            `json:"status"`
+	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	CreatedBy         uuid.UUID                 `json:"created_by"`
+	DueDate           sql.NullTime              `json:"due_date"`
+	CreatedAt         sql.NullTime              `json:"created_at"`
+	FirstName         sql.NullString            `json:"first_name"`
+	LastName          sql.NullString            `json:"last_name"`
+}
+
+func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamTasks, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTeamTasksRow
+	for rows.Next() {
+		var i GetTeamTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.FulfillmentStatus,
+			&i.CreatedBy,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTasksByTeam = `-- name: ListTasksByTeam :many
@@ -115,4 +547,75 @@ func (q *Queries) ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTaskDeadline = `-- name: UpdateTaskDeadline :exec
+UPDATE tasks SET due_date = $2 WHERE id = $1
+`
+
+type UpdateTaskDeadlineParams struct {
+	ID      uuid.UUID    `json:"id"`
+	DueDate sql.NullTime `json:"due_date"`
+}
+
+func (q *Queries) UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskDeadline, arg.ID, arg.DueDate)
+	return err
+}
+
+const updateTaskDetails = `-- name: UpdateTaskDetails :exec
+UPDATE tasks 
+SET title = $1, 
+    description = $2, 
+    due_date = $3 
+WHERE id = $4
+`
+
+type UpdateTaskDetailsParams struct {
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	DueDate     sql.NullTime   `json:"due_date"`
+	ID          uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskDetails,
+		arg.Title,
+		arg.Description,
+		arg.DueDate,
+		arg.ID,
+	)
+	return err
+}
+
+const updateTaskFulfillment = `-- name: UpdateTaskFulfillment :exec
+UPDATE tasks 
+SET fulfillment_status = $1 
+WHERE id = $2
+`
+
+type UpdateTaskFulfillmentParams struct {
+	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	ID                uuid.UUID                 `json:"id"`
+}
+
+func (q *Queries) UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskFulfillment, arg.FulfillmentStatus, arg.ID)
+	return err
+}
+
+const updateTaskStatus = `-- name: UpdateTaskStatus :exec
+UPDATE tasks 
+SET status = $1 
+WHERE id = $2
+`
+
+type UpdateTaskStatusParams struct {
+	Status NullTaskStatus `json:"status"`
+	ID     uuid.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskStatus, arg.Status, arg.ID)
+	return err
 }

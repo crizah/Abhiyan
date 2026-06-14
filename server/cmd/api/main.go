@@ -47,12 +47,14 @@ func main() {
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
+	taskService := services.NewTaskService(dbConn, onionApp)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
 	adminHandler := handlers.NewAdminHandler(adminService)
 	userHandler := handlers.NewUserHandler(userService)
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
+	taskHandler := handlers.NewTaskHandler(taskService)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -104,7 +106,7 @@ func main() {
 			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers)
 			superAdminGroup.POST("/teams", adminHandler.CreateTeam)
 			superAdminGroup.GET("/teams", adminHandler.GetTeams)
-			superAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
+
 			superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
 			superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
 			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
@@ -122,6 +124,18 @@ func main() {
 			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
 			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
 			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions) // when tf am i hitting this??
+			teamAdminGroup.POST("/teams/:team_id/tasks", taskHandler.CreateTask)
+			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks)
+			teamAdminGroup.PUT("/tasks/:task_id/status", taskHandler.UpdateTaskStatus)
+			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams)
+			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
+			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
+			teamAdminGroup.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
+			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
+			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
+			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
+			teamAdminGroup.PUT("/tasks/:task_id/reopen", taskHandler.ReopenTask)
+			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 		}
 
 		users := v1.Group("/users")

@@ -13,3 +13,9 @@ DELETE FROM notifications WHERE user_id = $1;
 
 -- name: MarkOneNotificationRead :exec
 UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;
+
+
+-- name: CreateNotification :exec
+INSERT INTO notifications (user_id, title, message) 
+VALUES ($1, $2, $3);
+

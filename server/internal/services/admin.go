@@ -254,14 +254,38 @@ func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) 
 	return users, nil
 }
 
-func (s *AdminService) CreateTeam(ctx context.Context, orgID, name string) (string, error) {
-	teamID, err := s.queries.CreateTeam(ctx, db.CreateTeamParams{
+func (s *AdminService) CreateTeam(ctx context.Context, orgID, name, creatorID string) (string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+
+	// 1. Create the Team
+	teamID, err := qtx.CreateTeam(ctx, db.CreateTeamParams{
 		OrgID: util.ParseUUID(orgID),
 		Name:  name,
 	})
 	if err != nil {
 		return "", errors.New("a team with this name may already exist")
 	}
+
+	// 2. Automatically make the creator the TEAM_ADMIN
+	err = qtx.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+		TeamID:   teamID,
+		UserID:   util.ParseUUID(creatorID),
+		TeamRole: "TEAM_ADMIN", // Or db.TeamRoleEnumTEAM_ADMIN depending on your generated types
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+
 	return teamID.String(), nil
 }
 
@@ -285,7 +309,21 @@ func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]sche
 	return teams, nil
 }
 
-func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string) ([]schemas.TeamMemberResponse, error) {
+func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string, userID string, role string) ([]schemas.TeamMemberResponse, error) {
+	tID := util.ParseUUID(teamID)
+	uID := util.ParseUUID(userID)
+
+	// SECURITY GUARD: If they are not a SUPER_ADMIN, verify they actually manage this team
+	if role != "SUPER_ADMIN" {
+		isAdmin, err := s.queries.CheckTeamAdminStatus(ctx, db.CheckTeamAdminStatusParams{
+			TeamID: tID,
+			UserID: uID,
+		})
+		if err != nil || !isAdmin {
+			return nil, errors.New("unauthorized: you do not manage this team")
+		}
+	}
+
 	dbMembers, err := s.queries.GetTeamMembersDetails(ctx, util.ParseUUID(teamID))
 	if err != nil {
 		return nil, err
@@ -342,7 +380,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 		}
 
 		if adminCount <= 1 {
-			members, _ := s.GetTeamMembers(ctx, teamID)
+			members, _ := s.GetTeamMembers(ctx, teamID, "", "SUPER_ADMIN")
 			for _, m := range members {
 				if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
 					return errors.New("cannot remove or demote the last Team Admin. Promote someone else first")
@@ -378,7 +416,7 @@ func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTea
 	}
 
 	if adminCount <= 1 {
-		members, _ := s.GetTeamMembers(ctx, fromTeamID)
+		members, _ := s.GetTeamMembers(ctx, fromTeamID, "", "SUPER_ADMIN")
 		for _, m := range members {
 			if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
 				return errors.New("cannot transfer the last Team Admin. Promote someone else on this team first")
@@ -479,4 +517,8 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	}
 
 	return nil
+}
+
+func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string) ([]db.GetAdminManagedTeamsRow, error) {
+	return s.queries.GetAdminManagedTeams(ctx, util.ParseUUID(userID))
 }

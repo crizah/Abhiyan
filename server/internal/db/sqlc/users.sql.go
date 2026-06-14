@@ -304,6 +304,22 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	return i, err
 }
 
+const getUserNameByID = `-- name: GetUserNameByID :one
+SELECT first_name, last_name FROM users WHERE id = $1
+`
+
+type GetUserNameByIDRow struct {
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserNameByID, id)
+	var i GetUserNameByIDRow
+	err := row.Scan(&i.FirstName, &i.LastName)
+	return i, err
+}
+
 const getUserStatus = `-- name: GetUserStatus :one
 SELECT status FROM users WHERE id = $1
 `

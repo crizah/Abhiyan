@@ -16,6 +16,7 @@ type Querier interface {
 	AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error)
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
+	ApproveTaskState(ctx context.Context, id uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
@@ -32,7 +33,10 @@ type Querier interface {
 	GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error)
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error)
 	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
+	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
+	GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
@@ -44,6 +48,7 @@ type Querier interface {
 	GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error)
 	GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error)
 	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
+	GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error)
@@ -65,7 +70,10 @@ type Querier interface {
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
+	RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
+	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
+	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error

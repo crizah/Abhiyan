@@ -1,26 +1,113 @@
-import React from 'react';
-import { Typography, Empty, theme } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Typography, Spin, message, theme, Flex } from 'antd';
+import { TeamOutlined, ApartmentOutlined, UserOutlined } from '@ant-design/icons';
+import { useAuth } from '../../../context/AuthContext'; // Adjust path if needed
+import apiClient from '../../../config/axios';
 
-const { Title } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 export default function EmployeeDashboard() {
-  const { token } = theme.useToken(); // Injecting tokens for the text color
+  const { user } = useAuth();
+  const { token } = theme.useToken();
+  
+  const [teams, setTeams] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const res = await apiClient.get('/employee/teams');
+        setTeams(res.data || []);
+      } catch (error) {
+        message.error("Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      minHeight: '60vh' 
-    }}>
-      <Empty 
-        description={
-          <Title level={4} style={{ color: token.colorTextHeading, marginTop: '16px' }}>
-            Employee Dashboard Under Construction
-          </Title>
-        } 
-      />
+    <div>
+      {/* Page Title Area */}
+      <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.email || 'Team Member'}</Title>
+      <Paragraph type="secondary">Here is an overview of your teams.</Paragraph>
+
+      {/* Content Area */}
+      <div style={{ marginTop: '40px' }}>
+        {loading ? (
+          <Spin />
+        ) : (
+          <>
+            {/* KPI Block (Matches SuperAdmin Design) */}
+            <div style={{ 
+              display: 'inline-flex', 
+              flexDirection: 'column', 
+              gap: '8px',
+              padding: '20px 32px',
+              border: `1px solid ${token.colorBorderSecondary}`,
+              borderRadius: token.borderRadiusLG,
+              backgroundColor: token.colorBgLayout
+            }}>
+              <Text style={{ fontSize: '14px', color: token.colorTextSecondary, fontWeight: 500 }}>
+                <ApartmentOutlined style={{ marginRight: '8px' }} />
+                Total Teams
+              </Text>
+              <Text style={{ fontSize: '36px', color: token.colorTextHeading, fontWeight: 600, lineHeight: 1 }}>
+                {teams.length}
+              </Text>
+            </div>
+
+            {/* Workspaces Grid */}
+            <div style={{ marginTop: '48px' }}>
+              <Title level={4} style={{ marginBottom: '20px' }}>My Assigned Teams</Title>
+              
+              {teams.length === 0 ? (
+                <div style={{ padding: '40px 0' }}>
+                  <Text type="secondary">You have not been assigned to any teams yet.</Text>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  {teams.map(team => (
+                    <div key={team.id} style={{
+                      width: '280px',
+                      padding: '20px',
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      borderRadius: token.borderRadiusLG,
+                      backgroundColor: token.colorBgContainer,
+                      borderTop: `3px solid ${token.colorPrimary}`, // Subtle accent strip on top
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      transition: 'box-shadow 0.2s',
+                    }}>
+                      {/* Team Header */}
+                      <Flex justify="space-between" align="center">
+                        <Text strong style={{ fontSize: '16px', color: token.colorTextHeading, lineHeight: 1.3 }}>
+                          {team.name}
+                        </Text>
+                      </Flex>
+                      
+                      {/* Team Meta Details */}
+                      <Flex vertical gap="6px" style={{ marginTop: '4px' }}>
+                        <Text style={{ fontSize: '13px', color: token.colorTextSecondary }}>
+                          <UserOutlined style={{ marginRight: '8px' }} /> 
+                          {team.member_count} {team.member_count === 1 ? 'Member' : 'Members'}
+                        </Text>
+                        <Text style={{ fontSize: '13px', color: token.colorTextSecondary }}>
+                          <TeamOutlined style={{ marginRight: '8px' }} />
+                          Role: <Text strong style={{ color: token.colorText }}>{team.role?.replace('_', ' ')}</Text>
+                        </Text>
+                      </Flex>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

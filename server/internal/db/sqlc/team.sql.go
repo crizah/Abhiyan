@@ -114,6 +114,93 @@ func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]st
 	return items, nil
 }
 
+const getAdminTeamWiseStats = `-- name: GetAdminTeamWiseStats :many
+SELECT 
+    t.id, 
+    t.name, 
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC
+`
+
+type GetAdminTeamWiseStatsRow struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	MemberCount int64     `json:"member_count"`
+}
+
+func (q *Queries) GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminTeamWiseStats, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAdminTeamWiseStatsRow
+	for rows.Next() {
+		var i GetAdminTeamWiseStatsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.MemberCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEmployeeTeams = `-- name: GetEmployeeTeams :many
+SELECT 
+    t.id, 
+    t.name, 
+    tm.team_role,
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) AS member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1
+ORDER BY t.name ASC
+`
+
+type GetEmployeeTeamsRow struct {
+	ID          uuid.UUID    `json:"id"`
+	Name        string       `json:"name"`
+	TeamRole    TeamRoleEnum `json:"team_role"`
+	MemberCount int64        `json:"member_count"`
+}
+
+func (q *Queries) GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getEmployeeTeams, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEmployeeTeamsRow
+	for rows.Next() {
+		var i GetEmployeeTeamsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.TeamRole,
+			&i.MemberCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrgTeams = `-- name: GetOrgTeams :many
 SELECT t.id, t.name, COUNT(tm.user_id) AS member_count
 FROM teams t
@@ -162,6 +249,36 @@ func (q *Queries) GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int6
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getTeamAdminsByTask = `-- name: GetTeamAdminsByTask :many
+SELECT tm.user_id 
+FROM team_members tm
+JOIN tasks t ON tm.team_id = t.team_id
+WHERE t.id = $1 AND tm.team_role = 'TEAM_ADMIN'
+`
+
+func (q *Queries) GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamAdminsByTask, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var user_id uuid.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTeamEmployeesPaginated = `-- name: GetTeamEmployeesPaginated :many

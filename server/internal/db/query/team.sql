@@ -5,6 +5,15 @@ FROM team_members tm1
 JOIN team_members tm2 ON tm1.team_id = tm2.team_id
 WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN';
 
+-- name: GetAdminTeamWiseStats :many
+SELECT 
+    t.id, 
+    t.name, 
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC;
 
 -- name: GetTeamEmployeesPaginated :many
 SELECT 
@@ -82,3 +91,23 @@ SELECT EXISTS (
     SELECT 1 FROM team_members 
     WHERE team_id = $1 AND user_id = $2 AND team_role = 'TEAM_ADMIN'
 );
+
+
+
+-- name: GetTeamAdminsByTask :many
+SELECT tm.user_id 
+FROM team_members tm
+JOIN tasks t ON tm.team_id = t.team_id
+WHERE t.id = $1 AND tm.team_role = 'TEAM_ADMIN';
+
+
+-- name: GetEmployeeTeams :many
+SELECT 
+    t.id, 
+    t.name, 
+    tm.team_role,
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) AS member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1
+ORDER BY t.name ASC;

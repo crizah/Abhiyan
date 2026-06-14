@@ -10,7 +10,7 @@ const { TextArea } = Input;
 export default function TeamTasksPage() {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
-  const [reopenForm] = Form.useForm();
+  const [actionForm] = Form.useForm();
   
   const [teams, setTeams] = useState([]);
   const [activeTeamId, setActiveTeamId] = useState(null);
@@ -20,7 +20,7 @@ export default function TeamTasksPage() {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
   const [selectedTask, setSelectedTask] = useState(null);
@@ -30,7 +30,7 @@ export default function TeamTasksPage() {
   const [taskUpdates, setTaskUpdates] = useState([]);
   const [newUpdateText, setNewUpdateText] = useState('');
   
-  // Comments State map: { update_id: "Draft comment text" }
+  // Comments State
   const [commentDrafts, setCommentDrafts] = useState({});
   const [expandedComments, setExpandedComments] = useState({});
 
@@ -75,8 +75,7 @@ export default function TeamTasksPage() {
   };
 
   // --- CRUD Modals ---
-  
-const handleCreateTask = async (values) => {
+  const handleCreateTask = async (values) => {
     try {
       const payload = {
         team_id: activeTeamId, title: values.title, description: values.description,
@@ -130,37 +129,43 @@ const handleCreateTask = async (values) => {
     } catch (err) { message.error("Failed to update task"); }
   };
 
-  const openReopenModal = () => {
-    reopenForm.setFieldsValue({
+  const openActionModal = () => {
+    actionForm.setFieldsValue({
       note: '', due_date: selectedTask.due_date ? dayjs(selectedTask.due_date) : null,
       reminders: (taskDetails?.reminders || []).map(r => ({
         channel: r.channel, scheduled_at: dayjs(r.scheduled_at),
         recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
       }))
     });
-    setIsReopenModalOpen(true);
+    setIsActionModalOpen(true);
   };
 
-  const handleReopenTask = async (values) => {
+  const handleActionTask = async (values) => {
     try {
       const payload = {
         note: values.note, due_date: values.due_date ? values.due_date.toISOString() : null,
-        reminders: (values.reminders || []).map(r => ({
-          channel: r.channel, scheduled_at: r.scheduled_at.toISOString(),
-          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value) : undefined,
-          recurrence_unit: r.recurrence_unit || undefined
-        }))
+        reminders: (values.reminders || []).map(r => ({ ...r, scheduled_at: r.scheduled_at.toISOString() }))
       };
-      await apiClient.put(`/admin/tasks/${selectedTask.id}/reopen`, payload);
-      message.success("Task reopened!");
-      setIsReopenModalOpen(false);
       
-      setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, status: 'OPEN' } : t));
-      setSelectedTask(prev => ({ ...prev, status: 'OPEN' }));
+      const actionType = selectedTask.status === 'CLOSED' ? 'REOPEN' : 'REJECT';
+      await apiClient.put(`/admin/tasks/${selectedTask.id}/action/${actionType}`, payload);
+      
+      message.success(`Task ${actionType.toLowerCase()}ed successfully!`);
+      setIsActionModalOpen(false);
       window.dispatchEvent(new Event('refresh-notifications'));
       fetchTasks(activeTeamId);
-      openTaskDrawer(selectedTask);
-    } catch (err) { message.error("Failed to reopen task."); }
+      setIsDrawerOpen(false); 
+    } catch (err) { message.error("Failed to action task."); }
+  };
+
+  const handleApprove = async () => {
+    try {
+      await apiClient.put(`/admin/tasks/${selectedTask.id}/approve`);
+      message.success("Task approved!");
+      window.dispatchEvent(new Event('refresh-notifications'));
+      fetchTasks(activeTeamId);
+      setIsDrawerOpen(false);
+    } catch (err) { message.error("Failed to approve."); }
   };
 
   // --- DRAWER & UPDATES ---
@@ -195,7 +200,6 @@ const handleCreateTask = async (values) => {
   const postTaskUpdate = async () => {
     if (!newUpdateText.trim()) return;
     try {
-      // Extract mentioned IDs by matching the display names
       const mentionedIds = teamMembers
         .filter(m => newUpdateText.includes(`@${m.full_name.replace(/\s+/g, '')}`))
         .map(m => m.id);
@@ -215,20 +219,17 @@ const handleCreateTask = async (values) => {
     const text = commentDrafts[updateId];
     if (!text?.trim()) return;
     try {
-      // FIX: Extract mentioned IDs similarly to update posting
       const mentionedIds = teamMembers
         .filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`))
         .map(m => m.id);
 
-      // FIX: Include mentioned IDs in the request body
       await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, { 
         content: text,
-        mentioned_user_ids: mentionedIds // <-- NEW PAYLOAD
+        mentioned_user_ids: mentionedIds 
       });
       
       setCommentDrafts(prev => ({ ...prev, [updateId]: '' }));
       fetchTaskUpdates(selectedTask.id);
-      // FIX: Dispatch event for real-time notification update
       window.dispatchEvent(new Event('refresh-notifications'));
     } catch (err) { message.error("Failed to post comment"); }
   };
@@ -238,10 +239,18 @@ const handleCreateTask = async (values) => {
     { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
     { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
-    { title: 'Admin Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
-    { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View details</Button> }
+    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
+    { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={status === 'APPROVED' ? 'gold' : status === 'REJECTED' ? 'error' : status === 'PENDING' ? 'purple' : 'default'}>{status}</Tag> },
+    { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View Task</Button> }
   ];
   const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
+
+  const getTimelineColor = (content) => {
+    if (content.includes("Task submitted") || content.includes("Task Approved")) return 'green';
+    if (content.includes("TASK REJECTED")) return 'red';
+    if (content.includes("TASK REOPENED")) return 'orange';
+    return 'blue';
+  };
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -319,10 +328,10 @@ const handleCreateTask = async (values) => {
         </Form>
       </Modal>
 
-      {/* REOPEN MODAL */}
-      <Modal destroyOnClose title="Reopen Task" open={isReopenModalOpen} onCancel={() => setIsReopenModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsReopenModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => reopenForm.submit()}>Confirm Reopen</Button>]}>
-        <Form form={reopenForm} layout="vertical" onFinish={handleReopenTask}>
-          <Form.Item name="note" label="Reopen Note (Optional)"><TextArea rows={2} /></Form.Item>
+      {/* ACTION MODAL (Reopen / Reject) */}
+      <Modal destroyOnClose title={selectedTask?.status === 'CLOSED' ? "Reopen Task" : "Reject Task"} open={isActionModalOpen} onCancel={() => setIsActionModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsActionModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => actionForm.submit()}>{selectedTask?.status === 'CLOSED' ? "Confirm Reopen" : "Confirm Rejection"}</Button>]}>
+        <Form form={actionForm} layout="vertical" onFinish={handleActionTask}>
+          <Form.Item name="note" label="Action Note (Optional)"><TextArea rows={2} /></Form.Item>
           <Form.Item name="due_date" label="Updated Deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
           <Divider orientation="left">Automated Reminders</Divider>
           <Form.List name="reminders">
@@ -347,12 +356,29 @@ const handleCreateTask = async (values) => {
 
       {/* DRAWER */}
       <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={600} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
-        extra={selectedTask?.status === 'OPEN' ? (
+        extra={
           <Flex gap="small">
-            <Button icon={<EditOutlined />} onClick={openEditModal}>Edit</Button>
-            <Popconfirm title="Close task?" onConfirm={() => changeTaskStatus('CLOSED')}><Button type="primary" danger>Close Task</Button></Popconfirm>
+            {selectedTask?.status === 'OPEN' ? (
+              selectedTask?.review_status === 'PENDING' ? (
+                <>
+                  <Button danger onClick={openActionModal}>Reject</Button>
+                  <Popconfirm title="Approve and close this task?" onConfirm={handleApprove}>
+                    <Button type="primary" style={{ backgroundColor: '#52c41a' }}>Approve</Button>
+                  </Popconfirm>
+                </>
+              ) : (
+                <>
+                  <Button icon={<EditOutlined />} onClick={openEditModal}>Edit</Button>
+                  <Popconfirm title="Force close task?" onConfirm={() => changeTaskStatus('CLOSED')}>
+                    <Button type="primary" danger>Close Task</Button>
+                  </Popconfirm>
+                </>
+              )
+            ) : (
+              <Button type="primary" onClick={openActionModal}>Reopen Task</Button>
+            )}
           </Flex>
-        ) : <Button type="primary" onClick={openReopenModal}>Reopen Task</Button>}
+        }
       >
         {selectedTask && (
           <Flex vertical gap="large" style={{ height: '100%' }}>
@@ -360,8 +386,11 @@ const handleCreateTask = async (values) => {
               <Paragraph style={{ margin: 0 }}>{selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}</Paragraph>
               <Divider style={{ margin: '12px 0' }} />
               <Flex justify="space-between">
-                <Text><InfoCircleOutlined /> Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
+                <Text><InfoCircleOutlined /> Task Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
                 <Text><CheckCircleOutlined /> Fulfillment: <Tag color={selectedTask.fulfillment_status === 'COMPLETED' ? 'success' : 'processing'}>{selectedTask.fulfillment_status}</Tag></Text>
+              </Flex>
+              <Flex justify="space-between" style={{ marginTop: 12 }}>
+                <Text><InfoCircleOutlined /> Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
               </Flex>
               {taskDetails && (
                 <div style={{ marginTop: 12 }}>
@@ -372,11 +401,11 @@ const handleCreateTask = async (values) => {
             </Card>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              <Title level={5}>Activity & Updates</Title>
+              <Title level={5}>Activity</Title>
               {taskUpdates.length === 0 ? <Text type="secondary">No updates yet.</Text> : (
                 <Timeline 
                   items={taskUpdates.map(u => ({ 
-                    color: 'blue', 
+                    color: getTimelineColor(u.content),
                     children: (
                       <>
                         <Flex justify="space-between" align="baseline">
@@ -401,18 +430,33 @@ const handleCreateTask = async (values) => {
                                 </div>
                               ))}
                               {selectedTask.status === 'OPEN' && (
-
-                                <Mentions 
-                                  size="small" placeholder="Write a comment... use @ to mention" 
-                                  value={commentDrafts[u.id] || ''} 
-                                  onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
-                                  onPressEnter={() => postComment(u.id)}
-                                  // FIX: Suggestions logic
-                                  options={teamMembers.map(m => ({
-                                    value: m.full_name.replace(/\s+/g, ''), // e.g. "@JohnDoe"
-                                    label: m.full_name
-                                  }))}
-                                />
+                                <Flex gap="small" style={{ marginTop: '8px' }}>
+                                  <Mentions 
+                                    style={{ flex: 1 }}
+                                    size="small" placeholder="Write a comment... use @ to mention" 
+                                    value={commentDrafts[u.id] || ''} 
+                                    onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
+                                    onPressEnter={(e) => {
+                                      if (!e.shiftKey) {
+                                        e.preventDefault();
+                                        postComment(u.id);
+                                      }
+                                    }}
+                                    options={teamMembers.map(m => ({
+                                      value: m.full_name.replace(/\s+/g, ''),
+                                      label: m.full_name
+                                    }))}
+                                  />
+                                  <Button 
+                                    type="primary" 
+                                    size="small" 
+                                    icon={<SendOutlined />} 
+                                    onClick={() => postComment(u.id)}
+                                    disabled={!commentDrafts[u.id]?.trim()}
+                                  >
+                                    Reply
+                                  </Button>
+                                </Flex>
                               )}
                             </>
                           )}
@@ -432,7 +476,7 @@ const handleCreateTask = async (values) => {
                   value={newUpdateText}
                   onChange={setNewUpdateText}
                   options={teamMembers.map(m => ({
-                    value: m.full_name.replace(/\s+/g, ''), // e.g. "@JohnDoe"
+                    value: m.full_name.replace(/\s+/g, ''),
                     label: m.full_name
                   }))}
                 />

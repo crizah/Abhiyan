@@ -270,6 +270,50 @@ func (ns NullTaskFulfillmentStatus) Value() (driver.Value, error) {
 	return string(ns.TaskFulfillmentStatus), nil
 }
 
+type TaskReviewStatus string
+
+const (
+	TaskReviewStatusUNSUBMITTED TaskReviewStatus = "UNSUBMITTED"
+	TaskReviewStatusPENDING     TaskReviewStatus = "PENDING"
+	TaskReviewStatusAPPROVED    TaskReviewStatus = "APPROVED"
+	TaskReviewStatusREJECTED    TaskReviewStatus = "REJECTED"
+)
+
+func (e *TaskReviewStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TaskReviewStatus(s)
+	case string:
+		*e = TaskReviewStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TaskReviewStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTaskReviewStatus struct {
+	TaskReviewStatus TaskReviewStatus `json:"task_review_status"`
+	Valid            bool             `json:"valid"` // Valid is true if TaskReviewStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTaskReviewStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TaskReviewStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TaskReviewStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTaskReviewStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TaskReviewStatus), nil
+}
+
 type TaskStatus string
 
 const (
@@ -431,6 +475,7 @@ type Task struct {
 	Description       sql.NullString            `json:"description"`
 	Status            NullTaskStatus            `json:"status"`
 	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	ReviewStatus      TaskReviewStatus          `json:"review_status"`
 	CreatedBy         uuid.UUID                 `json:"created_by"`
 	DueDate           sql.NullTime              `json:"due_date"`
 	CreatedAt         sql.NullTime              `json:"created_at"`

@@ -58,7 +58,15 @@ const GlobalHeader = ({ user, token, navigate }) => {
   useEffect(() => {
     fetchNotifications();
     const intervalId = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(intervalId);
+    
+    // Listen for the custom real-time event from the task updates
+    const handleForceRefresh = () => fetchNotifications();
+    window.addEventListener('refresh-notifications', handleForceRefresh);
+    
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('refresh-notifications', handleForceRefresh);
+    };
   }, []);
 
   const fetchNotifications = async () => {
@@ -114,7 +122,7 @@ const GlobalHeader = ({ user, token, navigate }) => {
   const notificationDropdown = (
     <div style={{ width: '350px', backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, overflow: 'hidden' }}>
       
-{/* Compact Header */}
+      {/* Compact Header */}
       <div style={{ padding: '8px 16px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fafafa' }}>
         <Text strong style={{ fontSize: '13px' }}>Notifications</Text>
         <Flex gap="middle" align="center">
@@ -123,7 +131,6 @@ const GlobalHeader = ({ user, token, navigate }) => {
               Mark all read
             </Button>
           )}
-          {/* Only show Clear if there are actually clearable non-system notifications */}
           {notifications.some(n => !n.is_system) && (
             <Button type="link" danger size="small" onClick={clearAllNotifications} style={{ padding: 0, fontSize: '12px' }}>
               Clear
@@ -288,6 +295,13 @@ export default function AppLayout() {
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/tasks'); }} active={location.pathname === '/tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
+            </>
+          )}
+          
+          {/* EMPLOYEE SPECIFIC ITEMS */}
+          {activeRole === 'EMPLOYEE' && (
+            <>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employee-tasks'); }} active={location.pathname === '/employee-tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
             </>
           )}
 

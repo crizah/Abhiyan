@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT,
     status task_status DEFAULT 'OPEN',
     fulfillment_status task_fulfillment_status DEFAULT 'PENDING',
+    review_status task_review_status NOT NULL DEFAULT 'UNSUBMITTED',
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     due_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()

@@ -174,6 +174,7 @@ func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schema
 			Description:       t.Description.String, // will be "" if not valid
 			Status:            string(t.Status.TaskStatus),
 			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			ReviewStatus:      string(t.ReviewStatus),
 			CreatedBy:         t.CreatedBy.String(),
 			CreatorName:       creatorName,
 			DueDate:           dueDate,
@@ -192,21 +193,11 @@ func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schema
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
 	tID := util.ParseUUID(taskID)
 
-	// Prepare status update
+	// We only update the absolute lifecycle status here (OPEN/CLOSED).
+	// We DO NOT touch Fulfillment or Review status here anymore.
 	statusParam := db.NullTaskStatus{
 		TaskStatus: db.TaskStatus(status),
 		Valid:      true,
-	}
-
-	// Logic: If status is CLOSED, force Fulfillment to COMPLETED
-	if status == "CLOSED" {
-		_ = s.queries.UpdateTaskFulfillment(ctx, db.UpdateTaskFulfillmentParams{
-			FulfillmentStatus: db.NullTaskFulfillmentStatus{
-				TaskFulfillmentStatus: db.TaskFulfillmentStatusCOMPLETED,
-				Valid:                 true,
-			},
-			ID: tID,
-		})
 	}
 
 	return s.queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
@@ -380,6 +371,7 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 			Description:       t.Description.String,
 			Status:            string(t.Status.TaskStatus),
 			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			ReviewStatus:      string(t.ReviewStatus),
 			CreatedBy:         t.CreatedBy.String(),
 			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
 			DueDate:           dueDate,
@@ -392,7 +384,7 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 	return tasks, nil
 }
 
-func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ReopenTaskRequest) error {
+func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -659,4 +651,200 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 	}
 
 	return tx.Commit()
+}
+
+// 2. Fetch tasks where the employee is an Assignee or Subscriber
+func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string) ([]schemas.TaskResponse, error) {
+	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
+		TeamID: util.ParseUUID(teamID),
+		UserID: util.ParseUUID(userID),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []schemas.TaskResponse
+	for _, t := range dbTasks {
+		var dueDate *time.Time
+		if t.DueDate.Valid {
+			dueDate = &t.DueDate.Time
+		}
+		var createdAt *time.Time
+		if t.CreatedAt.Valid {
+			createdAt = &t.CreatedAt.Time
+		}
+
+		tasks = append(tasks, schemas.TaskResponse{
+			ID:                t.ID.String(),
+			TeamID:            t.TeamID.String(),
+			Title:             t.Title,
+			Description:       t.Description.String,
+			Status:            string(t.Status.TaskStatus),
+			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
+			ReviewStatus:      string(t.ReviewStatus),
+			CreatedBy:         t.CreatedBy.String(),
+			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
+			DueDate:           dueDate,
+			CreatedAt:         createdAt,
+		})
+	}
+	if tasks == nil {
+		tasks = []schemas.TaskResponse{}
+	}
+	return tasks, nil
+}
+
+func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	// NEW: Use the combined state updater
+	err = qtx.SubmitTaskState(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to update state: %w", err)
+	}
+
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	userRec, _ := qtx.GetUserNameByID(ctx, uID)
+	userName := strings.TrimSpace(userRec.FirstName.String + " " + userRec.LastName.String)
+
+	_, _ = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+		TaskID: tID, UserID: uuid.NullUUID{UUID: uID, Valid: true}, Content: "Task submitted for Admin review.",
+	})
+
+	admins, _ := qtx.GetTeamAdminsByTask(ctx, tID)
+	for _, adminID := range admins {
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID: adminID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
+		})
+	}
+	return tx.Commit()
+}
+
+func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	aID := util.ParseUUID(adminID)
+
+	err = qtx.ApproveTaskState(ctx, tID)
+	if err != nil {
+		return err
+	}
+
+	s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
+
+	_, _ = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+		TaskID: tID, UserID: uuid.NullUUID{UUID: aID, Valid: true}, Content: "Task Approved and Closed.",
+	})
+
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	participants, _ := qtx.GetTaskParticipants(ctx, tID)
+	for _, p := range participants {
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID: p.ID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
+		})
+	}
+	return tx.Commit()
+}
+
+// Handles BOTH Reject and Reopen since the database logic/reminders are identical,
+// just the final Database State changes.
+func (s *TaskService) ActionTask(ctx context.Context, action string, taskID string, userID string, req schemas.ActionTaskRequest) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	var safeDueDate sql.NullTime
+	if req.DueDate != nil {
+		safeDueDate = sql.NullTime{Time: *req.DueDate, Valid: true}
+	}
+
+	var actionMsg string
+	if action == "REJECT" {
+		err = qtx.RejectTaskState(ctx, db.RejectTaskStateParams{ID: tID, DueDate: safeDueDate})
+		actionMsg = "TASK REJECTED"
+	} else {
+		err = qtx.ReopenTaskState(ctx, db.ReopenTaskStateParams{ID: tID, DueDate: safeDueDate})
+		actionMsg = "TASK REOPENED"
+	}
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(req.Note) != "" {
+		qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+			TaskID: tID, UserID: uuid.NullUUID{UUID: uID, Valid: true}, Content: fmt.Sprintf("%s: %s", actionMsg, req.Note),
+		})
+	}
+
+	_ = qtx.DeleteTaskReminders(ctx, tID)
+	s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
+
+	// for _, rem := range req.Reminders {
+	// 	remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
+	// 	isRecurring := rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil
+	// 	if isRecurring {
+	// 		remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
+	// 		remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
+	// 	}
+	// 	rRow, _ := qtx.CreateReminder(ctx, remParams)
+	// 	payload := map[string]any{"task_id": tID.String(), "reminder_id": rRow.ID.String(), "channel": rem.Channel}
+	// 	if isRecurring {
+	// 		payload["cron"] = generateCronString(rem.ScheduledAt.Minute(), rem.ScheduledAt.Hour(), *rem.RecurrenceValue, *rem.RecurrenceUnit)
+	// 		s.onionApp.Enqueue(ctx, "send_recurring_task_reminder", payload)
+	// 	} else {
+	// 		s.onionApp.Enqueue(ctx, "send_task_reminder", payload)
+	// 	}
+	// }
+
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	participants, _ := qtx.GetTaskParticipants(ctx, tID)
+	for _, p := range participants {
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID: p.ID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
+		})
+	}
+
+	return tx.Commit()
+}
+
+func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:          t.ID.String(),
+			Name:        t.Name,
+			MemberCount: int(t.MemberCount),
+			Role:        string(t.TeamRole),
+		})
+	}
+
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
 }

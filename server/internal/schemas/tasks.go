@@ -32,7 +32,7 @@ type CreateReminderPayload struct {
 
 type AddTaskUpdateRequest struct {
 	Content          string   `json:"content" binding:"required"`
-	MentionedUserIDs []string `json:"mentioned_user_ids"` // <-- NEW
+	MentionedUserIDs []string `json:"mentioned_user_ids"`
 }
 
 type UpdateTaskStatusRequest struct {
@@ -96,7 +96,8 @@ type ReopenTaskRequest struct {
 }
 
 type AddCommentRequest struct { // <-- NEW
-	Content string `json:"content" binding:"required"`
+	Content          string   `json:"content" binding:"required"`
+	MentionedUserIDs []string `json:"mentioned_user_ids"`
 }
 
 type TaskUpdateCommentResponse struct { // <-- NEW

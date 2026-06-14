@@ -147,3 +147,6 @@ UPDATE users SET status = $1 WHERE id = $2;
 
 -- name: GetUserStatus :one
 SELECT status FROM users WHERE id = $1;
+
+-- name: GetUserNameByID :one
+SELECT first_name, last_name FROM users WHERE id = $1;

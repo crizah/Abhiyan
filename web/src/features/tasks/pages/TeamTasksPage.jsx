@@ -75,7 +75,8 @@ export default function TeamTasksPage() {
   };
 
   // --- CRUD Modals ---
-  const handleCreateTask = async (values) => {
+  
+const handleCreateTask = async (values) => {
     try {
       const payload = {
         team_id: activeTeamId, title: values.title, description: values.description,
@@ -214,9 +215,20 @@ export default function TeamTasksPage() {
     const text = commentDrafts[updateId];
     if (!text?.trim()) return;
     try {
-      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, { content: text });
+      // FIX: Extract mentioned IDs similarly to update posting
+      const mentionedIds = teamMembers
+        .filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`))
+        .map(m => m.id);
+
+      // FIX: Include mentioned IDs in the request body
+      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, { 
+        content: text,
+        mentioned_user_ids: mentionedIds // <-- NEW PAYLOAD
+      });
+      
       setCommentDrafts(prev => ({ ...prev, [updateId]: '' }));
       fetchTaskUpdates(selectedTask.id);
+      // FIX: Dispatch event for real-time notification update
       window.dispatchEvent(new Event('refresh-notifications'));
     } catch (err) { message.error("Failed to post comment"); }
   };
@@ -389,12 +401,17 @@ export default function TeamTasksPage() {
                                 </div>
                               ))}
                               {selectedTask.status === 'OPEN' && (
-                                <Input 
-                                  size="small" placeholder="Write a comment..." 
+
+                                <Mentions 
+                                  size="small" placeholder="Write a comment... use @ to mention" 
                                   value={commentDrafts[u.id] || ''} 
-                                  onChange={e => setCommentDrafts({...commentDrafts, [u.id]: e.target.value})}
+                                  onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
                                   onPressEnter={() => postComment(u.id)}
-                                  suffix={<SendOutlined style={{ color: '#1890ff', cursor: 'pointer' }} onClick={() => postComment(u.id)} />}
+                                  // FIX: Suggestions logic
+                                  options={teamMembers.map(m => ({
+                                    value: m.full_name.replace(/\s+/g, ''), // e.g. "@JohnDoe"
+                                    label: m.full_name
+                                  }))}
                                 />
                               )}
                             </>

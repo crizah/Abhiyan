@@ -52,6 +52,7 @@ type Querier interface {
 	GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
+	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
 	GetUserStatus(ctx context.Context, id uuid.UUID) (NullUserStatus, error)
 	// NEW: Fetches all roles assigned to a user

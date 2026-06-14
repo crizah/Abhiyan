@@ -522,7 +522,6 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]sche
 	}
 	return mapped, nil
 }
-
 func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -587,8 +586,7 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 
 	return tx.Commit()
 }
-
-func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, content string) error {
+func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, req schemas.AddCommentRequest) error { // <-- UPDATED SIGNATURE
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -598,25 +596,66 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 	qtx := s.queries.WithTx(tx)
 	uID := util.ParseUUID(updateID)
 	cID := util.ParseUUID(userID)
+	tID := util.ParseUUID(taskID)
 
 	// 1. Insert Comment
 	_, err = qtx.AddUpdateComment(ctx, db.AddUpdateCommentParams{
 		TaskUpdateID: uID,
 		UserID:       uuid.NullUUID{UUID: cID, Valid: true},
-		Content:      content,
+		Content:      req.Content,
 	})
 	if err != nil {
 		return err
 	}
 
-	// 2. Notify the original author of the update
-	updateAuthor, err := qtx.GetTaskUpdateAuthor(ctx, uID)
-	if err == nil && updateAuthor.UUID != cID { // Don't notify if commenting on own post
+	// 2. Notifications Logic
+
+	// De-duplicate mentioned user IDs
+	uniqueMentionedIds := make([]string, 0)
+	mentionMap := make(map[string]bool)
+	for _, id := range req.MentionedUserIDs {
+		if !mentionMap[id] {
+			mentionMap[id] = true
+			uniqueMentionedIds = append(uniqueMentionedIds, id)
+		}
+	}
+
+	// Reusable notification creation/messaging logic
+	createMentionNotification := func(ctx context.Context, qtx *db.Queries, mentionedUserID, commentAuthorName, taskTitle string) {
+		mID := util.ParseUUID(mentionedUserID)
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  updateAuthor.UUID,
-			Title:   "New Comment on your update",
+			UserID:  mID,
+			Title:   "Mentioned in comment!",
+			Message: fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle),
+		})
+	}
+
+	createAuthorNotification := func(ctx context.Context, qtx *db.Queries, authorID uuid.UUID) {
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID:  authorID,
+			Title:   "New comment on your task update",
 			Message: "Someone replied to your task update.",
 		})
+	}
+
+	// Fetch required names/titles
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	commentAuthor, _ := qtx.GetUserNameByID(ctx, cID)
+	commentAuthorName := strings.TrimSpace(commentAuthor.FirstName.String + " " + commentAuthor.LastName.String)
+	if commentAuthorName == "" {
+		commentAuthorName = "Someone"
+	}
+
+	// 3. Loop through mentioned users, trigger notifications
+	for _, mIDStr := range uniqueMentionedIds {
+		createMentionNotification(ctx, qtx, mIDStr, commentAuthorName, taskTitle)
+	}
+
+	// 4. Notify the original author of the update (if not commenting on own post and not mentioned)
+	updateAuthor, err := qtx.GetTaskUpdateAuthor(ctx, uID)
+	updateAuthorIdStr := updateAuthor.UUID.String()
+	if err == nil && updateAuthor.UUID != cID && !mentionMap[updateAuthorIdStr] { // Don't notify if author posted comment OR already mentioned
+		createAuthorNotification(ctx, qtx, updateAuthor.UUID)
 	}
 
 	return tx.Commit()

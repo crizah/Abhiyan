@@ -85,7 +85,7 @@ func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req)
+	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req) // Pass entire req
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post update"})
 		return
@@ -105,7 +105,7 @@ func (h *TaskHandler) PostUpdateComment(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.PostUpdateComment(c.Request.Context(), taskID, updateID, userID, req.Content)
+	err := h.taskService.PostUpdateComment(c.Request.Context(), taskID, updateID, userID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post comment"})
 		return

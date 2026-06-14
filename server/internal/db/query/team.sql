@@ -69,3 +69,16 @@ FROM team_members tm
 JOIN teams t ON tm.team_id = t.id
 WHERE tm.user_id = $1
 ORDER BY t.name ASC;
+
+-- name: GetAdminManagedTeams :many
+SELECT t.id, t.name 
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC;
+
+-- name: CheckTeamAdminStatus :one
+SELECT EXISTS (
+    SELECT 1 FROM team_members 
+    WHERE team_id = $1 AND user_id = $2 AND team_role = 'TEAM_ADMIN'
+);

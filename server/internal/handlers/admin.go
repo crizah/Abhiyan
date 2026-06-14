@@ -143,11 +143,14 @@ func (h *AdminHandler) CreateTeam(c *gin.Context) {
 	}
 
 	orgID := c.MustGet("org_id").(string)
-	teamID, err := h.adminService.CreateTeam(c.Request.Context(), orgID, req.Name)
+	userID := c.MustGet("user_id").(string) // <-- Extract creator's ID
+
+	teamID, err := h.adminService.CreateTeam(c.Request.Context(), orgID, req.Name, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Team created", "team_id": teamID})
 }
 
@@ -163,9 +166,16 @@ func (h *AdminHandler) GetTeams(c *gin.Context) {
 
 func (h *AdminHandler) GetTeamMembers(c *gin.Context) {
 	teamID := c.Param("team_id")
-	members, err := h.adminService.GetTeamMembers(c.Request.Context(), teamID)
+	userID := c.Param("user_id")
+	roleVal, exists := c.Get("role")
+	role := ""
+	if exists {
+		role = roleVal.(string)
+	}
+
+	members, err := h.adminService.GetTeamMembers(c.Request.Context(), teamID, userID, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch members"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, members)
@@ -253,4 +263,41 @@ func (h *AdminHandler) UpdateUserSystemProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User profile updated successfully"})
+}
+
+func (h *AdminHandler) GetAdminManagedTeams(c *gin.Context) {
+
+	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
+
+	// Extract role safely
+	roleVal, exists := c.Get("role")
+	role := ""
+	if exists {
+		role = roleVal.(string)
+	}
+
+	var teams interface{}
+	var err error
+
+	// If Super Admin, fetch ALL teams
+	if role == "SUPER_ADMIN" {
+		teams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
+	} else {
+		// Normal Admin: Fetch only teams they manage
+		teams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+
+	// Prevents the "null" JSON quirk if they truly have 0 teams
+	if teams == nil {
+		c.JSON(http.StatusOK, []string{})
+		return
+	}
+
+	c.JSON(http.StatusOK, teams)
 }

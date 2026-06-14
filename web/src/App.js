@@ -9,16 +9,17 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 import AppLayout from './layouts/AppLayout';
-import UserProfilePage from './features/users/UserProfilePage'
-import TeamEmployeesPage from './features/users/TeamEmployeesPage'
+import UserProfilePage from './features/users/UserProfilePage';
+import TeamEmployeesPage from './features/users/TeamEmployeesPage';
 import UserOnboardingPage from './features/users/UserOnboardingPage';
 import TeamsPage from './features/users/TeamsPage';
+import TeamTasksPage from './features/tasks/pages/TeamTasksPage'; 
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
 import AdminDashboard from './features/dashboard/pages/AdminDashboard';
 import EmployeeDashboard from './features/dashboard/pages/EmployeeDashboard';
-import UsersPage from './features/users/UsersPage'
+import UsersPage from './features/users/UsersPage';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,6 +58,8 @@ export default function App() {
                 <Route path="employees" element={<TeamEmployeesPage />} />
                 <Route path="onboarding" element={<UserOnboardingPage />} />
                 <Route path="teams" element={<TeamsPage />} />
+                <Route path="tasks" element={<TeamTasksPage />} />
+                
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

@@ -3,7 +3,8 @@ import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag,
 
 import { 
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, UserAddOutlined, CheckOutlined, ApartmentOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, 
+  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -251,6 +252,8 @@ export default function AppLayout() {
 
         <CSidebarNav>
           <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }} active={location.pathname === '/dashboard'}><DashboardOutlined className="nav-icon" /> Dashboard</CNavItem>
+          
+          {/* SUPER ADMIN SPECIFIC ITEMS */}
           {activeRole === 'SUPER_ADMIN' && (
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/users'); }} active={location.pathname === '/users'}><TeamOutlined className="nav-icon" /> Users</CNavItem>
@@ -260,9 +263,16 @@ export default function AppLayout() {
               </CNavItem>
             </>
           )}
+
+          {/* ADMIN SPECIFIC ITEMS */}
           {activeRole === 'ADMIN' && (
-            <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
+            <>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/tasks'); }} active={location.pathname === '/tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
+            </>
           )}
+
+          {/* COMMON BOTTOM ITEMS */}
           <Dropdown dropdownRender={() => customRoleDropdown} placement="topLeft" trigger={['click']}>
             <CNavItem className="mt-auto" href="#" style={{ cursor: 'pointer' }}><UserSwitchOutlined className="nav-icon" /> Switch Roles</CNavItem>
           </Dropdown>

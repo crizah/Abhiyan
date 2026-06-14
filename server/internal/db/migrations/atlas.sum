@@ -1,4 +1,4 @@
-h1:U9VCBKM5uwikNwG8WRjn9PAooUhC4dnu3KVc2ANbbLw=
+h1:yCt0PVx+zvGl+veU45Q2HJb9C4CoLLMt95fWHSVIE8Q=
 20260609122837_initial_db_schemas.sql h1:Qlt9JvF4auI2yCUz7oDluImiRst+uVpfBkBVc7ToUYM=
 20260609125210_add_user_status_column.sql h1:NdZtJ6Bw7BEOZXUULmLGqKTbbs3FB8aLfoTjAdOZ55s=
 20260609132310_make_domain_nullable.sql h1:XIcLOCpbS2hEgRxp0f7PZZCZQZZtxl3hN//05Sv4hr8=
@@ -7,3 +7,4 @@ h1:U9VCBKM5uwikNwG8WRjn9PAooUhC4dnu3KVc2ANbbLw=
 20260611160458_multi_role_system.sql h1:+yu/Xk4zXc8qGDsPqVyaf0pvI09dVhbDXtc1DPPHHPA=
 20260612184641_add_notifications_table.sql h1:/YU8VKfLDGhf1Jb59fDPI3sPxj9xXTECShgvPOFbuv4=
 20260614115620_add_frequency_to_reminders.sql h1:72ZvD7+p7OJKwAqeSv+dH15ZeIYjnnJxgc4ItzNpOHw=
+20260614153847_add_comments_table.sql h1:iG0tPg73eeBbbbLn8pgWOUzkqylUGsCyc2qxMTJP+Hc=

@@ -31,7 +31,8 @@ type CreateReminderPayload struct {
 }
 
 type AddTaskUpdateRequest struct {
-	Content string `json:"content" binding:"required"`
+	Content          string   `json:"content" binding:"required"`
+	MentionedUserIDs []string `json:"mentioned_user_ids"` // <-- NEW
 }
 
 type UpdateTaskStatusRequest struct {
@@ -56,13 +57,14 @@ type TaskResponse struct {
 
 // FIX: Clean mapping to prevent React `{String, Valid}` crash
 type TaskUpdateResponse struct {
-	ID        string `json:"id"`
-	TaskID    string `json:"task_id"`
-	UserID    string `json:"user_id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"created_at"`
+	ID        string                      `json:"id"`
+	TaskID    string                      `json:"task_id"`
+	UserID    string                      `json:"user_id"`
+	FirstName string                      `json:"first_name"`
+	LastName  string                      `json:"last_name"`
+	Content   string                      `json:"content"`
+	CreatedAt string                      `json:"created_at"`
+	Comments  []TaskUpdateCommentResponse `json:"comments"`
 }
 
 type TaskParticipantResponse struct {
@@ -91,4 +93,17 @@ type ReopenTaskRequest struct {
 	Note      string                  `json:"note"`
 	DueDate   *time.Time              `json:"due_date"`
 	Reminders []CreateReminderPayload `json:"reminders"`
+}
+
+type AddCommentRequest struct { // <-- NEW
+	Content string `json:"content" binding:"required"`
+}
+
+type TaskUpdateCommentResponse struct { // <-- NEW
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
 }

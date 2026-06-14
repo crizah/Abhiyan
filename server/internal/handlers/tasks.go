@@ -85,13 +85,33 @@ func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req.Content)
+	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post update"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Update posted"})
+}
+
+func (h *TaskHandler) PostUpdateComment(c *gin.Context) {
+	taskID := c.Param("task_id")
+	updateID := c.Param("update_id")
+	userID := c.MustGet("user_id").(string)
+
+	var req schemas.AddCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.taskService.PostUpdateComment(c.Request.Context(), taskID, updateID, userID, req.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post comment"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Comment posted"})
 }
 
 func (h *TaskHandler) GetFullTaskDetails(c *gin.Context) {

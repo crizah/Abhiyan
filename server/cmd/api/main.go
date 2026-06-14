@@ -135,6 +135,7 @@ func main() {
 			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
 			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
 			teamAdminGroup.PUT("/tasks/:task_id/reopen", taskHandler.ReopenTask)
+			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 		}
 
 		users := v1.Group("/users")

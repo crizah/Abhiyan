@@ -55,6 +55,24 @@ func (q *Queries) AddTaskUpdate(ctx context.Context, arg AddTaskUpdateParams) (T
 	return i, err
 }
 
+const addUpdateComment = `-- name: AddUpdateComment :one
+INSERT INTO task_update_comments (task_update_id, user_id, content)
+VALUES ($1, $2, $3) RETURNING id
+`
+
+type AddUpdateCommentParams struct {
+	TaskUpdateID uuid.UUID     `json:"task_update_id"`
+	UserID       uuid.NullUUID `json:"user_id"`
+	Content      string        `json:"content"`
+}
+
+func (q *Queries) AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, addUpdateComment, arg.TaskUpdateID, arg.UserID, arg.Content)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createReminder = `-- name: CreateReminder :one
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
 VALUES ($1, $2, $3, $4, $5)
@@ -310,6 +328,68 @@ func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Rem
 			&i.RecurrenceValue,
 			&i.RecurrenceUnit,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskUpdateAuthor = `-- name: GetTaskUpdateAuthor :one
+SELECT user_id FROM task_updates WHERE id = $1
+`
+
+func (q *Queries) GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.NullUUID, error) {
+	row := q.db.QueryRowContext(ctx, getTaskUpdateAuthor, id)
+	var user_id uuid.NullUUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getTaskUpdateComments = `-- name: GetTaskUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+       u.first_name, u.last_name
+FROM task_update_comments c
+JOIN task_updates tu ON c.task_update_id = tu.id
+LEFT JOIN users u ON c.user_id = u.id
+WHERE tu.task_id = $1
+ORDER BY c.created_at ASC
+`
+
+type GetTaskUpdateCommentsRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskUpdateID uuid.UUID      `json:"task_update_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdateComments, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskUpdateCommentsRow
+	for rows.Next() {
+		var i GetTaskUpdateCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskUpdateID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
 		); err != nil {
 			return nil, err
 		}

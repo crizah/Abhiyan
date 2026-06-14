@@ -215,72 +215,6 @@ func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, statu
 	})
 }
 
-func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]schemas.TaskUpdateResponse, error) {
-	tID := util.ParseUUID(taskID)
-	updates, err := s.queries.GetTaskUpdates(ctx, tID)
-	if err != nil {
-		return nil, err
-	}
-
-	var mapped []schemas.TaskUpdateResponse
-	for _, u := range updates {
-		mapped = append(mapped, schemas.TaskUpdateResponse{
-			ID:        u.ID.String(),
-			TaskID:    u.TaskID.String(),
-			UserID:    u.UserID.UUID.String(),
-			FirstName: u.FirstName.String,
-			LastName:  u.LastName.String,
-			Content:   u.Content,
-			CreatedAt: u.CreatedAt.Time.Format(time.RFC3339),
-		})
-	}
-	if mapped == nil {
-		mapped = []schemas.TaskUpdateResponse{}
-	}
-	return mapped, nil
-}
-
-// 2. FIX: Wrap uID in uuid.NullUUID and trigger notifications safely
-func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, content string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
-	uID := util.ParseUUID(userID)
-
-	_, err = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
-		TaskID:  tID,
-		UserID:  uuid.NullUUID{UUID: uID, Valid: true}, // Explicit valid flag fixes the compiler error
-		Content: content,
-	})
-	if err != nil {
-		return err
-	}
-
-	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
-	participants, _ := qtx.GetTaskParticipants(ctx, tID)
-
-	snippet := content
-	if len(snippet) > 40 {
-		snippet = snippet[:37] + "..."
-	}
-
-	for _, p := range participants {
-		if p.ID != uID {
-			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID:  p.ID,
-				Title:   fmt.Sprintf("Update: %s", taskTitle),
-				Message: fmt.Sprintf("%s %s posted: %s", p.FirstName.String, p.LastName.String, snippet),
-			})
-		}
-	}
-	return tx.Commit()
-}
-
 func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*schemas.FullTaskDetailsResponse, error) {
 	tID := util.ParseUUID(taskID)
 
@@ -535,6 +469,153 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 			UserID:  p.ID,
 			Title:   "Task Reopened",
 			Message: fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
+		})
+	}
+
+	return tx.Commit()
+}
+
+func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]schemas.TaskUpdateResponse, error) {
+	tID := util.ParseUUID(taskID)
+
+	// 1. Fetch Updates
+	updates, err := s.queries.GetTaskUpdates(ctx, tID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Fetch all Comments for this entire task
+	dbComments, _ := s.queries.GetTaskUpdateComments(ctx, tID)
+
+	// Group comments by their parent Update ID
+	commentsMap := make(map[string][]schemas.TaskUpdateCommentResponse)
+	for _, c := range dbComments {
+		uID := c.TaskUpdateID.String()
+		commentsMap[uID] = append(commentsMap[uID], schemas.TaskUpdateCommentResponse{
+			ID:        c.ID.String(),
+			UserID:    c.UserID.UUID.String(),
+			FirstName: c.FirstName.String,
+			LastName:  c.LastName.String,
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt.Time.Format(time.RFC3339),
+		})
+	}
+
+	// 3. Map together
+	var mapped []schemas.TaskUpdateResponse
+	for _, u := range updates {
+		uID := u.ID.String()
+		mapped = append(mapped, schemas.TaskUpdateResponse{
+			ID:        uID,
+			TaskID:    u.TaskID.String(),
+			UserID:    u.UserID.UUID.String(),
+			FirstName: u.FirstName.String,
+			LastName:  u.LastName.String,
+			Content:   u.Content,
+			CreatedAt: u.CreatedAt.Time.Format(time.RFC3339),
+			Comments:  commentsMap[uID], // Attach comments or nil
+		})
+	}
+
+	if mapped == nil {
+		mapped = []schemas.TaskUpdateResponse{}
+	}
+	return mapped, nil
+}
+
+func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	// 1. Insert Update
+	_, err = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+		TaskID:  tID,
+		UserID:  uuid.NullUUID{UUID: uID, Valid: true},
+		Content: req.Content,
+	})
+	if err != nil {
+		return err
+	}
+
+	// 2. Data for Notifications
+	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
+	participants, _ := qtx.GetTaskParticipants(ctx, tID)
+
+	var authorName string = "Someone"
+	for _, p := range participants {
+		if p.ID == uID {
+			authorName = strings.TrimSpace(p.FirstName.String + " " + p.LastName.String)
+			break
+		}
+	}
+
+	snippet := req.Content
+	if len(snippet) > 40 {
+		snippet = snippet[:37] + "..."
+	}
+
+	// 3. Handle @Mentions First
+	mentionedMap := make(map[string]bool)
+	for _, mIDStr := range req.MentionedUserIDs {
+		mID := util.ParseUUID(mIDStr)
+		mentionedMap[mIDStr] = true
+
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID:  mID,
+			Title:   "You were mentioned!",
+			Message: fmt.Sprintf("%s mentioned you: %s", authorName, snippet),
+		})
+	}
+
+	// 4. Handle Standard Participants (skip author and anyone already mentioned)
+	for _, p := range participants {
+		if p.ID != uID && !mentionedMap[p.ID.String()] {
+			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+				UserID:  p.ID,
+				Title:   fmt.Sprintf("Update: %s", taskTitle),
+				Message: fmt.Sprintf("%s posted: %s", authorName, snippet),
+			})
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, content string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := s.queries.WithTx(tx)
+	uID := util.ParseUUID(updateID)
+	cID := util.ParseUUID(userID)
+
+	// 1. Insert Comment
+	_, err = qtx.AddUpdateComment(ctx, db.AddUpdateCommentParams{
+		TaskUpdateID: uID,
+		UserID:       uuid.NullUUID{UUID: cID, Valid: true},
+		Content:      content,
+	})
+	if err != nil {
+		return err
+	}
+
+	// 2. Notify the original author of the update
+	updateAuthor, err := qtx.GetTaskUpdateAuthor(ctx, uID)
+	if err == nil && updateAuthor.UUID != cID { // Don't notify if commenting on own post
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID:  updateAuthor.UUID,
+			Title:   "New Comment on your update",
+			Message: "Someone replied to your task update.",
 		})
 	}
 

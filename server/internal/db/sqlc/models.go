@@ -450,6 +450,14 @@ type TaskUpdate struct {
 	CreatedAt sql.NullTime  `json:"created_at"`
 }
 
+type TaskUpdateComment struct {
+	ID           uuid.UUID     `json:"id"`
+	TaskUpdateID uuid.UUID     `json:"task_update_id"`
+	UserID       uuid.NullUUID `json:"user_id"`
+	Content      string        `json:"content"`
+	CreatedAt    sql.NullTime  `json:"created_at"`
+}
+
 type Team struct {
 	ID        uuid.UUID    `json:"id"`
 	OrgID     uuid.UUID    `json:"org_id"`

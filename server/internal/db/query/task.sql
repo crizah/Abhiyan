@@ -92,3 +92,19 @@ ORDER BY t.created_at DESC;
 
 -- name: UpdateTaskDeadline :exec
 UPDATE tasks SET due_date = $2 WHERE id = $1;
+
+-- name: AddUpdateComment :one
+INSERT INTO task_update_comments (task_update_id, user_id, content)
+VALUES ($1, $2, $3) RETURNING id;
+
+-- name: GetTaskUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+       u.first_name, u.last_name
+FROM task_update_comments c
+JOIN task_updates tu ON c.task_update_id = tu.id
+LEFT JOIN users u ON c.user_id = u.id
+WHERE tu.task_id = $1
+ORDER BY c.created_at ASC;
+
+-- name: GetTaskUpdateAuthor :one
+SELECT user_id FROM task_updates WHERE id = $1;

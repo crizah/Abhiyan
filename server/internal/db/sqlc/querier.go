@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AddTaskParticipant(ctx context.Context, arg AddTaskParticipantParams) error
 	AddTaskUpdate(ctx context.Context, arg AddTaskUpdateParams) (TaskUpdate, error)
+	AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error)
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
@@ -39,6 +40,8 @@ type Querier interface {
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
 	GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error)
+	GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.NullUUID, error)
+	GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error)
 	GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error)
 	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)

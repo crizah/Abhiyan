@@ -16,6 +16,7 @@ type Querier interface {
 	AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error)
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
+	ApproveTaskState(ctx context.Context, id uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
@@ -68,7 +69,10 @@ type Querier interface {
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
+	RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
+	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
+	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error

@@ -79,7 +79,7 @@ DELETE FROM reminders WHERE task_id = $1;
 
 -- name: GetAdminAllTasks :many
 SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
     t.created_by, t.due_date, t.created_at, 
     u.first_name, u.last_name, 
     tm.name as team_name
@@ -110,10 +110,22 @@ ORDER BY c.created_at ASC;
 SELECT user_id FROM task_updates WHERE id = $1;
 
 -- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
        t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
 FROM tasks t
 JOIN users u ON t.created_by = u.id
 JOIN task_participants tp ON t.id = tp.task_id
 WHERE t.team_id = $1 AND tp.user_id = $2
 ORDER BY t.created_at DESC;
+
+-- name: SubmitTaskState :exec
+UPDATE tasks SET fulfillment_status = 'COMPLETED', review_status = 'PENDING' WHERE id = $1;
+
+-- name: ApproveTaskState :exec
+UPDATE tasks SET status = 'CLOSED', review_status = 'APPROVED' WHERE id = $1;
+
+-- name: RejectTaskState :exec
+UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'REJECTED', due_date = $2 WHERE id = $1;
+
+-- name: ReopenTaskState :exec
+UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'UNSUBMITTED', due_date = $2 WHERE id = $1;

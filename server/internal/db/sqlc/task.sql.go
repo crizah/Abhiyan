@@ -73,6 +73,15 @@ func (q *Queries) AddUpdateComment(ctx context.Context, arg AddUpdateCommentPara
 	return id, err
 }
 
+const approveTaskState = `-- name: ApproveTaskState :exec
+UPDATE tasks SET status = 'CLOSED', review_status = 'APPROVED' WHERE id = $1
+`
+
+func (q *Queries) ApproveTaskState(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, approveTaskState, id)
+	return err
+}
+
 const createReminder = `-- name: CreateReminder :one
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
 VALUES ($1, $2, $3, $4, $5)
@@ -112,7 +121,7 @@ func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) 
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (team_id, title, description, created_by, due_date)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at
+RETURNING id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at
 `
 
 type CreateTaskParams struct {
@@ -139,6 +148,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Description,
 		&i.Status,
 		&i.FulfillmentStatus,
+		&i.ReviewStatus,
 		&i.CreatedBy,
 		&i.DueDate,
 		&i.CreatedAt,
@@ -166,7 +176,7 @@ func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) err
 
 const getAdminAllTasks = `-- name: GetAdminAllTasks :many
 SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
     t.created_by, t.due_date, t.created_at, 
     u.first_name, u.last_name, 
     tm.name as team_name
@@ -185,6 +195,7 @@ type GetAdminAllTasksRow struct {
 	Description       sql.NullString            `json:"description"`
 	Status            NullTaskStatus            `json:"status"`
 	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	ReviewStatus      TaskReviewStatus          `json:"review_status"`
 	CreatedBy         uuid.UUID                 `json:"created_by"`
 	DueDate           sql.NullTime              `json:"due_date"`
 	CreatedAt         sql.NullTime              `json:"created_at"`
@@ -209,6 +220,7 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 			&i.Description,
 			&i.Status,
 			&i.FulfillmentStatus,
+			&i.ReviewStatus,
 			&i.CreatedBy,
 			&i.DueDate,
 			&i.CreatedAt,
@@ -230,7 +242,7 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 }
 
 const getEmployeeTasks = `-- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, 
+SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
        t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
 FROM tasks t
 JOIN users u ON t.created_by = u.id
@@ -251,6 +263,7 @@ type GetEmployeeTasksRow struct {
 	Description       sql.NullString            `json:"description"`
 	Status            NullTaskStatus            `json:"status"`
 	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	ReviewStatus      TaskReviewStatus          `json:"review_status"`
 	CreatedBy         uuid.UUID                 `json:"created_by"`
 	DueDate           sql.NullTime              `json:"due_date"`
 	CreatedAt         sql.NullTime              `json:"created_at"`
@@ -274,6 +287,7 @@ func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksPara
 			&i.Description,
 			&i.Status,
 			&i.FulfillmentStatus,
+			&i.ReviewStatus,
 			&i.CreatedBy,
 			&i.DueDate,
 			&i.CreatedAt,
@@ -294,7 +308,7 @@ func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksPara
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at FROM tasks
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at FROM tasks
 WHERE id = $1 LIMIT 1
 `
 
@@ -308,6 +322,7 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error) {
 		&i.Description,
 		&i.Status,
 		&i.FulfillmentStatus,
+		&i.ReviewStatus,
 		&i.CreatedBy,
 		&i.DueDate,
 		&i.CreatedAt,
@@ -518,7 +533,7 @@ func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTa
 }
 
 const getTeamTasks = `-- name: GetTeamTasks :many
-SELECT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.created_by, t.due_date, t.created_at, u.first_name, u.last_name 
+SELECT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status, t.created_by, t.due_date, t.created_at, u.first_name, u.last_name 
 FROM tasks t
 JOIN users u ON t.created_by = u.id
 WHERE t.team_id = $1
@@ -532,6 +547,7 @@ type GetTeamTasksRow struct {
 	Description       sql.NullString            `json:"description"`
 	Status            NullTaskStatus            `json:"status"`
 	FulfillmentStatus NullTaskFulfillmentStatus `json:"fulfillment_status"`
+	ReviewStatus      TaskReviewStatus          `json:"review_status"`
 	CreatedBy         uuid.UUID                 `json:"created_by"`
 	DueDate           sql.NullTime              `json:"due_date"`
 	CreatedAt         sql.NullTime              `json:"created_at"`
@@ -555,6 +571,7 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 			&i.Description,
 			&i.Status,
 			&i.FulfillmentStatus,
+			&i.ReviewStatus,
 			&i.CreatedBy,
 			&i.DueDate,
 			&i.CreatedAt,
@@ -575,7 +592,7 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 }
 
 const listTasksByTeam = `-- name: ListTasksByTeam :many
-SELECT id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at FROM tasks
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at FROM tasks
 WHERE team_id = $1
 ORDER BY created_at DESC
 `
@@ -596,6 +613,7 @@ func (q *Queries) ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task
 			&i.Description,
 			&i.Status,
 			&i.FulfillmentStatus,
+			&i.ReviewStatus,
 			&i.CreatedBy,
 			&i.DueDate,
 			&i.CreatedAt,
@@ -611,6 +629,43 @@ func (q *Queries) ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task
 		return nil, err
 	}
 	return items, nil
+}
+
+const rejectTaskState = `-- name: RejectTaskState :exec
+UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'REJECTED', due_date = $2 WHERE id = $1
+`
+
+type RejectTaskStateParams struct {
+	ID      uuid.UUID    `json:"id"`
+	DueDate sql.NullTime `json:"due_date"`
+}
+
+func (q *Queries) RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error {
+	_, err := q.db.ExecContext(ctx, rejectTaskState, arg.ID, arg.DueDate)
+	return err
+}
+
+const reopenTaskState = `-- name: ReopenTaskState :exec
+UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'UNSUBMITTED', due_date = $2 WHERE id = $1
+`
+
+type ReopenTaskStateParams struct {
+	ID      uuid.UUID    `json:"id"`
+	DueDate sql.NullTime `json:"due_date"`
+}
+
+func (q *Queries) ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error {
+	_, err := q.db.ExecContext(ctx, reopenTaskState, arg.ID, arg.DueDate)
+	return err
+}
+
+const submitTaskState = `-- name: SubmitTaskState :exec
+UPDATE tasks SET fulfillment_status = 'COMPLETED', review_status = 'PENDING' WHERE id = $1
+`
+
+func (q *Queries) SubmitTaskState(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, submitTaskState, id)
+	return err
 }
 
 const updateTaskDeadline = `-- name: UpdateTaskDeadline :exec

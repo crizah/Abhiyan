@@ -63,7 +63,7 @@ export default function EmployeeTasksPage() {
     setIsDrawerOpen(true);
     fetchTaskUpdates(task.id);
     try {
-      const res = await apiClient.get(`/tasks/${task.id}/details`);
+      const res = await apiClient.get(`/admin/tasks/${task.id}/details`);
       setTaskDetails(res.data);
     } catch(err) {}
   };
@@ -82,8 +82,8 @@ export default function EmployeeTasksPage() {
       message.success(`Task submitted to Admin for review!`);
       
       // Optimistic Update
-      setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, fulfillment_status: 'COMPLETED' } : t));
-      setSelectedTask(prev => ({ ...prev, fulfillment_status: 'COMPLETED' }));
+      setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, fulfillment_status: 'COMPLETED', review_status: 'PENDING' } : t));
+      setSelectedTask(prev => ({ ...prev, fulfillment_status: 'COMPLETED', review_status: 'PENDING' }));
       
       fetchTaskUpdates(selectedTask.id); // Pull in the automated system message
       window.dispatchEvent(new Event('refresh-notifications'));
@@ -132,7 +132,8 @@ export default function EmployeeTasksPage() {
     { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
     { title: 'My Progress', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
-    { title: 'Admin Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
+    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
+    { title: 'Admin Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={status === 'APPROVED' ? 'gold' : status === 'REJECTED' ? 'error' : status === 'PENDING' ? 'purple' : 'default'}>{status}</Tag> },
     { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View Task</Button> }
   ];
 
@@ -154,9 +155,16 @@ export default function EmployeeTasksPage() {
       </Card>
 
       {/* DRAWER */}
-      <Drawer title={selectedTask?.title || "Task Workspace"} placement="right" width={600} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
+      <Drawer 
+        title={selectedTask?.title || "Task Workspace"} 
+        placement="right" 
+        width={600} 
+        onClose={() => setIsDrawerOpen(false)} 
+        open={isDrawerOpen}
         extra={
-          selectedTask?.status === 'OPEN' && selectedTask?.fulfillment_status !== 'COMPLETED' && (
+          selectedTask?.status === 'OPEN' && 
+          selectedTask?.fulfillment_status !== 'COMPLETED' && 
+          selectedTask?.review_status !== 'PENDING' && (
             <Popconfirm title="Submit this task to Admin for review?" onConfirm={submitTaskForReview}>
               <Button type="primary" icon={<CheckCircleOutlined />}>Submit for Review</Button>
             </Popconfirm>
@@ -169,8 +177,11 @@ export default function EmployeeTasksPage() {
               <Paragraph style={{ margin: 0 }}>{selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}</Paragraph>
               <Divider style={{ margin: '12px 0' }} />
               <Flex justify="space-between">
-                <Text><InfoCircleOutlined /> Admin Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
+                <Text><InfoCircleOutlined /> Task Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
                 <Text><CheckCircleOutlined /> My Progress: <Tag color={selectedTask.fulfillment_status === 'COMPLETED' ? 'success' : 'processing'}>{selectedTask.fulfillment_status}</Tag></Text>
+              </Flex>
+              <Flex justify="space-between" style={{ marginTop: 12 }}>
+                <Text><InfoCircleOutlined /> Admin Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
               </Flex>
               {taskDetails && (
                 <div style={{ marginTop: 12 }}>

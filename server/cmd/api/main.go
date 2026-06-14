@@ -143,8 +143,11 @@ func main() {
 			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
 			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
-			teamAdminGroup.PUT("/tasks/:task_id/reopen", taskHandler.ReopenTask)
+			// teamAdminGroup.PUT("/tasks/:task_id/reopen", taskHandler.ReopenTask)
 			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
+
+			teamAdminGroup.PUT("/tasks/:task_id/approve", taskHandler.ApproveTask)
+			teamAdminGroup.PUT("/tasks/:task_id/action/:action", taskHandler.ActionTask) // reject or reopen
 		}
 
 		users := v1.Group("/users")

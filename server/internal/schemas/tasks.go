@@ -49,6 +49,7 @@ type TaskResponse struct {
 	TeamName          string     `json:"team_name,omitempty"`
 	Status            string     `json:"status"`
 	FulfillmentStatus string     `json:"fulfillment_status"`
+	ReviewStatus      string     `json:"review_status"`
 	CreatedBy         string     `json:"created_by"`
 	CreatorName       string     `json:"creator_name"`
 	DueDate           *time.Time `json:"due_date"`
@@ -89,12 +90,11 @@ type FullTaskDetailsResponse struct {
 	Reminders    []ReminderResponse        `json:"reminders"`
 }
 
-type ReopenTaskRequest struct {
+type ActionTaskRequest struct {
 	Note      string                  `json:"note"`
 	DueDate   *time.Time              `json:"due_date"`
 	Reminders []CreateReminderPayload `json:"reminders"`
 }
-
 type AddCommentRequest struct { // <-- NEW
 	Content          string   `json:"content" binding:"required"`
 	MentionedUserIDs []string `json:"mentioned_user_ids"`

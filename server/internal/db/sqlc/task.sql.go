@@ -128,6 +128,24 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 	return i, err
 }
 
+const deleteTaskParticipants = `-- name: DeleteTaskParticipants :exec
+DELETE FROM task_participants WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskParticipants, taskID)
+	return err
+}
+
+const deleteTaskReminders = `-- name: DeleteTaskReminders :exec
+DELETE FROM reminders WHERE task_id = $1
+`
+
+func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskReminders, taskID)
+	return err
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, team_id, title, description, status, fulfillment_status, created_by, due_date, created_at FROM tasks
 WHERE id = $1 LIMIT 1
@@ -148,6 +166,17 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error) {
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getTaskDetailsForNotifications = `-- name: GetTaskDetailsForNotifications :one
+SELECT title FROM tasks WHERE id = $1
+`
+
+func (q *Queries) GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTaskDetailsForNotifications, id)
+	var title string
+	err := row.Scan(&title)
+	return title, err
 }
 
 const getTaskParticipants = `-- name: GetTaskParticipants :many
@@ -180,6 +209,42 @@ func (q *Queries) GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]
 			&i.FirstName,
 			&i.LastName,
 			&i.EmailID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskReminders = `-- name: GetTaskReminders :many
+SELECT id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC
+`
+
+func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskReminders, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reminder
+	for rows.Next() {
+		var i Reminder
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.ScheduledAt,
+			&i.Channel,
+			&i.Status,
+			&i.RecurrenceValue,
+			&i.RecurrenceUnit,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

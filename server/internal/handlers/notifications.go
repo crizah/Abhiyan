@@ -13,8 +13,8 @@ import (
 )
 
 type NotificationHandler struct {
-	adminService *services.AdminService // Reusing AdminService for the unassigned query
-	db           *db.Queries            // Your sqlc queries instance
+	adminService *services.AdminService
+	db           *db.Queries
 }
 
 func NewNotificationHandler(adminSvc *services.AdminService, queries *db.Queries) *NotificationHandler {
@@ -22,43 +22,71 @@ func NewNotificationHandler(adminSvc *services.AdminService, queries *db.Queries
 }
 
 func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
-	// userID := c.MustGet("user_id").(string)
+	userID := c.MustGet("user_id").(string)
 	orgID := c.GetString("org_id")
 	role := c.GetString("role")
 
 	var notifications []schemas.NotificationResponse
 
 	// 1. Fetch standard DB notifications
-	// (Add h.db.GetUserNotifications call here and map to the array)
-	// For brevity, assuming this maps correctly.
+	dbNotifs, err := h.db.GetUserNotifications(c.Request.Context(), util.ParseUUID(userID))
+	if err == nil {
+		for _, n := range dbNotifs {
+			notifications = append(notifications, schemas.NotificationResponse{
+				ID:        n.ID.String(),
+				Title:     n.Title,
+				Message:   n.Message,
+				IsRead:    n.IsRead.Bool,
+				IsSystem:  false,
+				Type:      "INFO",
+				CreatedAt: n.CreatedAt.Time.Format(time.RFC3339),
+			})
+		}
+	}
 
 	// 2. Inject Dynamic System Alerts (Unassigned Users Queue)
 	if role == "SUPER_ADMIN" && orgID != "" {
 		unassigned, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID)
 		if err == nil && len(unassigned) > 0 {
-			// Prepend the system alert to the top of the list
 			sysAlert := schemas.NotificationResponse{
 				ID:        "sys-unassigned-queue",
 				Title:     "Action Required",
 				Message:   fmt.Sprintf("You have %d user(s) waiting to be assigned to teams.", len(unassigned)),
-				IsRead:    false, // System alerts are always unread until resolved
+				IsRead:    false,
 				IsSystem:  true,
+				Type:      "WARNING",
 				CreatedAt: time.Now().Format(time.RFC3339),
 			}
 			notifications = append([]schemas.NotificationResponse{sysAlert}, notifications...)
 		}
 	}
 
+	if notifications == nil {
+		notifications = []schemas.NotificationResponse{}
+	}
+
 	c.JSON(http.StatusOK, notifications)
 }
 
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
-	// Execute h.db.MarkNotificationsRead
+	userID := c.MustGet("user_id").(string)
+
+	err := h.db.MarkNotificationsRead(c.Request.Context(), util.ParseUUID(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notifications read"})
+		return
+	}
 	c.Status(http.StatusOK)
 }
 
 func (h *NotificationHandler) ClearAll(c *gin.Context) {
-	// Execute h.db.ClearNotifications
+	userID := c.MustGet("user_id").(string)
+
+	err := h.db.ClearNotifications(c.Request.Context(), util.ParseUUID(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear notifications"})
+		return
+	}
 	c.Status(http.StatusOK)
 }
 
@@ -66,7 +94,6 @@ func (h *NotificationHandler) MarkOneRead(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
 	notifID := c.Param("id")
 
-	// Pass both to ensure a user can only mark their OWN notifications as read
 	err := h.db.MarkOneNotificationRead(c.Request.Context(), db.MarkOneNotificationReadParams{
 		ID:     util.ParseUUID(notifID),
 		UserID: util.ParseUUID(userID),

@@ -47,7 +47,7 @@ func main() {
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
-	taskService := services.NewTaskService(dbConn)
+	taskService := services.NewTaskService(dbConn, onionApp)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -129,6 +129,10 @@ func main() {
 			teamAdminGroup.PUT("/tasks/:task_id/status", taskHandler.UpdateTaskStatus)
 			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams)
 			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
+			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
+			teamAdminGroup.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
+			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
+			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
 		}
 
 		users := v1.Group("/users")

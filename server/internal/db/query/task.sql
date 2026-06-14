@@ -64,3 +64,15 @@ ORDER BY tu.created_at ASC;
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
+
+-- name: GetTaskDetailsForNotifications :one
+SELECT title FROM tasks WHERE id = $1;
+
+-- name: GetTaskReminders :many
+SELECT * FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC;
+
+-- name: DeleteTaskParticipants :exec
+DELETE FROM task_participants WHERE task_id = $1;
+
+-- name: DeleteTaskReminders :exec
+DELETE FROM reminders WHERE task_id = $1;

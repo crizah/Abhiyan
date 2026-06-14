@@ -114,6 +114,46 @@ func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]st
 	return items, nil
 }
 
+const getAdminTeamWiseStats = `-- name: GetAdminTeamWiseStats :many
+SELECT 
+    t.id, 
+    t.name, 
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC
+`
+
+type GetAdminTeamWiseStatsRow struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	MemberCount int64     `json:"member_count"`
+}
+
+func (q *Queries) GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminTeamWiseStats, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAdminTeamWiseStatsRow
+	for rows.Next() {
+		var i GetAdminTeamWiseStatsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.MemberCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEmployeeTeams = `-- name: GetEmployeeTeams :many
 SELECT 
     t.id, 

@@ -245,6 +245,13 @@ export default function TeamTasksPage() {
   ];
   const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
 
+  const getTimelineColor = (content) => {
+    if (content.includes("Task submitted") || content.includes("Task Approved")) return 'green';
+    if (content.includes("TASK REJECTED")) return 'red';
+    if (content.includes("TASK REOPENED")) return 'orange';
+    return 'blue';
+  };
+
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
@@ -398,7 +405,7 @@ export default function TeamTasksPage() {
               {taskUpdates.length === 0 ? <Text type="secondary">No updates yet.</Text> : (
                 <Timeline 
                   items={taskUpdates.map(u => ({ 
-                    color: u.content.includes("✅") ? 'green' : u.content.includes("❌") ? 'red' : 'blue', 
+                    color: getTimelineColor(u.content),
                     children: (
                       <>
                         <Flex justify="space-between" align="baseline">
@@ -423,16 +430,33 @@ export default function TeamTasksPage() {
                                 </div>
                               ))}
                               {selectedTask.status === 'OPEN' && (
-                                <Mentions 
-                                  size="small" placeholder="Write a comment... use @ to mention" 
-                                  value={commentDrafts[u.id] || ''} 
-                                  onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
-                                  onPressEnter={() => postComment(u.id)}
-                                  options={teamMembers.map(m => ({
-                                    value: m.full_name.replace(/\s+/g, ''), 
-                                    label: m.full_name
-                                  }))}
-                                />
+                                <Flex gap="small" style={{ marginTop: '8px' }}>
+                                  <Mentions 
+                                    style={{ flex: 1 }}
+                                    size="small" placeholder="Write a comment... use @ to mention" 
+                                    value={commentDrafts[u.id] || ''} 
+                                    onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
+                                    onPressEnter={(e) => {
+                                      if (!e.shiftKey) {
+                                        e.preventDefault();
+                                        postComment(u.id);
+                                      }
+                                    }}
+                                    options={teamMembers.map(m => ({
+                                      value: m.full_name.replace(/\s+/g, ''),
+                                      label: m.full_name
+                                    }))}
+                                  />
+                                  <Button 
+                                    type="primary" 
+                                    size="small" 
+                                    icon={<SendOutlined />} 
+                                    onClick={() => postComment(u.id)}
+                                    disabled={!commentDrafts[u.id]?.trim()}
+                                  >
+                                    Reply
+                                  </Button>
+                                </Flex>
                               )}
                             </>
                           )}

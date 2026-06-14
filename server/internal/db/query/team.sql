@@ -5,6 +5,15 @@ FROM team_members tm1
 JOIN team_members tm2 ON tm1.team_id = tm2.team_id
 WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN';
 
+-- name: GetAdminTeamWiseStats :many
+SELECT 
+    t.id, 
+    t.name, 
+    (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
+FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+ORDER BY t.name ASC;
 
 -- name: GetTeamEmployeesPaginated :many
 SELECT 

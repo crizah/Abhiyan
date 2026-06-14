@@ -80,3 +80,14 @@ type UpdateUserManagementPayload struct {
 	Role   string `json:"role"`
 	Status string `json:"status"`
 }
+
+type TeamStatResponse struct {
+	TeamID      string `json:"team_id"`
+	TeamName    string `json:"team_name"`
+	MemberCount int    `json:"member_count"`
+}
+
+type AdminDashboardStatsResponse struct {
+	TotalUsers int64              `json:"total_users"`
+	Teams      []TeamStatResponse `json:"teams"`
+}

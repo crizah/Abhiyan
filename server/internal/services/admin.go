@@ -80,6 +80,42 @@ func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, 
 func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string) (int64, error) {
 	return s.queries.GetTotalUsersInAdminTeams(ctx, util.ParseUUID(userID))
 }
+
+func (s *AdminService) GetAdminDashboardStats(ctx context.Context, userID string) (*schemas.AdminDashboardStatsResponse, error) {
+	uID := util.ParseUUID(userID)
+
+	// 1. Get overarching total distinct users
+	totalUsers, err := s.queries.GetTotalUsersInAdminTeams(ctx, uID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Get breakdown per team
+	dbTeams, err := s.queries.GetAdminTeamWiseStats(ctx, uID)
+	if err != nil {
+		return nil, err
+	}
+
+	var teamStats []schemas.TeamStatResponse
+	for _, t := range dbTeams {
+		teamStats = append(teamStats, schemas.TeamStatResponse{
+			TeamID:      t.ID.String(),
+			TeamName:    t.Name,
+			MemberCount: int(t.MemberCount),
+		})
+	}
+
+	// Prevent null JSON arrays
+	if teamStats == nil {
+		teamStats = []schemas.TeamStatResponse{}
+	}
+
+	return &schemas.AdminDashboardStatsResponse{
+		TotalUsers: totalUsers,
+		Teams:      teamStats,
+	}, nil
+}
+
 func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string, roleFilter string, statusFilter string) (*schemas.PaginatedUsersResponse, error) {
 	parsedOrgID := util.ParseUUID(orgID)
 

@@ -40,6 +40,7 @@ type Querier interface {
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
+	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)

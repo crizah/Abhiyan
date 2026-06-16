@@ -15,6 +15,7 @@ import UserOnboardingPage from './features/users/UserOnboardingPage';
 import TeamsPage from './features/users/TeamsPage';
 import TeamTasksPage from './features/tasks/pages/TeamTasksPage'; 
 import EmployeeTasksPage from './features/tasks/pages/EmployeeTasksPage';
+import AcceptInvitePage from './features/auth/pages/AcceptInvitePage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -50,6 +51,8 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register-org" element={<RegisterOrgPage />} />
+              <Route path="/accept-invite" element={<AcceptInvitePage />} />
+              
               
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<Navigate to="dashboard" replace />} />
@@ -62,6 +65,7 @@ export default function App() {
                 
                 <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
                 <Route path="employee-tasks" element={<EmployeeTasksPage />} />
+
                 
                 
               </Route>

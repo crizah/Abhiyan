@@ -1,41 +1,43 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Typography, Layout, message, Card } from 'antd';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Form, Input, Button, Card, Typography, Flex, message, theme } from 'antd';
+import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
 
 const { Title, Text } = Typography;
 
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm();
-
-  // Extract the token from the URL query string
   const token = searchParams.get('token');
+  
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { token: themeToken } = theme.useToken();
 
   const onFinish = async (values) => {
     if (!token) {
-      message.error("Invalid or missing invite token.");
+      message.error("Invalid invite link. Missing token.");
       return;
     }
 
     setLoading(true);
     try {
-      // Matches the AcceptInviteRequest struct exactly
+      // Mapping the form values exactly to your Go schema
       await apiClient.post('/auth/accept-invite', {
         token: token,
-        first_name: values.firstName,
-        last_name: values.lastName || "",
-        phone: values.phone,
-        new_password: values.password,
+        first_name: values.first_name,
+        last_name: values.last_name || "", // Last name is optional in your schema
+        phone: values.phone,               // Added phone field
+        new_password: values.password,     // Mapped to your new_password JSON tag
       });
 
-      message.success('Account setup complete! You can now log in.');
+      message.success("Account fully onboarded. You may now log in.");
+      
+      // Since your backend doesn't auto-issue an access token here, 
+      // we redirect them to the standard login page.
       navigate('/login');
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Failed to accept invite. It may have expired.';
-      message.error(errorMsg);
+      message.error(error.response?.data?.error || "Failed to accept invite.");
     } finally {
       setLoading(false);
     }
@@ -43,70 +45,92 @@ export default function AcceptInvitePage() {
 
   if (!token) {
     return (
-      <Layout style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Card>
-          <Title level={4} type="danger">Invalid Invite Link</Title>
-          <Text>This link is missing its security token. Please check your email and try again.</Text>
+      <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout }}>
+        <Card style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
+          <Title level={4} style={{ color: themeToken.colorError }}>Invalid Invite Link</Title>
+          <Text type="secondary">This link is missing a secure token. Please ask your administrator to re-send the invite.</Text>
         </Card>
-      </Layout>
+      </Flex>
     );
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f0f2f5' }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <Title level={3} style={{ margin: 0 }}>Complete Your Profile</Title>
-          <Text type="secondary">Set up your details to join the workspace</Text>
+    <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout, padding: '24px' }}>
+      <Card 
+        style={{ 
+          width: '100%', maxWidth: 450, 
+          boxShadow: themeToken.boxShadowSecondary,
+          borderRadius: themeToken.borderRadiusLG 
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <Title level={3} style={{ margin: 0 }}>Join Your Organization</Title>
+          <Text type="secondary">Complete your profile to access your workspace.</Text>
         </div>
 
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={onFinish}
-          requiredMark={false}
-        >
-          <Form.Item
-            label="First Name"
-            name="firstName"
-            rules={[{ required: true, message: 'Please enter your first name' }]}
+        <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
+          <Flex gap="middle">
+            <Form.Item 
+              name="first_name" 
+              label="First Name" 
+              style={{ flex: 1 }}
+              rules={[{ required: true, message: 'First name is required' }]}
+            >
+              <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+            </Form.Item>
+
+            <Form.Item 
+              name="last_name" 
+              label="Last Name" 
+              style={{ flex: 1 }}
+            >
+              <Input size="large" />
+            </Form.Item>
+          </Flex>
+
+          <Form.Item 
+            name="phone" 
+            label="Phone Number" 
+            rules={[{ required: true, message: 'Phone number is required' }]}
           >
-            <Input size="large" />
+            <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
           </Form.Item>
 
-          <Form.Item
-            label="Last Name"
-            name="lastName"
-          >
-            <Input size="large" />
-          </Form.Item>
-
-          <Form.Item
-            label="Phone Number"
-            name="phone"
-            rules={[{ required: true, message: 'Please enter your phone number' }]}
-          >
-            <Input size="large" />
-          </Form.Item>
-
-          <Form.Item
-            label="New Password"
-            name="password"
+          <Form.Item 
+            name="password" 
+            label="Create Password" 
             rules={[
-              { required: true, message: 'Please set a password' },
-              { min: 8, message: 'Password must be at least 8 characters' }
+              { required: true, message: 'Please create a password.' },
+              { min: 8, message: 'Password must be at least 8 characters.' }
             ]}
           >
-            <Input.Password size="large" />
+            <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
           </Form.Item>
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" size="large" block loading={loading}>
-              Create Account
-            </Button>
+          <Form.Item 
+            name="confirm_password" 
+            label="Confirm Password" 
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm your password.' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('The two passwords do not match!'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
           </Form.Item>
+
+          <Button type="primary" htmlType="submit" size="large" block loading={loading} style={{ marginTop: 8 }}>
+            Complete Setup
+          </Button>
         </Form>
       </Card>
-    </Layout>
+    </Flex>
   );
 }

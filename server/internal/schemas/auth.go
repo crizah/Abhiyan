@@ -42,3 +42,6 @@ type TokenResponse struct {
 type MessageResponse struct {
 	Message string `json:"message"`
 }
+type ResendInviteRequest struct {
+	Token string `json:"token" binding:"required"`
+}

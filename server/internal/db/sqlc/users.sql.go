@@ -213,6 +213,39 @@ func (q *Queries) GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFull
 	return i, err
 }
 
+const getPendingInvitedUser = `-- name: GetPendingInvitedUser :one
+SELECT u.id, u.email_id, u.org_id, u.status, usr.role
+FROM users u
+JOIN user_system_roles usr ON u.id = usr.user_id
+WHERE u.email_id = $1 AND u.org_id = $2
+`
+
+type GetPendingInvitedUserParams struct {
+	EmailID string    `json:"email_id"`
+	OrgID   uuid.UUID `json:"org_id"`
+}
+
+type GetPendingInvitedUserRow struct {
+	ID      uuid.UUID      `json:"id"`
+	EmailID string         `json:"email_id"`
+	OrgID   uuid.UUID      `json:"org_id"`
+	Status  NullUserStatus `json:"status"`
+	Role    SystemRole     `json:"role"`
+}
+
+func (q *Queries) GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getPendingInvitedUser, arg.EmailID, arg.OrgID)
+	var i GetPendingInvitedUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.EmailID,
+		&i.OrgID,
+		&i.Status,
+		&i.Role,
+	)
+	return i, err
+}
+
 const getTotalUsersByOrg = `-- name: GetTotalUsersByOrg :one
 SELECT COUNT(*) FROM users 
 WHERE org_id = $1

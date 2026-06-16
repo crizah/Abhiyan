@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -222,7 +224,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 // --- Accept Invite (Public Link) ---
 func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
 	// 1. Parse and validate the JWT from the URL
-	claims, err := util.ParseInviteToken(req.Token, []byte("your-super-secret-key"))
+	claims, err := util.ParseInviteToken(req.Token, s.JwtSecret)
 	if err != nil {
 		return errors.New("invalid or expired invite link")
 	}
@@ -250,8 +252,11 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 		EmailID:     claims.Email, // Extracted safely from the signed JWT, not user input!
 		// status already active here
 	})
+	// if err != nil {
+	// 	return errors.New("failed to update user profile or invite already accepted")
+	// }
 	if err != nil {
-		return errors.New("failed to update user profile or invite already accepted")
+		return err
 	}
 
 	// 5. Insert their new password into user_credentials
@@ -264,4 +269,38 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 	}
 
 	return tx.Commit()
+}
+
+func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken string) error {
+	// 1. Safely extract claims from the expired-but-validly-signed token
+	claims, err := util.ParseInviteToken(expiredToken, s.JwtSecret)
+	if err != nil {
+		return err // Fails if tampered with
+	}
+
+	// 2. Fetch the user to ensure they exist and haven't already accepted an invite
+	user, err := s.Queries.GetPendingInvitedUser(ctx, db.GetPendingInvitedUserParams{
+		EmailID: claims.Email,
+		OrgID:   util.ParseUUID(claims.OrgID),
+	})
+	if err != nil {
+		return errors.New("could not verify original invite record")
+	}
+
+	if user.Status.Valid && user.Status.UserStatus == db.UserStatusACTIVE {
+		return errors.New("this account is already active, please log in")
+	}
+
+	// 3. Generate a brand new token
+	newToken, err := util.GenerateInviteToken(user.EmailID, user.OrgID.String(), string(user.Role), []byte("your-super-secret-key"), 48*time.Hour)
+	if err != nil {
+		return err
+	}
+
+	// 4. Enqueue the email
+	frontendURL := os.Getenv("FRONTEND_URL")
+	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, newToken)
+	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": user.EmailID, "link": link})
+
+	return err
 }

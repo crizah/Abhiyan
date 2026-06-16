@@ -232,3 +232,19 @@ func (h *AuthHandler) AcceptInvite(c *gin.Context) {
 
 	c.JSON(http.StatusOK, schemas.MessageResponse{Message: "Account fully onboarded. You may now log in."})
 }
+
+func (h *AuthHandler) ResendPublicInvite(c *gin.Context) {
+	var req schemas.ResendInviteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.authService.ResendPublicInvite(c.Request.Context(), req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "A fresh invite link has been emailed to you."})
+}

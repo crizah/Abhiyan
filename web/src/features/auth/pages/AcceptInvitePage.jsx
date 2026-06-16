@@ -11,6 +11,9 @@ export default function AcceptInvitePage() {
   const token = searchParams.get('token');
   
   const [loading, setLoading] = useState(false);
+  const [tokenExpired, setTokenExpired] = useState(false);
+  const [resending, setResending] = useState(false);
+  
   const navigate = useNavigate();
   const { token: themeToken } = theme.useToken();
 
@@ -21,6 +24,7 @@ export default function AcceptInvitePage() {
     }
 
     setLoading(true);
+    setTokenExpired(false);
     try {
       // Mapping the form values exactly to your Go schema
       await apiClient.post('/auth/accept-invite', {
@@ -37,18 +41,55 @@ export default function AcceptInvitePage() {
       // we redirect them to the standard login page.
       navigate('/login');
     } catch (error) {
-      message.error(error.response?.data?.error || "Failed to accept invite.");
+      const errMsg = error.response?.data?.error || "Failed to accept invite.";
+      message.error(errMsg);
+      
+      // If the backend specifically kicks back an expiration/invalid error, flip the state
+      if (errMsg.includes("expired") || errMsg.includes("invalid")) {
+        setTokenExpired(true);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token) {
+  const handleResendInvite = async () => {
+    setResending(true);
+    try {
+      await apiClient.post('/auth/resend-invite', { token: token });
+      message.success("A fresh invite link has been sent to your email!");
+      setTokenExpired(false); // Hide the button after success
+    } catch (error) {
+      message.error(error.response?.data?.error || "Failed to resend invite.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  if (!token || tokenExpired) {
     return (
       <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout }}>
         <Card style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
-          <Title level={4} style={{ color: themeToken.colorError }}>Invalid Invite Link</Title>
-          <Text type="secondary">This link is missing a secure token. Please ask your administrator to re-send the invite.</Text>
+          <Title level={4} style={{ color: themeToken.colorError }}>
+            {!token ? "Invalid Invite Link" : "Invite Link Expired"}
+          </Title>
+          <Text type="secondary">
+            {!token 
+              ? "This link is missing a secure token. Please ask your administrator to re-send the invite." 
+              : "For your security, invite links expire after 48 hours. Click below to email yourself a fresh link."}
+          </Text>
+
+          {tokenExpired && (
+            <Button 
+              type="primary" 
+              style={{ marginTop: 24 }} 
+              block 
+              loading={resending}
+              onClick={handleResendInvite}
+            >
+              Email Me a New Invite Link
+            </Button>
+          )}
         </Card>
       </Flex>
     );

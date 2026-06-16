@@ -79,6 +79,7 @@ func main() {
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/accept-invite", authHandler.AcceptInvite)
+			auth.POST("/resend-invite", authHandler.ResendPublicInvite)
 
 			// Protected Auth Context
 			auth.GET("/me", middleware.RequireAuth(s_byte), authHandler.Me)

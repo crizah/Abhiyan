@@ -150,3 +150,9 @@ SELECT status FROM users WHERE id = $1;
 
 -- name: GetUserNameByID :one
 SELECT first_name, last_name FROM users WHERE id = $1;
+
+-- name: GetPendingInvitedUser :one
+SELECT u.id, u.email_id, u.org_id, u.status, usr.role
+FROM users u
+JOIN user_system_roles usr ON u.id = usr.user_id
+WHERE u.email_id = $1 AND u.org_id = $2;

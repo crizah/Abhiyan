@@ -68,7 +68,10 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
-	s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
+	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
+	if err != nil {
+		return "", err
+	}
 
 	return token, nil
 }

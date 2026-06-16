@@ -53,8 +53,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 3. Register the task by calling our constructor and passing the email service
+	// register task
 	onionApp.Register("send_invite_email", tasks.NewSendInviteEmailTask(emailService))
+	// map to queue
+	onionApp.UpdateConfig(app.Config{
+		TaskRoutes: map[string]string{
+			"send_invite_email": "critical",
+		},
+	})
 
 	// 4. Start Worker
 	log.Println("Worker started successfully. Listening for tasks...")

@@ -11,6 +11,7 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	app "github.com/crizah/Onion/app"
+	"github.com/crizah/Onion/broker"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -36,6 +37,13 @@ func main() {
 		BrokerAddr:    broker_url,
 		BackendURL:    db_url,
 		DashboardAddr: dashboard_addr,
+		DefaultQueue:  "default",
+		Queues: []broker.Queue{
+			{Name: "critical", Priority: 10},
+		},
+		TaskRoutes: map[string]string{
+			"send_invite_email": "critical",
+		},
 	})
 	if err != nil {
 		panic(err)

@@ -783,6 +783,20 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	// Just delete reminders from DB
 	_ = qtx.DeleteTaskReminders(ctx, tID)
 
+	// Rebuild the fresh ones from the Reopen/Reject Modal payload
+	for _, rem := range req.Reminders {
+		remParams := db.CreateReminderParams{
+			TaskID:      tID,
+			ScheduledAt: rem.ScheduledAt,
+			Channel:     db.ReminderChannel(rem.Channel),
+		}
+		if rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil {
+			remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
+			remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
+		}
+		_, _ = qtx.CreateReminder(ctx, remParams)
+	}
+
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 	for _, p := range participants {

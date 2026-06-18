@@ -94,9 +94,9 @@ func (q *Queries) CompleteReminder(ctx context.Context, id uuid.UUID) error {
 }
 
 const createReminder = `-- name: CreateReminder :one
-INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at
+INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit, is_system_spawned)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at, is_system_spawned
 `
 
 type CreateReminderParams struct {
@@ -105,6 +105,7 @@ type CreateReminderParams struct {
 	Channel         ReminderChannel    `json:"channel"`
 	RecurrenceValue sql.NullInt32      `json:"recurrence_value"`
 	RecurrenceUnit  NullRecurrenceUnit `json:"recurrence_unit"`
+	IsSystemSpawned bool               `json:"is_system_spawned"`
 }
 
 func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error) {
@@ -114,6 +115,7 @@ func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) 
 		arg.Channel,
 		arg.RecurrenceValue,
 		arg.RecurrenceUnit,
+		arg.IsSystemSpawned,
 	)
 	var i Reminder
 	err := row.Scan(
@@ -125,6 +127,7 @@ func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) 
 		&i.RecurrenceValue,
 		&i.RecurrenceUnit,
 		&i.CreatedAt,
+		&i.IsSystemSpawned,
 	)
 	return i, err
 }
@@ -475,7 +478,8 @@ func (q *Queries) GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]
 }
 
 const getTaskReminders = `-- name: GetTaskReminders :many
-SELECT id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC
+SELECT id, task_id, scheduled_at, channel, status, recurrence_value, recurrence_unit, created_at, is_system_spawned FROM reminders
+WHERE task_id = $1 AND is_system_spawned = FALSE ORDER BY scheduled_at ASC
 `
 
 func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error) {
@@ -496,6 +500,7 @@ func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Rem
 			&i.RecurrenceValue,
 			&i.RecurrenceUnit,
 			&i.CreatedAt,
+			&i.IsSystemSpawned,
 		); err != nil {
 			return nil, err
 		}

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     recurrence_value INT DEFAULT NULL,
     recurrence_unit recurrence_unit DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    is_system_spawned BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT valid_recurrence CHECK (
         (recurrence_value IS NULL AND recurrence_unit IS NULL) OR
         (recurrence_value > 0 AND recurrence_unit IS NOT NULL)

@@ -66,6 +66,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 					Channel:         rem.Channel,
 					RecurrenceValue: rem.RecurrenceValue,
 					RecurrenceUnit:  rem.RecurrenceUnit,
+					IsSystemSpawned: true, // <--- ADD THIS LINE
 				})
 
 				if err != nil {

@@ -61,15 +61,16 @@ WHERE tu.task_id = $1
 ORDER BY tu.created_at ASC;
 
 -- name: CreateReminder :one
-INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit, is_system_spawned)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetTaskDetailsForNotifications :one
 SELECT title FROM tasks WHERE id = $1;
 
 -- name: GetTaskReminders :many
-SELECT * FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC;
+SELECT * FROM reminders
+WHERE task_id = $1 AND is_system_spawned = FALSE ORDER BY scheduled_at ASC;
 
 -- name: DeleteTaskParticipants :exec
 DELETE FROM task_participants WHERE task_id = $1;

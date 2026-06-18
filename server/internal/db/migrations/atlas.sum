@@ -1,4 +1,4 @@
-h1:RY0+jw1KtoonGWXhp7ZtbWo4YzVlUx05x3P6xFJ7ays=
+h1:9jJc8rN6Zyr4GDJOqAup2QHuIpcYV9c6ebRIxBaFMW0=
 20260609122837_initial_db_schemas.sql h1:Qlt9JvF4auI2yCUz7oDluImiRst+uVpfBkBVc7ToUYM=
 20260609125210_add_user_status_column.sql h1:NdZtJ6Bw7BEOZXUULmLGqKTbbs3FB8aLfoTjAdOZ55s=
 20260609132310_make_domain_nullable.sql h1:XIcLOCpbS2hEgRxp0f7PZZCZQZZtxl3hN//05Sv4hr8=
@@ -9,4 +9,4 @@ h1:RY0+jw1KtoonGWXhp7ZtbWo4YzVlUx05x3P6xFJ7ays=
 20260614115620_add_frequency_to_reminders.sql h1:72ZvD7+p7OJKwAqeSv+dH15ZeIYjnnJxgc4ItzNpOHw=
 20260614153847_add_comments_table.sql h1:iG0tPg73eeBbbbLn8pgWOUzkqylUGsCyc2qxMTJP+Hc=
 20260614171416_add_review_status_to_task.sql h1:MDfkabvobui8gt+y5hydoeCW7j8/x5VfFLDEz6OIQeo=
-20260616100031_add_invite_token_column.sql h1:zSH5x/j/idc6vjuFvUlmsLuzJ9YHSn/i7SxBHQeZ96Y=
+20260618132727_add_flag_to_reminders.sql h1:6dIcAK7AE0OeKHi2mj0FZRBnhbSB7gTxUYQ2jkry1iE=

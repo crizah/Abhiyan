@@ -140,11 +140,18 @@ export default function TeamTasksPage() {
     setIsActionModalOpen(true);
   };
 
-  const handleActionTask = async (values) => {
+const handleActionTask = async (values) => {
     try {
       const payload = {
-        note: values.note, due_date: values.due_date ? values.due_date.toISOString() : null,
-        reminders: (values.reminders || []).map(r => ({ ...r, scheduled_at: r.scheduled_at.toISOString() }))
+        note: values.note, 
+        due_date: values.due_date ? values.due_date.toISOString() : null,
+        reminders: (values.reminders || []).map(r => ({ 
+          channel: r.channel, 
+          scheduled_at: r.scheduled_at.toISOString(),
+          // ADD THE PARSE-INT LOGIC HERE:
+          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value, 10) : undefined,
+          recurrence_unit: r.recurrence_unit || undefined
+        }))
       };
       
       const actionType = selectedTask.status === 'CLOSED' ? 'REOPEN' : 'REJECT';
@@ -155,7 +162,9 @@ export default function TeamTasksPage() {
       window.dispatchEvent(new Event('refresh-notifications'));
       fetchTasks(activeTeamId);
       setIsDrawerOpen(false); 
-    } catch (err) { message.error("Failed to action task."); }
+    } catch (err) { 
+      message.error("Failed to action task."); 
+    }
   };
 
   const handleApprove = async () => {

@@ -387,20 +387,57 @@ func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string, userID
 	}
 	return members, nil
 }
-func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool) error {
+
+func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool, reqUserID string) error {
 	tID := util.ParseUUID(teamID)
 	uID := util.ParseUUID(userID)
+	reqUID := util.ParseUUID(reqUserID)
 
-	// GUARD 1: SYSTEM ROLE CHECK FOR TEAM ADMINS
+	// 1. Authorization Check: Get the requester's system roles
+	reqSysRoles, err := s.queries.GetUserSystemRoles(ctx, reqUID)
+	if err != nil {
+		return fmt.Errorf("failed to check requester roles: %w", err)
+	}
+
+	// Check if requester is a SUPER_ADMIN
+	isSuperAdmin := false
+	for _, r := range reqSysRoles {
+		if string(r) == "SUPER_ADMIN" {
+			isSuperAdmin = true
+			break
+		}
+	}
+
+	// 2. Authorization Check: If NOT a Super Admin, verify they manage this specific team
+	if !isSuperAdmin {
+		teamIds, err := s.queries.GetAdminManagedTeams(ctx, reqUID)
+		if err != nil {
+			return fmt.Errorf("failed to verify managed teams: %w", err)
+		}
+
+		isTeamManager := false
+		for _, t := range teamIds {
+			if t.ID == tID {
+				isTeamManager = true
+				break
+			}
+		}
+
+		if !isTeamManager {
+			return errors.New("action blocked: You do not manage this team")
+		}
+	}
+
+	// 3. Role Validation: Only System Admins/Super Admins can be made TEAM_ADMINs
 	if !isRemoval && role == "TEAM_ADMIN" {
 		sysRoles, err := s.queries.GetUserSystemRoles(ctx, uID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to fetch target user roles: %w", err)
 		}
 
 		isSystemAdmin := false
 		for _, r := range sysRoles {
-			if r == "ADMIN" || r == "SUPER_ADMIN" {
+			if string(r) == "ADMIN" || string(r) == "SUPER_ADMIN" {
 				isSystemAdmin = true
 				break
 			}
@@ -411,24 +448,27 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 		}
 	}
 
-	// GUARD 2: PREVENT REMOVING THE LAST ADMIN
+	// 4. Safety Check: Prevent removing or demoting the last Team Admin
 	if isRemoval || role == "MEMBER" {
 		adminCount, err := s.queries.GetTeamAdminCount(ctx, tID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get team admin count: %w", err)
 		}
 
 		if adminCount <= 1 {
-			members, _ := s.GetTeamMembers(ctx, teamID, "", "SUPER_ADMIN")
-			for _, m := range members {
-				if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
-					return errors.New("cannot remove or demote the last Team Admin. Promote someone else first")
+			// Using your existing GetTeamMembers function to check the target's current role
+			members, err := s.GetTeamMembers(ctx, teamID, "", "SUPER_ADMIN")
+			if err == nil {
+				for _, m := range members {
+					if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
+						return errors.New("cannot remove or demote the last Team Admin. Promote someone else first")
+					}
 				}
 			}
 		}
 	}
 
-	// Execute DB Transaction
+	// 5. Execute DB Transaction
 	if isRemoval {
 		return s.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
 			TeamID: tID,
@@ -558,6 +598,23 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	return nil
 }
 
-func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string) ([]db.GetAdminManagedTeamsRow, error) {
-	return s.queries.GetAdminManagedTeams(ctx, util.ParseUUID(userID))
+func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetAdminManagedTeams(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var teams []schemas.TeamResponse
+	for _, t := range dbTeams {
+		teams = append(teams, schemas.TeamResponse{
+			ID:          t.ID.String(),
+			Name:        t.Name,
+			MemberCount: int(t.MemberCount), // Properly forwards the aggregated count to your frontend column
+		})
+	}
+
+	if teams == nil {
+		teams = []schemas.TeamResponse{}
+	}
+	return teams, nil
 }

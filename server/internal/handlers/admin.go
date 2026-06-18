@@ -182,25 +182,36 @@ func (h *AdminHandler) GetTeamMembers(c *gin.Context) {
 
 func (h *AdminHandler) AssignTeamMember(c *gin.Context) {
 	teamID := c.Param("team_id")
+
+	// User ID of the person making the request
+	reqUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req schemas.AssignTeamMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, req.UserID, req.TeamRole, false)
+	// Pass both the target UserID (req.UserID) and the Requester UserID (reqUserID) to the service
+	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, req.UserID, req.TeamRole, false, reqUserID.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.Status(http.StatusOK)
 }
 
 func (h *AdminHandler) RemoveTeamMember(c *gin.Context) {
 	teamID := c.Param("team_id")
 	userID := c.Param("user_id")
+	reqUserID := c.MustGet("user_id").(string)
 
-	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, userID, "", true)
+	err := h.adminService.ManageTeamMember(c.Request.Context(), teamID, userID, "", true, reqUserID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

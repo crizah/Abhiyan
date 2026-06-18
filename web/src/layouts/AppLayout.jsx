@@ -295,6 +295,8 @@ export default function AppLayout() {
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employees'); }} active={location.pathname === '/employees'}><TeamOutlined className="nav-icon" /> Employees</CNavItem>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/tasks'); }} active={location.pathname === '/tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/admin-teams'); }} active={location.pathname === '/admin-teams'}><ApartmentOutlined className="nav-icon" /> Teams
+              </CNavItem>
             </>
           )}
           

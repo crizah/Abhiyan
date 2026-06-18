@@ -48,18 +48,26 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UU
 }
 
 const getAdminManagedTeams = `-- name: GetAdminManagedTeams :many
-SELECT t.id, t.name 
+SELECT 
+    t.id, 
+    t.name,
+    COUNT(all_members.user_id) AS member_count
 FROM teams t
-JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+JOIN team_members managers ON t.id = managers.team_id
+LEFT JOIN team_members all_members ON t.id = all_members.team_id
+WHERE managers.user_id = $1 AND managers.team_role = 'TEAM_ADMIN'
+GROUP BY t.id, t.name
 ORDER BY t.name ASC
 `
 
 type GetAdminManagedTeamsRow struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	MemberCount int64     `json:"member_count"`
 }
 
+// 1. Identify teams where this user is an admin
+// 2. Fetch all members attached to those specific teams for aggregate counting
 func (q *Queries) GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAdminManagedTeams, userID)
 	if err != nil {
@@ -69,7 +77,7 @@ func (q *Queries) GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([
 	var items []GetAdminManagedTeamsRow
 	for rows.Next() {
 		var i GetAdminManagedTeamsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.MemberCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

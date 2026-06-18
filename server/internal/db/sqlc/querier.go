@@ -19,6 +19,7 @@ type Querier interface {
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
+	CompleteReminder(ctx context.Context, id uuid.UUID) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
@@ -37,12 +38,15 @@ type Querier interface {
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error)
 	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
+	GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, error)
+	GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error)
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
 	GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
+	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
@@ -76,6 +80,7 @@ type Querier interface {
 	RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
+	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error

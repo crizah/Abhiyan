@@ -75,16 +75,22 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		return db.Task{}, err
 	}
 
-	// 2. Add Assignees
+	// 2. Add Assignees and get their email ids
+	var assigneeEmails []string
 	for _, assigneeID := range req.AssigneeIDs {
+		uID := util.ParseUUID(assigneeID)
 		err := qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{
 			TaskID: task.ID,
-			UserID: util.ParseUUID(assigneeID),
+			UserID: uID,
 			Role:   db.ParticipantRoleASSIGNEE,
 		})
 		if err != nil {
 			return db.Task{}, err
 		}
+
+		email, _ := qtx.GetEmailByUser(ctx, uID)
+		assigneeEmails = append(assigneeEmails, email)
+
 	}
 
 	// 3. Add Subscribers (In-Loop)
@@ -117,22 +123,17 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		})
 	}
 
-	// 4. Configure Reminders
+	// 4. Configure Reminders (Pure DB write, Onion Poller will pick it up)
 	for _, rem := range req.Reminders {
 		remParams := db.CreateReminderParams{
 			TaskID:      task.ID,
 			ScheduledAt: rem.ScheduledAt,
 			Channel:     db.ReminderChannel(rem.Channel),
 		}
-
 		if rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil {
 			remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
-			remParams.RecurrenceUnit = db.NullRecurrenceUnit{
-				RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit),
-				Valid:          true,
-			}
+			remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
 		}
-
 		_, err := qtx.CreateReminder(ctx, remParams)
 		if err != nil {
 			return db.Task{}, err
@@ -193,17 +194,21 @@ func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schema
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
 	tID := util.ParseUUID(taskID)
 
-	// We only update the absolute lifecycle status here (OPEN/CLOSED).
-	// We DO NOT touch Fulfillment or Review status here anymore.
-	statusParam := db.NullTaskStatus{
-		TaskStatus: db.TaskStatus(status),
-		Valid:      true,
-	}
-
-	return s.queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
-		Status: statusParam,
+	// Update the absolute lifecycle status
+	err := s.queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
+		Status: db.NullTaskStatus{TaskStatus: db.TaskStatus(status), Valid: true},
 		ID:     tID,
 	})
+	if err != nil {
+		return err
+	}
+
+	// If the task is closed manually, kill all pending reminders so they stop firing
+	if status == string(db.TaskStatusCLOSED) {
+		_ = s.queries.DeleteTaskReminders(ctx, tID)
+	}
+
+	return nil
 }
 
 func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*schemas.FullTaskDetailsResponse, error) {
@@ -321,27 +326,17 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		}
 	}
 
-	// // 3. Rebuild Reminders
-	// _ = qtx.DeleteTaskReminders(ctx, tID)
-	// s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
-
-	// for _, rem := range req.Reminders {
-	// 	remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
-	// 	isRecurring := rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil
-	// 	if isRecurring {
-	// 		remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
-	// 		remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
-	// 	}
-	// 	rRow, _ := qtx.CreateReminder(ctx, remParams)
-
-	// 	payload := map[string]any{"task_id": tID.String(), "reminder_id": rRow.ID.String(), "channel": rem.Channel}
-	// 	if isRecurring {
-	// 		payload["cron"] = generateCronString(rem.ScheduledAt.Minute(), rem.ScheduledAt.Hour(), *rem.RecurrenceValue, *rem.RecurrenceUnit)
-	// 		s.onionApp.Enqueue(ctx, "send_recurring_task_reminder", payload)
-	// 	} else {
-	// 		s.onionApp.Enqueue(ctx, "send_task_reminder", payload)
-	// 	}
-	// }
+	// 3. Rebuild Reminders (Wipes old DB rows, inserts new ones)
+	// TODO: dont wipe db rows and rebuild, keep the existing ones if unchanged
+	_ = qtx.DeleteTaskReminders(ctx, tID)
+	for _, rem := range req.Reminders {
+		remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
+		if rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil {
+			remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
+			remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
+		}
+		_, _ = qtx.CreateReminder(ctx, remParams)
+	}
 
 	return tx.Commit()
 }
@@ -429,27 +424,16 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 		})
 	}
 
-	// // 4. Reset & Apply Reminders
-	// _ = qtx.DeleteTaskReminders(ctx, tID)
-	// s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
-
-	// for _, rem := range req.Reminders {
-	// 	remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
-	// 	isRecurring := rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil
-	// 	if isRecurring {
-	// 		remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
-	// 		remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
-	// 	}
-	// 	rRow, _ := qtx.CreateReminder(ctx, remParams)
-
-	// 	payload := map[string]any{"task_id": tID.String(), "reminder_id": rRow.ID.String(), "channel": rem.Channel}
-	// 	if isRecurring {
-	// 		payload["cron"] = generateCronString(rem.ScheduledAt.Minute(), rem.ScheduledAt.Hour(), *rem.RecurrenceValue, *rem.RecurrenceUnit)
-	// 		s.onionApp.Enqueue(ctx, "send_recurring_task_reminder", payload)
-	// 	} else {
-	// 		s.onionApp.Enqueue(ctx, "send_task_reminder", payload)
-	// 	}
-	// }
+	// Rebuild Reminders
+	_ = qtx.DeleteTaskReminders(ctx, tID)
+	for _, rem := range req.Reminders {
+		remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
+		if rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil {
+			remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
+			remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
+		}
+		_, _ = qtx.CreateReminder(ctx, remParams)
+	}
 
 	// 5. Mass-Notify Participants
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
@@ -727,7 +711,6 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 	}
 	return tx.Commit()
 }
-
 func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -744,7 +727,8 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 		return err
 	}
 
-	s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
+	// 1. Just delete the reminders directly from the DB
+	_ = qtx.DeleteTaskReminders(ctx, tID)
 
 	_, _ = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
 		TaskID: tID, UserID: uuid.NullUUID{UUID: aID, Valid: true}, Content: "Task Approved and Closed.",
@@ -796,25 +780,8 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 		})
 	}
 
+	// Just delete reminders from DB
 	_ = qtx.DeleteTaskReminders(ctx, tID)
-	s.onionApp.Enqueue(ctx, "kill_task_reminders", map[string]any{"task_id": tID.String()})
-
-	// for _, rem := range req.Reminders {
-	// 	remParams := db.CreateReminderParams{TaskID: tID, ScheduledAt: rem.ScheduledAt, Channel: db.ReminderChannel(rem.Channel)}
-	// 	isRecurring := rem.RecurrenceValue != nil && rem.RecurrenceUnit != nil
-	// 	if isRecurring {
-	// 		remParams.RecurrenceValue = sql.NullInt32{Int32: int32(*rem.RecurrenceValue), Valid: true}
-	// 		remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
-	// 	}
-	// 	rRow, _ := qtx.CreateReminder(ctx, remParams)
-	// 	payload := map[string]any{"task_id": tID.String(), "reminder_id": rRow.ID.String(), "channel": rem.Channel}
-	// 	if isRecurring {
-	// 		payload["cron"] = generateCronString(rem.ScheduledAt.Minute(), rem.ScheduledAt.Hour(), *rem.RecurrenceValue, *rem.RecurrenceUnit)
-	// 		s.onionApp.Enqueue(ctx, "send_recurring_task_reminder", payload)
-	// 	} else {
-	// 		s.onionApp.Enqueue(ctx, "send_task_reminder", payload)
-	// 	}
-	// }
 
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)

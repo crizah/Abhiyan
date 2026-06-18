@@ -36,3 +36,31 @@ func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Co
 		return "Email sent successfully", nil
 	}
 }
+
+func NewSendReminderEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
+	return func(ctx context.Context, args map[string]any) (any, error) {
+
+		// 1. Extract arguments safely to prevent panics
+		email, ok := args["email"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'email' argument")
+		}
+
+		taskName, ok := args["taskName"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'taskName' argument")
+		}
+
+		fmt.Printf("Attempting to send reminder email to %s...\n", email)
+
+		// 2. AWS SES
+		err := emailService.SendReminderEmail(ctx, email, taskName)
+		if err != nil {
+			fmt.Printf("Failed to send email to %s: %v\n", email, err)
+			return nil, err
+		}
+
+		fmt.Printf("Successfully sent reminder email to %s\n", email)
+		return "Email sent successfully", nil
+	}
+}

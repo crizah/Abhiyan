@@ -129,3 +129,27 @@ UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status 
 
 -- name: ReopenTaskState :exec
 UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'UNSUBMITTED', due_date = $2 WHERE id = $1;
+
+-- name: GetDueReminders :many
+SELECT r.id, r.task_id, r.channel, r.recurrence_value, r.recurrence_unit, t.title as task_title
+FROM reminders r
+JOIN tasks t ON r.task_id = t.id
+WHERE r.status = 'PENDING' 
+  AND r.scheduled_at <= NOW()
+FOR UPDATE SKIP LOCKED;
+
+-- name: CompleteReminder :exec
+UPDATE reminders 
+SET status = 'SENT' 
+WHERE id = $1;
+
+-- name: RescheduleReminder :exec
+UPDATE reminders 
+SET scheduled_at = $2 
+WHERE id = $1;
+
+-- name: GetTaskAssigneeEmails :many
+SELECT u.email_id
+FROM users u
+JOIN task_participants tp ON u.id = tp.user_id
+WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE';

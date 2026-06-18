@@ -82,6 +82,17 @@ func (q *Queries) ApproveTaskState(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const completeReminder = `-- name: CompleteReminder :exec
+UPDATE reminders 
+SET status = 'SENT' 
+WHERE id = $1
+`
+
+func (q *Queries) CompleteReminder(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, completeReminder, id)
+	return err
+}
+
 const createReminder = `-- name: CreateReminder :one
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
 VALUES ($1, $2, $3, $4, $5)
@@ -241,6 +252,54 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 	return items, nil
 }
 
+const getDueReminders = `-- name: GetDueReminders :many
+SELECT r.id, r.task_id, r.channel, r.recurrence_value, r.recurrence_unit, t.title as task_title
+FROM reminders r
+JOIN tasks t ON r.task_id = t.id
+WHERE r.status = 'PENDING' 
+  AND r.scheduled_at <= NOW()
+FOR UPDATE SKIP LOCKED
+`
+
+type GetDueRemindersRow struct {
+	ID              uuid.UUID          `json:"id"`
+	TaskID          uuid.UUID          `json:"task_id"`
+	Channel         ReminderChannel    `json:"channel"`
+	RecurrenceValue sql.NullInt32      `json:"recurrence_value"`
+	RecurrenceUnit  NullRecurrenceUnit `json:"recurrence_unit"`
+	TaskTitle       string             `json:"task_title"`
+}
+
+func (q *Queries) GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDueReminders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDueRemindersRow
+	for rows.Next() {
+		var i GetDueRemindersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.Channel,
+			&i.RecurrenceValue,
+			&i.RecurrenceUnit,
+			&i.TaskTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEmployeeTasks = `-- name: GetEmployeeTasks :many
 SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
        t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
@@ -297,6 +356,36 @@ func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksPara
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskAssigneeEmails = `-- name: GetTaskAssigneeEmails :many
+SELECT u.email_id
+FROM users u
+JOIN task_participants tp ON u.id = tp.user_id
+WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE'
+`
+
+func (q *Queries) GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskAssigneeEmails, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var email_id string
+		if err := rows.Scan(&email_id); err != nil {
+			return nil, err
+		}
+		items = append(items, email_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -656,6 +745,22 @@ type ReopenTaskStateParams struct {
 
 func (q *Queries) ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error {
 	_, err := q.db.ExecContext(ctx, reopenTaskState, arg.ID, arg.DueDate)
+	return err
+}
+
+const rescheduleReminder = `-- name: RescheduleReminder :exec
+UPDATE reminders 
+SET scheduled_at = $2 
+WHERE id = $1
+`
+
+type RescheduleReminderParams struct {
+	ID          uuid.UUID `json:"id"`
+	ScheduledAt time.Time `json:"scheduled_at"`
+}
+
+func (q *Queries) RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error {
+	_, err := q.db.ExecContext(ctx, rescheduleReminder, arg.ID, arg.ScheduledAt)
 	return err
 }
 

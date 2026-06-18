@@ -399,6 +399,35 @@ func (q *Queries) GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) (
 	return items, nil
 }
 
+const getTaskAssigneePhones = `-- name: GetTaskAssigneePhones :many
+SELECT u.phone_number 
+FROM users u JOIN task_participants tp on u.id = tp.user_id
+WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE'
+`
+
+func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskAssigneePhones, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []sql.NullString
+	for rows.Next() {
+		var phone_number sql.NullString
+		if err := rows.Scan(&phone_number); err != nil {
+			return nil, err
+		}
+		items = append(items, phone_number)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at FROM tasks
 WHERE id = $1 LIMIT 1

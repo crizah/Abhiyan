@@ -38,6 +38,10 @@ func main() {
 		log.Fatalf("Failed to initialize AWS SES client: %v", err)
 	}
 
+	wa := os.Getenv("WHATSAPP_ACCESS_TOKEN")
+	bp := os.Getenv("PHONE_ID")
+	whatsappService := services.NewWhatsappService(context.Background(), wa, bp)
+
 	// 2. Initialize Onion App
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
@@ -64,13 +68,15 @@ func main() {
 	// register reminder
 	onionApp.Register("send_reminder_email", tasks.NewSendReminderEmailTask(emailService))
 	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(queries, onionApp))
+	onionApp.Register("send_reminder_whatsapp", tasks.NewSendReminderWhatsappTask(whatsappService))
 
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
-			"send_invite_email":   "critical",
-			"send_reminder_email": "reminders",
-			"poll_due_reminders":  "polling",
+			"send_invite_email":      "critical",
+			"send_reminder_email":    "reminders",
+			"send_reminder_whatsapp": "reminders",
+			"poll_due_reminders":     "polling",
 		},
 	})
 

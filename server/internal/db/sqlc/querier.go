@@ -31,6 +31,8 @@ type Querier interface {
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
 	GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error)
+	// 1. Identify teams where this user is an admin
+	// 2. Fetch all members attached to those specific teams for aggregate counting
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error)

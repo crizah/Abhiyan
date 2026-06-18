@@ -16,6 +16,7 @@ import TeamsPage from './features/users/TeamsPage';
 import TeamTasksPage from './features/tasks/pages/TeamTasksPage'; 
 import EmployeeTasksPage from './features/tasks/pages/EmployeeTasksPage';
 import AcceptInvitePage from './features/auth/pages/AcceptInvitePage';
+import AdminTeamsPage from './features/users/AdminTeamsPage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -65,6 +66,8 @@ export default function App() {
                 
                 <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
                 <Route path="employee-tasks" element={<EmployeeTasksPage />} />
+                <Route path="admin-teams" element={<AdminTeamsPage />} />
+                
 
                 
                 

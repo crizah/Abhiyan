@@ -126,11 +126,11 @@ func main() {
 			superAdminGroup.POST("/teams", adminHandler.CreateTeam)
 			superAdminGroup.GET("/teams", adminHandler.GetTeams)
 
-			superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
-			superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
+			// superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
+			// superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
 			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
 			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers)
-			superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
+			// superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 		}
 
@@ -147,6 +147,10 @@ func main() {
 			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks)
 			teamAdminGroup.PUT("/tasks/:task_id/status", taskHandler.UpdateTaskStatus)
 			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams)
+			teamAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
+			teamAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
+			teamAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
+
 			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
 			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
 			teamAdminGroup.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)

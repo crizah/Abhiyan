@@ -18,6 +18,7 @@ type EmailService struct {
 func NewEmailService(ctx context.Context, senderEmail string) (*EmailService, error) {
 	// Loads AWS credentials automatically from standard ENV variables
 	// AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load AWS config: %v", err)
@@ -27,6 +28,34 @@ func NewEmailService(ctx context.Context, senderEmail string) (*EmailService, er
 		sesClient: ses.NewFromConfig(cfg),
 		sender:    senderEmail, // e.g., "no-reply@yourdomain.com"
 	}, nil
+}
+
+func (es *EmailService) SendReminderEmail(ctx context.Context, recipientEmail string, taskName string) error {
+	subject := "Reminder to complete task "
+	htmlBody := fmt.Sprintf(`
+		<h2>You have a pending task, name: %s</h2>
+	`, taskName)
+
+	input := &ses.SendEmailInput{
+		Source: aws.String(es.sender),
+		Destination: &types.Destination{
+			ToAddresses: []string{recipientEmail},
+		},
+		Message: &types.Message{
+			Subject: &types.Content{
+				Data: aws.String(subject),
+			},
+			Body: &types.Body{
+				Html: &types.Content{
+					Data: aws.String(htmlBody),
+				},
+			},
+		},
+	}
+
+	_, err := es.sesClient.SendEmail(ctx, input)
+	return err
+
 }
 
 // SendInviteEmail is the function Onion app worker will call

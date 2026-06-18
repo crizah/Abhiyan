@@ -40,9 +40,13 @@ func main() {
 		DefaultQueue:  "default",
 		Queues: []broker.Queue{
 			{Name: "critical", Priority: 10},
+			{Name: "reminders", Priority: 7},
+			{Name: "polling", Priority: 7},
 		},
 		TaskRoutes: map[string]string{
-			"send_invite_email": "critical",
+			"send_invite_email":   "critical",
+			"send_reminder_email": "reminders",
+			"poll_due_reminders":  "polling",
 		},
 	})
 	if err != nil {

@@ -61,15 +61,16 @@ WHERE tu.task_id = $1
 ORDER BY tu.created_at ASC;
 
 -- name: CreateReminder :one
-INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit, is_system_spawned)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetTaskDetailsForNotifications :one
 SELECT title FROM tasks WHERE id = $1;
 
 -- name: GetTaskReminders :many
-SELECT * FROM reminders WHERE task_id = $1 ORDER BY scheduled_at ASC;
+SELECT * FROM reminders
+WHERE task_id = $1 AND is_system_spawned = FALSE ORDER BY scheduled_at ASC;
 
 -- name: DeleteTaskParticipants :exec
 DELETE FROM task_participants WHERE task_id = $1;
@@ -129,3 +130,27 @@ UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status 
 
 -- name: ReopenTaskState :exec
 UPDATE tasks SET status = 'OPEN', fulfillment_status = 'PENDING', review_status = 'UNSUBMITTED', due_date = $2 WHERE id = $1;
+
+-- name: GetDueReminders :many
+SELECT r.id, r.task_id, r.channel, r.recurrence_value, r.recurrence_unit, t.title as task_title
+FROM reminders r
+JOIN tasks t ON r.task_id = t.id
+WHERE r.status = 'PENDING' 
+  AND r.scheduled_at <= NOW()
+FOR UPDATE SKIP LOCKED;
+
+-- name: CompleteReminder :exec
+UPDATE reminders 
+SET status = 'SENT' 
+WHERE id = $1;
+
+-- name: RescheduleReminder :exec
+UPDATE reminders 
+SET scheduled_at = $2 
+WHERE id = $1;
+
+-- name: GetTaskAssigneeEmails :many
+SELECT u.email_id
+FROM users u
+JOIN task_participants tp ON u.id = tp.user_id
+WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE';

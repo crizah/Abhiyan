@@ -32,6 +32,9 @@ WHERE user_id = $1;
 SELECT * FROM users 
 WHERE email_id = $1 LIMIT 1;
 
+-- name: GetEmailByUser :one
+SELECT email_id from users where id = $1 LIMIT 1;
+
 -- name: GetUserCredentials :one
 SELECT * FROM user_credentials 
 WHERE user_id = $1 LIMIT 1;

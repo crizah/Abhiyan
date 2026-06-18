@@ -466,6 +466,7 @@ type Reminder struct {
 	RecurrenceValue sql.NullInt32      `json:"recurrence_value"`
 	RecurrenceUnit  NullRecurrenceUnit `json:"recurrence_unit"`
 	CreatedAt       sql.NullTime       `json:"created_at"`
+	IsSystemSpawned bool               `json:"is_system_spawned"`
 }
 
 type Task struct {

@@ -179,6 +179,17 @@ func (q *Queries) GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]G
 	return items, nil
 }
 
+const getEmailByUser = `-- name: GetEmailByUser :one
+SELECT email_id from users where id = $1 LIMIT 1
+`
+
+func (q *Queries) GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getEmailByUser, id)
+	var email_id string
+	err := row.Scan(&email_id)
+	return email_id, err
+}
+
 const getFullUserProfile = `-- name: GetFullUserProfile :one
 SELECT 
     u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,

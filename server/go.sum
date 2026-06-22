@@ -44,6 +44,14 @@ github.com/cloudwego/base64x v0.1.6 h1:t11wG9AECkCDk5fMSoxmufanudBtJ+/HemLstXDLI
 github.com/cloudwego/base64x v0.1.6/go.mod h1:OFcloc187FXDaYHvrNIjxSe8ncn0OOM8gEHfghB2IPU=
 github.com/crizah/Onion v0.0.0-20260616095113-bcd211ec0896 h1:zhTAGdGbKMEbxIxfDaIpXQuIoQ/MitRIkvDmh4mt7H4=
 github.com/crizah/Onion v0.0.0-20260616095113-bcd211ec0896/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260622171138-0582f1a61f27 h1:thiX9Y3YkFetLwguV9tFNKlW8/8byE3rZpi3gyOkxAU=
+github.com/crizah/Onion v0.0.0-20260622171138-0582f1a61f27/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260622171651-705a0961400b h1:WeoH3PNkYLvByvUuTpYXFRb8E8bAB/RqYMA1c2gZpYE=
+github.com/crizah/Onion v0.0.0-20260622171651-705a0961400b/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260622172031-e579039eab5e h1:THy9BaGF58pW1SmJonUlENGvRllXDkFL2zGhINP30/E=
+github.com/crizah/Onion v0.0.0-20260622172031-e579039eab5e/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260622173155-7d44c11f05ad h1:M8h8I7QvXxzZzndPoHxnEUVApN/m08at0QLG46RihF8=
+github.com/crizah/Onion v0.0.0-20260622173155-7d44c11f05ad/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

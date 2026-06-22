@@ -13,7 +13,7 @@ import (
 func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 
-		log.Println("[Poller] Waking up to check for due reminders...")
+		log.Println("[Poller] Scanning for new reminders")
 
 		reminders, err := queries.GetDueReminders(ctx)
 		if err != nil {
@@ -26,13 +26,38 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 			return "No reminders due", nil
 		}
 
-		log.Printf("[Poller] Found %d due reminders! Dispatching emails...\n", len(reminders))
+		log.Printf("[Poller] Found %d due reminders! Dispatching \n", len(reminders))
 
 		for _, rem := range reminders {
-			assigneeEmails, _ := queries.GetTaskAssigneeEmails(ctx, rem.TaskID)
 
-			// 1. Dispatch emails
-			if rem.Channel == "EMAIL" {
+			if rem.Channel == db.ReminderChannelWHATSAPP {
+				// send to whatsapp
+				assigneePhones, _ := queries.GetTaskAssigneePhones(ctx, rem.TaskID)
+
+				for _, n := range assigneePhones {
+					// skip if the database value was NULL or empty
+					if !n.Valid || n.String == "" {
+						continue
+					}
+
+					err := onionApp.Enqueue(ctx, "send_reminder_whatsapp", map[string]any{
+						"rPN":      n.String,
+						"taskName": rem.TaskTitle,
+					})
+					if err != nil {
+						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n.String, err)
+					} else {
+						log.Printf("[Poller] Enqueued whatsapp reminder for: %s\n", n.String)
+					}
+
+				}
+
+			} else {
+
+				assigneeEmails, _ := queries.GetTaskAssigneeEmails(ctx, rem.TaskID)
+
+				// 1. Dispatch emails
+
 				for _, email := range assigneeEmails {
 					err := onionApp.Enqueue(ctx, "send_reminder_email", map[string]any{
 						"email":    email,
@@ -44,6 +69,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 						log.Printf("[Poller] Enqueued email reminder for: %s\n", email)
 					}
 				}
+
 			}
 
 			// 2. State Management: ALWAYS complete the current row
@@ -66,7 +92,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 					Channel:         rem.Channel,
 					RecurrenceValue: rem.RecurrenceValue,
 					RecurrenceUnit:  rem.RecurrenceUnit,
-					IsSystemSpawned: true, // <--- ADD THIS LINE
+					IsSystemSpawned: true,
 				})
 
 				if err != nil {

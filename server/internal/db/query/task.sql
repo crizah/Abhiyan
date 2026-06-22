@@ -154,3 +154,8 @@ SELECT u.email_id
 FROM users u
 JOIN task_participants tp ON u.id = tp.user_id
 WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE';
+
+-- name: GetTaskAssigneePhones :many
+SELECT u.phone_number 
+FROM users u JOIN task_participants tp on u.id = tp.user_id
+WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE';

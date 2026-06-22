@@ -44,9 +44,10 @@ func main() {
 			{Name: "polling", Priority: 7},
 		},
 		TaskRoutes: map[string]string{
-			"send_invite_email":   "critical",
-			"send_reminder_email": "reminders",
-			"poll_due_reminders":  "polling",
+			"send_invite_email":      "critical",
+			"send_reminder_email":    "reminders",
+			"send_reminder_whatsapp": "reminders",
+			"poll_due_reminders":     "polling",
 		},
 	})
 	if err != nil {

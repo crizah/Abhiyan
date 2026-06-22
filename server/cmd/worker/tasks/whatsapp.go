@@ -23,7 +23,6 @@ func NewSendReminderWhatsappTask(whatsappService *services.WhatsappService) func
 
 		fmt.Printf("Attempting to send reminder whatsapp to %s...\n", n)
 
-		// 2. AWS SES
 		err := whatsappService.SendReminderWhatsapp(ctx, n, taskName)
 		if err != nil {
 			fmt.Printf("Failed to send whatsapp to %s: %v\n", n, err)

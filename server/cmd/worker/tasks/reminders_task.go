@@ -26,7 +26,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 			return "No reminders due", nil
 		}
 
-		log.Printf("[Poller] Found %d due reminders! Dispatching emails\n", len(reminders))
+		log.Printf("[Poller] Found %d due reminders! Dispatching \n", len(reminders))
 
 		for _, rem := range reminders {
 
@@ -35,14 +35,19 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 				assigneePhones, _ := queries.GetTaskAssigneePhones(ctx, rem.TaskID)
 
 				for _, n := range assigneePhones {
+					// skip if the database value was NULL or empty
+					if !n.Valid || n.String == "" {
+						continue
+					}
+
 					err := onionApp.Enqueue(ctx, "send_reminder_whatsapp", map[string]any{
-						"rPN":      n,
+						"rPN":      n.String,
 						"taskName": rem.TaskTitle,
 					})
 					if err != nil {
-						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n, err)
+						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n.String, err)
 					} else {
-						log.Printf("[Poller] Enqueued whatsapp reminder for: %s\n", n)
+						log.Printf("[Poller] Enqueued whatsapp reminder for: %s\n", n.String)
 					}
 
 				}

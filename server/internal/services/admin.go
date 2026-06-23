@@ -262,21 +262,28 @@ func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string) ([]
 	return names, nil
 }
 
-func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) ([]schemas.UnassignedUserResponse, error) {
-	parsedOrgID := util.ParseUUID(orgID)
-
-	dbUsers, err := s.queries.GetUnassignedOrgUsers(ctx, parsedOrgID)
+func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string, limit, offset int32) (*schemas.PaginatedUnassignedUsersResponse, error) {
+	dbUsers, err := s.queries.GetUnassignedOrgUsers(ctx, db.GetUnassignedOrgUsersParams{
+		OrgID:  util.ParseUUID(orgID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var users []schemas.UnassignedUserResponse
+	var totalCount int64 = 0
+
+	if len(dbUsers) > 0 {
+		totalCount = dbUsers[0].TotalCount
+	}
+
 	for _, u := range dbUsers {
 		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
 		if fullName == "" {
-			fullName = "Pending Acceptance" // Good default for invited users who haven't set a name
+			fullName = "Pending Acceptance"
 		}
-
 		users = append(users, schemas.UnassignedUserResponse{
 			ID:       u.ID.String(),
 			FullName: fullName,
@@ -285,12 +292,14 @@ func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string) 
 		})
 	}
 
-	// Always return an empty array instead of null for the frontend map function
 	if users == nil {
 		users = []schemas.UnassignedUserResponse{}
 	}
 
-	return users, nil
+	return &schemas.PaginatedUnassignedUsersResponse{
+		TotalCount: totalCount,
+		Users:      users,
+	}, nil
 }
 
 func (s *AdminService) CreateTeam(ctx context.Context, orgID, name, creatorID string) (string, error) {
@@ -520,19 +529,28 @@ func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTea
 	})
 }
 
-func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string) ([]schemas.AssignedUserResponse, error) {
-	dbUsers, err := s.queries.GetAssignedOrgUsers(ctx, util.ParseUUID(orgID))
+func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, limit, offset int32) (*schemas.PaginatedAssignedUsersResponse, error) {
+	dbUsers, err := s.queries.GetAssignedOrgUsers(ctx, db.GetAssignedOrgUsersParams{
+		OrgID:  util.ParseUUID(orgID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var users []schemas.AssignedUserResponse
+	var totalCount int64 = 0
+
+	if len(dbUsers) > 0 {
+		totalCount = dbUsers[0].TotalCount
+	}
+
 	for _, u := range dbUsers {
 		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
 		if fullName == "" {
 			fullName = "Pending Acceptance"
 		}
-
 		users = append(users, schemas.AssignedUserResponse{
 			ID:       u.ID.String(),
 			FullName: fullName,
@@ -540,10 +558,15 @@ func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string) ([
 			Status:   string(u.Status.UserStatus),
 		})
 	}
+
 	if users == nil {
 		users = []schemas.AssignedUserResponse{}
 	}
-	return users, nil
+
+	return &schemas.PaginatedAssignedUsersResponse{
+		TotalCount: totalCount,
+		Users:      users,
+	}, nil
 }
 
 func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schemas.UserTeamResponse, error) {

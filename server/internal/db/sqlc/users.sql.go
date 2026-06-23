@@ -135,23 +135,36 @@ func (q *Queries) DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) e
 }
 
 const getAssignedOrgUsers = `-- name: GetAssignedOrgUsers :many
-SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
-FROM users u
-WHERE u.org_id = $1 
-  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
-ORDER BY u.created_at DESC
+WITH base AS (
+    SELECT u.id, u.first_name, u.last_name, u.email_id, u.status, u.created_at
+    FROM users u
+    WHERE u.org_id = $1
+      AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+)
+SELECT id, first_name, last_name, email_id, status, created_at, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type GetAssignedOrgUsersRow struct {
-	ID        uuid.UUID      `json:"id"`
-	FirstName sql.NullString `json:"first_name"`
-	LastName  sql.NullString `json:"last_name"`
-	EmailID   string         `json:"email_id"`
-	Status    NullUserStatus `json:"status"`
+type GetAssignedOrgUsersParams struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
-func (q *Queries) GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAssignedOrgUsers, orgID)
+type GetAssignedOrgUsersRow struct {
+	ID         uuid.UUID      `json:"id"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	EmailID    string         `json:"email_id"`
+	Status     NullUserStatus `json:"status"`
+	CreatedAt  sql.NullTime   `json:"created_at"`
+	TotalCount int64          `json:"total_count"`
+}
+
+func (q *Queries) GetAssignedOrgUsers(ctx context.Context, arg GetAssignedOrgUsersParams) ([]GetAssignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAssignedOrgUsers, arg.OrgID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +178,8 @@ func (q *Queries) GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]G
 			&i.LastName,
 			&i.EmailID,
 			&i.Status,
+			&i.CreatedAt,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -270,24 +285,37 @@ func (q *Queries) GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int6
 }
 
 const getUnassignedOrgUsers = `-- name: GetUnassignedOrgUsers :many
-SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
-FROM users u
-LEFT JOIN team_members tm ON u.id = tm.user_id
-WHERE u.org_id = $1 
-  AND tm.team_id IS NULL
-ORDER BY u.created_at DESC
+WITH base AS (
+    SELECT u.id, u.first_name, u.last_name, u.email_id, u.status, u.created_at
+    FROM users u
+    LEFT JOIN team_members tm ON u.id = tm.user_id
+    WHERE u.org_id = $1
+      AND tm.team_id IS NULL
+)
+SELECT id, first_name, last_name, email_id, status, created_at, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type GetUnassignedOrgUsersRow struct {
-	ID        uuid.UUID      `json:"id"`
-	FirstName sql.NullString `json:"first_name"`
-	LastName  sql.NullString `json:"last_name"`
-	EmailID   string         `json:"email_id"`
-	Status    NullUserStatus `json:"status"`
+type GetUnassignedOrgUsersParams struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
-func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUnassignedOrgUsers, orgID)
+type GetUnassignedOrgUsersRow struct {
+	ID         uuid.UUID      `json:"id"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	EmailID    string         `json:"email_id"`
+	Status     NullUserStatus `json:"status"`
+	CreatedAt  sql.NullTime   `json:"created_at"`
+	TotalCount int64          `json:"total_count"`
+}
+
+func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOrgUsersParams) ([]GetUnassignedOrgUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUnassignedOrgUsers, arg.OrgID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +329,8 @@ func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([
 			&i.LastName,
 			&i.EmailID,
 			&i.Status,
+			&i.CreatedAt,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

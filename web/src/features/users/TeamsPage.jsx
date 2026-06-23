@@ -34,6 +34,16 @@ export default function TeamsPage() {
   const [unassignedUsers, setUnassignedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Pagination: Assigned Users (Tab 2)
+  const [assignedPage, setAssignedPage] = useState(1);
+  const [assignedPageSize, setAssignedPageSize] = useState(10);
+  const [assignedTotal, setAssignedTotal] = useState(0);
+
+  // Pagination: Unassigned Queue (Tab 3)
+  const [unassignedPage, setUnassignedPage] = useState(1);
+  const [unassignedPageSize, setUnassignedPageSize] = useState(10);
+  const [unassignedTotal, setUnassignedTotal] = useState(0);
+
   // Modals & Drawers
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
@@ -56,17 +66,30 @@ export default function TeamsPage() {
     fetchAllData();
   }, []);
 
+  const fetchAssignedUsers = async (page, limit) => {
+    const res = await apiClient.get('/admin/users/assigned', { params: { page, limit } });
+    setAssignedUsers(res.data.users || []);
+    setAssignedTotal(res.data.total_count || 0);
+  };
+
+  const fetchUnassignedUsers = async (page, limit) => {
+    const res = await apiClient.get('/admin/users/unassigned', { params: { page, limit } });
+    setUnassignedUsers(res.data.users || []);
+    setUnassignedTotal(res.data.total_count || 0);
+  };
+
+  // Called on mount and after any mutation — always resets both user lists to page 1
   const fetchAllData = async () => {
     setLoading(true);
+    setAssignedPage(1);
+    setUnassignedPage(1);
     try {
-      const [teamsRes, assignedRes, unassignedRes] = await Promise.all([
+      const [teamsRes] = await Promise.all([
         apiClient.get('/admin/teams'),
-        apiClient.get('/admin/users/assigned'),
-        apiClient.get('/admin/users/unassigned'),
+        fetchAssignedUsers(1, assignedPageSize),
+        fetchUnassignedUsers(1, unassignedPageSize),
       ]);
       setTeams(teamsRes.data || []);
-      setAssignedUsers(assignedRes.data || []);
-      setUnassignedUsers(unassignedRes.data || []);
     } catch (err) {
       message.error('Failed to load data.');
     } finally {
@@ -420,9 +443,19 @@ export default function TeamsPage() {
                   dataSource={assignedUsers}
                   rowKey="id"
                   loading={loading}
-                  pagination={false}
                   scroll={{ x: 'max-content' }}
                   size={isMobile ? 'small' : 'middle'}
+                  pagination={{
+                    current: assignedPage,
+                    pageSize: assignedPageSize,
+                    total: assignedTotal,
+                    showSizeChanger: true,
+                  }}
+                  onChange={(pagination) => {
+                    setAssignedPage(pagination.current);
+                    setAssignedPageSize(pagination.pageSize);
+                    fetchAssignedUsers(pagination.current, pagination.pageSize);
+                  }}
                 />
               ),
             },
@@ -432,9 +465,9 @@ export default function TeamsPage() {
                 <span>
                   <UserAddOutlined />{' '}
                   {isMobile ? 'Queue' : 'Unassigned Queue'}
-                  {unassignedUsers.length > 0 && (
+                  {unassignedTotal > 0 && (
                     <Badge
-                      count={unassignedUsers.length}
+                      count={unassignedTotal}
                       style={{ backgroundColor: '#fa8c16', marginLeft: 8 }}
                     />
                   )}
@@ -446,9 +479,19 @@ export default function TeamsPage() {
                   dataSource={unassignedUsers}
                   rowKey="id"
                   loading={loading}
-                  pagination={false}
                   scroll={{ x: 'max-content' }}
                   size={isMobile ? 'small' : 'middle'}
+                  pagination={{
+                    current: unassignedPage,
+                    pageSize: unassignedPageSize,
+                    total: unassignedTotal,
+                    showSizeChanger: true,
+                  }}
+                  onChange={(pagination) => {
+                    setUnassignedPage(pagination.current);
+                    setUnassignedPageSize(pagination.pageSize);
+                    fetchUnassignedUsers(pagination.current, pagination.pageSize);
+                  }}
                 />
               ),
             },

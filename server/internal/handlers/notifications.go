@@ -46,12 +46,12 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 
 	// 2. Inject Dynamic System Alerts (Unassigned Users Queue)
 	if role == "SUPER_ADMIN" && orgID != "" {
-		unassigned, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID)
-		if err == nil && len(unassigned) > 0 {
+		unassigned, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID, 1, 0)
+		if err == nil && unassigned.TotalCount > 0 {
 			sysAlert := schemas.NotificationResponse{
 				ID:        "sys-unassigned-queue",
 				Title:     "Action Required",
-				Message:   fmt.Sprintf("You have %d user(s) waiting to be assigned to teams.", len(unassigned)),
+				Message:   fmt.Sprintf("You have %d user(s) waiting to be assigned to teams.", unassigned.TotalCount),
 				IsRead:    false,
 				IsSystem:  true,
 				Type:      "WARNING",

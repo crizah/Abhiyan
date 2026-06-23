@@ -38,13 +38,26 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 func (h *TaskHandler) GetTeamTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
 
-	tasks, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
@@ -144,13 +157,26 @@ func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
 
-	tasks, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *TaskHandler) ReopenTask(c *gin.Context) {

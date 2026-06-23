@@ -160,48 +160,56 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	return task, nil
 }
 
-func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schemas.TaskResponse, error) {
-	dbTasks, err := s.queries.GetTeamTasks(ctx, util.ParseUUID(teamID))
+func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+	dbTasks, err := s.queries.GetTeamTasks(ctx, db.GetTeamTasksParams{
+		TeamID: util.ParseUUID(teamID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
-		// Safely unwrap nullable dates
 		var dueDate *time.Time
 		if t.DueDate.Valid {
 			dueDate = &t.DueDate.Time
 		}
-
 		var createdAt *time.Time
 		if t.CreatedAt.Valid {
 			createdAt = &t.CreatedAt.Time
 		}
 
-		creatorName := strings.TrimSpace(t.FirstName.String + " " + t.LastName.String)
-
 		tasks = append(tasks, schemas.TaskResponse{
 			ID:                t.ID.String(),
 			TeamID:            t.TeamID.String(),
 			Title:             t.Title,
-			Description:       t.Description.String, // will be "" if not valid
+			Description:       t.Description.String,
 			Status:            string(t.Status.TaskStatus),
 			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
 			ReviewStatus:      string(t.ReviewStatus),
 			CreatedBy:         t.CreatedBy.String(),
-			CreatorName:       creatorName,
+			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
 			DueDate:           dueDate,
 			CreatedAt:         createdAt,
 		})
 	}
 
-	// Prevent returning a null JSON object if the slice is empty
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
 
-	return tasks, nil
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
@@ -383,13 +391,23 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	return tx.Commit()
 }
 
-func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]schemas.TaskResponse, error) {
-	dbTasks, err := s.queries.GetAdminAllTasks(ctx, util.ParseUUID(adminID))
+func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+	dbTasks, err := s.queries.GetAdminAllTasks(ctx, db.GetAdminAllTasksParams{
+		UserID: util.ParseUUID(adminID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
 		var dueDate *time.Time
 		if t.DueDate.Valid {
@@ -403,7 +421,7 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 		tasks = append(tasks, schemas.TaskResponse{
 			ID:                t.ID.String(),
 			TeamID:            t.TeamID.String(),
-			TeamName:          t.TeamName, // Map the team name
+			TeamName:          t.TeamName,
 			Title:             t.Title,
 			Description:       t.Description.String,
 			Status:            string(t.Status.TaskStatus),
@@ -415,10 +433,15 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 			CreatedAt:         createdAt,
 		})
 	}
+
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
-	return tasks, nil
+
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest) error {

@@ -32,7 +32,7 @@ type Querier interface {
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
-	GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error)
+	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
 	// 1. Identify teams where this user is an admin
 	// 2. Fetch all members attached to those specific teams for aggregate counting
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
@@ -62,7 +62,7 @@ type Querier interface {
 	GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
-	GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error)
+	GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error)

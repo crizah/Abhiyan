@@ -20,6 +20,11 @@ export default function TeamTasksPage() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalTasks, setTotalTasks] = useState(0);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -40,16 +45,26 @@ export default function TeamTasksPage() {
   const [drawerFileList, setDrawerFileList] = useState([]);
 
   useEffect(() => { fetchTeams(); }, []);
+
+  // Reset page to 1 whenever the team changes
   useEffect(() => {
     if (activeTeamId) {
-      fetchTasks(activeTeamId);
+      setCurrentPage(1);
       if (activeTeamId !== 'ALL') fetchTeamMembers(activeTeamId);
       else setTeamMembers([]);
     } else {
       setTasks([]);
       setTeamMembers([]);
+      setTotalTasks(0);
     }
   }, [activeTeamId]);
+
+  // Fetch tasks whenever team, page, or pageSize changes
+  useEffect(() => {
+    if (activeTeamId) {
+      fetchTasks(activeTeamId, currentPage, pageSize);
+    }
+  }, [activeTeamId, currentPage, pageSize]);
 
   useEffect(() => { 
     form.resetFields(); 
@@ -64,13 +79,14 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to load teams."); }
   };
 
-  const fetchTasks = async (teamId) => {
+  const fetchTasks = async (teamId, page = 1, limit = 10) => {
     setLoading(true);
     try {
       const endpoint = teamId === 'ALL' ? '/admin/tasks' : `/admin/teams/${teamId}/tasks`;
-      const res = await apiClient.get(endpoint);
-      setTasks(res.data || []);
-    } catch (err) { message.error("Failed to load tasks."); } 
+      const res = await apiClient.get(endpoint, { params: { page, limit } });
+      setTasks(res.data.tasks || []);
+      setTotalTasks(res.data.total_count || 0);
+    } catch (err) { message.error("Failed to load tasks."); }
     finally { setLoading(false); }
   };
 
@@ -113,7 +129,7 @@ export default function TeamTasksPage() {
       setIsCreateModalOpen(false);
       form.resetFields();
       setCreateFileList([]);
-      fetchTasks(activeTeamId);
+      fetchTasks(activeTeamId, currentPage, pageSize);
     } catch (err) { message.error("Failed to create task"); }
   };
 
@@ -151,7 +167,7 @@ export default function TeamTasksPage() {
       await apiClient.put(`/admin/tasks/${selectedTask.id}`, payload);
       message.success("Task updated!");
       setIsEditModalOpen(false);
-      fetchTasks(activeTeamId);
+      fetchTasks(activeTeamId, currentPage, pageSize);
       openTaskDrawer(selectedTask);
     } catch (err) { message.error("Failed to update task"); }
   };
@@ -184,7 +200,7 @@ export default function TeamTasksPage() {
       message.success(`Task ${actionType.toLowerCase()}ed successfully!`);
       setIsActionModalOpen(false);
       window.dispatchEvent(new Event('refresh-notifications'));
-      fetchTasks(activeTeamId);
+      fetchTasks(activeTeamId, currentPage, pageSize);
       setIsDrawerOpen(false); 
     } catch (err) { message.error("Action handler failed."); }
   };
@@ -228,7 +244,7 @@ export default function TeamTasksPage() {
       await apiClient.put(`/admin/tasks/${selectedTask.id}/approve`);
       message.success("Task approved!");
       window.dispatchEvent(new Event('refresh-notifications'));
-      fetchTasks(activeTeamId);
+      fetchTasks(activeTeamId, currentPage, pageSize);
       setIsDrawerOpen(false);
     } catch (err) { message.error("Failed to approve."); }
   };
@@ -286,7 +302,22 @@ export default function TeamTasksPage() {
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <Table columns={columns} dataSource={tasks} rowKey="id" loading={loading} />
+        <Table
+          columns={columns}
+          dataSource={tasks}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: totalTasks,
+            showSizeChanger: true,
+          }}
+          onChange={(pagination) => {
+            setCurrentPage(pagination.current);
+            setPageSize(pagination.pageSize);
+          }}
+        />
       </Card>
 
       {/* CREATE MODAL */}

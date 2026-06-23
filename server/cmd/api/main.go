@@ -108,16 +108,16 @@ func main() {
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
 			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
-			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)
-			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks)
+			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)                // doesnt need to be paginated
+			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks) // needs to be paginated. done
 			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)
 
 			// Re-use existing comment/update routes for employees
-			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
+			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates) // shpuldnt get ALL
 			general.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
 			general.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
-			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // i just dont wanna update it to completely general
+			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // doesnt need to be paginated
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
 		}
 
@@ -132,17 +132,14 @@ func main() {
 		superAdminGroup.Use(middleware.RequireRole("SUPER_ADMIN"))
 		{
 			superAdminGroup.POST("/users/invite", adminHandler.InviteUser)
-			superAdminGroup.GET("/users", adminHandler.GetOrgUsers)
+			superAdminGroup.GET("/users", adminHandler.GetOrgUsers) // needs to be paginated
 			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
-			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers)
+			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers) // needs to be paginated
 			superAdminGroup.POST("/teams", adminHandler.CreateTeam)
-			superAdminGroup.GET("/teams", adminHandler.GetTeams)
+			superAdminGroup.GET("/teams", adminHandler.GetTeams) // needs to be paginated
 
-			// superAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
-			// superAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
 			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
-			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers)
-			// superAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
+			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers) // needs to be paginated
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 		}
 
@@ -153,22 +150,22 @@ func main() {
 		{
 
 			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
-			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
-			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions) // when tf am i hitting this??
+			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees) // needs to be paginated
+			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 			teamAdminGroup.POST("/teams/:team_id/tasks", taskHandler.CreateTask)
-			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks)
+			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks) // needs to be paginated
 			teamAdminGroup.PUT("/tasks/:task_id/status", taskHandler.UpdateTaskStatus)
-			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams)
+			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams) // needs to be paginated
 			teamAdminGroup.POST("/teams/:team_id/members", adminHandler.AssignTeamMember)
 			teamAdminGroup.DELETE("/teams/:team_id/members/:user_id", adminHandler.RemoveTeamMember)
 			teamAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
 
-			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
-			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
+			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // depends
+			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)  // depends
 			teamAdminGroup.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
 			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
-			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
+			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks) // needs to be paginated
 			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 
 			teamAdminGroup.PUT("/tasks/:task_id/approve", taskHandler.ApproveTask)

@@ -21,11 +21,18 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetTeamTasks :many
-SELECT t.*, u.first_name, u.last_name 
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-WHERE t.team_id = $1
-ORDER BY t.created_at DESC;
+WITH base AS (
+    SELECT t.id, t.team_id, t.title, t.description, t.status,
+           t.fulfillment_status, t.review_status, t.created_by,
+           t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    WHERE t.team_id = $1
+)
+SELECT *, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: UpdateTaskFulfillment :exec
 UPDATE tasks 
@@ -79,17 +86,22 @@ DELETE FROM task_participants WHERE task_id = $1;
 DELETE FROM reminders WHERE task_id = $1;
 
 -- name: GetAdminAllTasks :many
-SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-    t.created_by, t.due_date, t.created_at, 
-    u.first_name, u.last_name, 
-    tm.name as team_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN teams tm ON t.team_id = tm.id
-JOIN team_members tmem ON tm.id = tmem.team_id
-WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
-ORDER BY t.created_at DESC;
+WITH base AS (
+    SELECT DISTINCT
+        t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
+        t.created_by, t.due_date, t.created_at,
+        u.first_name, u.last_name,
+        tm.name AS team_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN teams tm ON t.team_id = tm.id
+    JOIN team_members tmem ON tm.id = tmem.team_id
+    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+)
+SELECT *, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: UpdateTaskDeadline :exec
 UPDATE tasks SET due_date = $2 WHERE id = $1;

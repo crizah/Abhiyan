@@ -199,18 +199,29 @@ func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) err
 }
 
 const getAdminAllTasks = `-- name: GetAdminAllTasks :many
-SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-    t.created_by, t.due_date, t.created_at, 
-    u.first_name, u.last_name, 
-    tm.name as team_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN teams tm ON t.team_id = tm.id
-JOIN team_members tmem ON tm.id = tmem.team_id
-WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
-ORDER BY t.created_at DESC
+WITH base AS (
+    SELECT DISTINCT
+        t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
+        t.created_by, t.due_date, t.created_at,
+        u.first_name, u.last_name,
+        tm.name AS team_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN teams tm ON t.team_id = tm.id
+    JOIN team_members tmem ON tm.id = tmem.team_id
+    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+)
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, team_name, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
+
+type GetAdminAllTasksParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
 
 type GetAdminAllTasksRow struct {
 	ID                uuid.UUID                 `json:"id"`
@@ -226,10 +237,11 @@ type GetAdminAllTasksRow struct {
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
 	TeamName          string                    `json:"team_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
-func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, userID)
+func (q *Queries) GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +263,7 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 			&i.FirstName,
 			&i.LastName,
 			&i.TeamName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -768,12 +781,25 @@ func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTa
 }
 
 const getTeamTasks = `-- name: GetTeamTasks :many
-SELECT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status, t.created_by, t.due_date, t.created_at, u.first_name, u.last_name 
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-WHERE t.team_id = $1
-ORDER BY t.created_at DESC
+WITH base AS (
+    SELECT t.id, t.team_id, t.title, t.description, t.status,
+           t.fulfillment_status, t.review_status, t.created_by,
+           t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    WHERE t.team_id = $1
+)
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
+
+type GetTeamTasksParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
 
 type GetTeamTasksRow struct {
 	ID                uuid.UUID                 `json:"id"`
@@ -788,10 +814,11 @@ type GetTeamTasksRow struct {
 	CreatedAt         sql.NullTime              `json:"created_at"`
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
-func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTeamTasks, teamID)
+func (q *Queries) GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamTasks, arg.TeamID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -812,6 +839,7 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

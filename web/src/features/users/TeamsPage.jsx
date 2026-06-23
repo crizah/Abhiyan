@@ -30,6 +30,8 @@ export default function TeamsPage() {
   // Unassigned Queue State
   const [pendingAssignments, setPendingAssignments] = useState({});
 
+const drawerWidth = typeof window !== 'undefined' ? Math.min(window.innerWidth * 0.7, 700) : 500;
+
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -292,7 +294,7 @@ export default function TeamsPage() {
       {/* DRAWER 1: Manage Team Members */}
       <Drawer
         title={selectedTeam ? `Manage Members: ${selectedTeam.name}` : 'Manage Team'}
-        placement="right" width={500}
+        placement="right" width={drawerWidth}
         onClose={() => setIsTeamDrawerOpen(false)} open={isTeamDrawerOpen}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
@@ -304,7 +306,7 @@ export default function TeamsPage() {
       {/* DRAWER 2: Manage User Teams */}
       <Drawer
         title={selectedUser ? `Manage Teams: ${selectedUser.full_name}` : 'Manage User'}
-        placement="right" width={500}
+        placement="right" width={drawerWidth}
         onClose={() => setIsUserDrawerOpen(false)} open={isUserDrawerOpen}
       >
         <Flex gap="small" align="center" style={{ marginBottom: '24px' }}>

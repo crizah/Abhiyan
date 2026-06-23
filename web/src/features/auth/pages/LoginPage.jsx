@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { App, Button, Flex, Form, Input, Typography, theme } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import { authAPI } from '../api'; // Your axios auth functions
+import { authAPI } from '../api';
+import PixelBlast from '../../../components/ui/PixelBlast';
 
 const { Title, Text } = Typography;
 
@@ -17,12 +18,9 @@ export default function LoginPage() {
   const onFinish = async (values) => {
     try {
       setIsLoading(true);
-      
-      await authAPI.login(values); 
-      
+      await authAPI.login(values);
       // 2. WAIT for the AuthContext to fetch the user profile via /me
-      await login(); 
-
+      await login();
       // 3. Now that we know who you are, go to the dashboard
       message.success('Welcome back!');
       navigate('/dashboard');
@@ -33,63 +31,170 @@ export default function LoginPage() {
     }
   };
 
-  
   return (
-    <Flex align="center" justify="center" style={{ minHeight: '100vh', backgroundColor: token.colorBgLayout }}>
-      <Flex
-        vertical
-        gap={token.marginXL}
-        style={{ 
-          width: '100%', 
-          maxWidth: 384, 
-          padding: token.paddingXL,
-          backgroundColor: token.colorBgContainer,
-          borderRadius: token.borderRadiusLG,
-          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-        }}
-      >
-        <Flex vertical gap={token.marginXS} align="center">
-          {/* Placeholder for SVG Logo */}
-          <div style={{ width: 48, height: 48, backgroundColor: token.colorInfo, borderRadius: 8, marginBottom: token.marginMD }} />
-          <Title level={3} style={{ margin: 0, fontWeight: token.fontWeightStrong, color: token.colorInfo }}>
-            Sign in to your account
-          </Title>
-          <Text style={{ color: token.colorTextSecondary }}>
-            Enter your credentials to access the workspace
-          </Text>
-        </Flex>
+    <>
+      <style>{`
+        .login-root {
+          display: flex;
+          min-height: 100vh;
+          background-color: ${token.colorBgLayout};
+        }
 
-        <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
-          <Form.Item
-            name="email"
-            label="Email address"
-            rules={[{ required: true, message: 'Please enter your email' }, { type: 'email', message: 'Invalid email' }]}
-          >
-            <Input size="large" placeholder="name@mnc.com" />
-          </Form.Item>
+        /* LEFT PANEL */
+        .login-brand-wrapper {
+          display: flex;
+          flex: 1;
+          padding: 24px;
+          background-color: ${token.colorBgLayout};
+        }
 
-          <Form.Item
-            name="password"
-            label="Password"
-            rules={[{ required: true, message: 'Please enter your password' }]}
-          >
-            <Input.Password size="large" placeholder="••••••••" />
-          </Form.Item>
+        .login-brand-panel {
+          display: flex;
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+          border-radius: 32px;
+          background-color: #0F172A; /* Fallback background */
+        }
 
-          <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
-            Sign In
-          </Button>
-        </Form>
+        /* RIGHT PANEL */
+        .login-form-panel {
+          display: flex;
+          flex: 1;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 24px;
+          background-color: ${token.colorBgLayout};
+        }
 
-        <Flex justify="center">
-          <Text style={{ color: token.colorTextSecondary }}>
-            Setting up a new organization?{' '}
-            <Link to="/register-org" style={{ color: token.colorPrimary, fontWeight: token.fontWeightStrong }}>
-              Register here
-            </Link>
-          </Text>
-        </Flex>
-      </Flex>
-    </Flex>
+        .login-form-container {
+          width: 100%;
+          max-width: 400px;
+        }
+
+        .login-logo-mark {
+          width: 44px;
+          height: 44px;
+          background: ${token.colorInfo};
+          border-radius: 10px;
+          margin: 0 auto 20px;
+        }
+
+        /* Hide brand panel on mobile */
+        @media (max-width: 768px) {
+          .login-brand-wrapper {
+            display: none;
+          }
+          .login-form-panel {
+            min-height: 100vh;
+          }
+        }
+      `}</style>
+
+      <div className="login-root">
+        {/* LEFT — Liquid Chrome entirely fills this panel */}
+        <div className="login-brand-wrapper">
+          <div className="login-brand-panel">
+            <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+              {/* <LiquidChrome
+                baseColor={[0.1, 0.1, 0.1]}
+                speed={0.3}
+                amplitude={0.3}
+                interactive
+              /> */}
+
+
+                <PixelBlast
+
+    variant="square"
+
+    pixelSize={4}
+
+    color='#f5897a'
+
+    patternScale={2}
+
+    patternDensity={1}
+
+    pixelSizeJitter={0}
+
+    enableRipples
+
+    rippleSpeed={0.4}
+
+    rippleThickness={0.12}
+
+    rippleIntensityScale={1.5}
+
+    liquid={false}
+
+    liquidStrength={0.12}
+
+    liquidRadius={1.2}
+
+    liquidWobbleSpeed={5}
+
+    speed={0.5}
+
+    edgeFade={0.25}
+
+    transparent
+
+  />
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT — Sign-in form directly on background */}
+        <div className="login-form-panel">
+          <div className="login-form-container">
+            <Flex vertical gap={token.marginXL}>
+              <Flex vertical gap={token.marginXS} align="center">
+                {/* Placeholder for SVG Logo */}
+                <div className="login-logo-mark" />
+                <Title level={3} style={{ margin: 0, fontWeight: token.fontWeightStrong, color: token.colorInfo }}>
+                  Sign in to your account
+                </Title>
+                <Text style={{ color: token.colorTextSecondary }}>
+                  Enter your credentials to access the workspace
+                </Text>
+              </Flex>
+
+              <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
+                <Form.Item
+                  name="email"
+                  label="Email address"
+                  rules={[
+                    { required: true, message: 'Please enter your email' },
+                    { type: 'email', message: 'Invalid email' },
+                  ]}
+                >
+                  <Input size="large" placeholder="name@mnc.com" />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label="Password"
+                  rules={[{ required: true, message: 'Please enter your password' }]}
+                >
+                  <Input.Password size="large" placeholder="••••••••" />
+                </Form.Item>
+                <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
+                  Sign In
+                </Button>
+              </Form>
+
+              <Flex justify="center">
+                <Text style={{ color: token.colorTextSecondary }}>
+                  Setting up a new organization?{' '}
+                  <Link to="/register-org" style={{ color: token.colorPrimary, fontWeight: token.fontWeightStrong }}>
+                    Register here
+                  </Link>
+                </Text>
+              </Flex>
+            </Flex>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

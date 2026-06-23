@@ -5,7 +5,23 @@ import apiClient from '../../config/axios';
 
 const { Title, Text } = Typography;
 
+// ─── responsive helpers ───────────────────────────────────────────────────────
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handle = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handle);
+    return () => window.removeEventListener('resize', handle);
+  }, []);
+  return width;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function TeamsPage() {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
+  const drawerWidth = isMobile ? '100%' : Math.min(Math.round(windowWidth * 0.7), 700);
+
   const [activeTab, setActiveTab] = useState('1');
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -170,12 +186,12 @@ export default function TeamsPage() {
   // --- TABLE COLUMNS ---
   const teamColumns = [
     { title: 'Team Name', dataIndex: 'name', key: 'name', render: text => <Text strong>{text}</Text> },
-    { title: 'Total Members', dataIndex: 'member_count', key: 'count' },
+    { title: 'Total Members', dataIndex: 'member_count', key: 'count', responsive: ['sm'] },
     { 
       title: 'Action', key: 'action', 
       render: (_, record) => (
         <Button type="default" size="small" icon={<SettingOutlined />} onClick={() => openTeamDrawer(record)}>
-          Manage Members
+          {isMobile ? null : 'Manage Members'}
         </Button>
       )
     }
@@ -185,7 +201,7 @@ export default function TeamsPage() {
   const getAssignedUserColumns = () => {
     const columns = [
       { title: 'Name', dataIndex: 'full_name', key: 'name', render: text => <Text strong>{text}</Text> },
-      { title: 'Email', dataIndex: 'email_id', key: 'email' }
+      { title: 'Email', dataIndex: 'email_id', key: 'email', responsive: ['sm'] }
     ];
 
     // Only inject Team Space and Team Role context if looking at a specific team slice
@@ -200,7 +216,7 @@ export default function TeamsPage() {
       title: 'Action', key: 'action', 
       render: (_, record) => (
         <Button type="default" size="small" icon={<UserOutlined />} onClick={() => openUserDrawer(record)}>
-          Manage User
+          {isMobile ? null : 'Manage User'}
         </Button>
       )
     });
@@ -215,7 +231,7 @@ export default function TeamsPage() {
       title: 'Role', dataIndex: 'team_role', key: 'role',
       render: (role, record) => (
         <Select 
-          value={role} style={{ width: 130 }} 
+          value={role} style={{ width: isMobile ? 110 : 130 }} 
           onChange={(val) => updateMemberRole(record.id, selectedTeam.id, val, 'TEAM')}
           options={[{ value: 'TEAM_ADMIN', label: 'Team Admin' }, { value: 'MEMBER', label: 'Member' }]}
         />
@@ -238,7 +254,7 @@ export default function TeamsPage() {
       title: 'Role', dataIndex: 'team_role', key: 'role',
       render: (role, record) => (
         <Select 
-          value={role} style={{ width: 130 }} 
+          value={role} style={{ width: isMobile ? 110 : 130 }} 
           onChange={(val) => updateMemberRole(selectedUser.id, record.team_id, val, 'USER')}
           options={[{ value: 'TEAM_ADMIN', label: 'Team Admin' }, { value: 'MEMBER', label: 'Member' }]}
         />
@@ -255,44 +271,63 @@ export default function TeamsPage() {
   ];
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ 
+      padding: isMobile ? '16px 12px' : '24px', 
+      maxWidth: '1200px', 
+      margin: '0 auto' 
+    }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
-        <Title level={3} style={{ margin: 0 }}>Team Management</Title>
+        <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>Team Management</Title>
       </Flex>
 
-      <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <Card 
+        style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+        styles={{ body: { padding: isMobile ? '0 0 12px' : undefined } }}
+      >
         <Tabs 
           activeKey={activeTab} 
           onChange={setActiveTab}
+          size={isMobile ? 'small' : 'middle'}
+          style={{ overflowX: 'auto' }}
           items={[
             {
               key: '1',
               label: <span><TeamOutlined /> Team Directory</span>,
-              children: <Table columns={teamColumns} dataSource={teams} rowKey="id" loading={loadingTeams} pagination={false} />
+              children: (
+                <Table 
+                  columns={teamColumns} 
+                  dataSource={teams} 
+                  rowKey="id" 
+                  loading={loadingTeams} 
+                  pagination={false} 
+                  scroll={{ x: 'max-content' }}
+                  size={isMobile ? 'small' : 'middle'}
+                />
+              )
             },
             {
               key: '2',
               label: <span><UserOutlined /> Team Members</span>,
               children: (
-                <Flex vertical gap="medium">
+                <Flex vertical gap="medium" style={{ padding: isMobile ? '0 12px' : 0 }}>
                   {/* Dynamic Frontend Filtering Grid */}
                   <Flex gap="small" wrap="wrap" style={{ marginBottom: '12px' }}>
                     <Input
                       placeholder="Search member name or email..."
                       prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                      style={{ width: 260 }}
+                      style={{ width: isMobile ? '100%' : 260 }}
                       value={search}
                       onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                       allowClear
                     />
                     <Select
-                      style={{ width: 160 }}
+                      style={{ width: isMobile ? '100%' : 160 }}
                       value={selectedTeamFilter}
                       onChange={(val) => { setSelectedTeamFilter(val); setCurrentPage(1); }}
                       options={[{ value: 'ALL', label: 'All Teams' }, ...teams.map(t => ({ value: t.name, label: t.name }))]}
                     />
                     <Select
-                      style={{ width: 160 }}
+                      style={{ width: isMobile ? '100%' : 160 }}
                       value={selectedRoleFilter}
                       onChange={(val) => { setSelectedRoleFilter(val); setCurrentPage(1); }}
                       options={[
@@ -308,11 +343,14 @@ export default function TeamsPage() {
                     dataSource={assignedUsers} 
                     rowKey={(record) => selectedTeamFilter === 'ALL' ? record.id : `${record.id}-${record.team_name}`} 
                     loading={loadingEmployees} 
+                    scroll={{ x: 'max-content' }}
+                    size={isMobile ? 'small' : 'middle'}
                     pagination={{
                       current: currentPage,
                       pageSize: pageSize,
                       total: totalCount,
                       showSizeChanger: true,
+                      size: isMobile ? 'small' : 'default',
                       onChange: (page, size) => {
                         setCurrentPage(page);
                         setPageSize(size);
@@ -329,22 +367,40 @@ export default function TeamsPage() {
       {/* DRAWER 1: Manage Team Members */}
       <Drawer
         title={selectedTeam ? `Manage Members: ${selectedTeam.name}` : 'Manage Team'}
-        placement="right" width={500}
-        onClose={() => setIsTeamDrawerOpen(false)} open={isTeamDrawerOpen}
+        placement="right" 
+        width={drawerWidth}
+        onClose={() => setIsTeamDrawerOpen(false)} 
+        open={isTeamDrawerOpen}
+        styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
           Assigning a user as a "Team Admin" grants them access to manage this team.
         </Text>
-        <Table columns={teamDrawerColumns} dataSource={teamMembers} rowKey="id" pagination={false} size="small" />
+        <Table 
+          columns={teamDrawerColumns} 
+          dataSource={teamMembers} 
+          rowKey="id" 
+          pagination={false} 
+          size="small" 
+          scroll={{ x: 'max-content' }}
+        />
       </Drawer>
 
       {/* DRAWER 2: Manage User Teams */}
       <Drawer
         title={selectedUser ? `Manage Teams: ${selectedUser.full_name}` : 'Manage User'}
-        placement="right" width={500}
-        onClose={() => setIsUserDrawerOpen(false)} open={isUserDrawerOpen}
+        placement="right" 
+        width={drawerWidth}
+        onClose={() => setIsUserDrawerOpen(false)} 
+        open={isUserDrawerOpen}
+        styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
       >
-        <Flex gap="small" align="center" style={{ marginBottom: '24px' }}>
+        <Flex 
+          gap="small" 
+          align={isMobile ? 'stretch' : 'center'} 
+          vertical={isMobile}
+          style={{ marginBottom: '24px' }}
+        >
           <Select 
             placeholder="Add to another team..." 
             style={{ flex: 1 }}
@@ -352,13 +408,25 @@ export default function TeamsPage() {
             onChange={setTeamToAssign}
             options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))} 
           />
-          <Button type="primary" disabled={!teamToAssign} onClick={handleAssignToAdditionalTeam}>
+          <Button 
+            type="primary" 
+            disabled={!teamToAssign} 
+            onClick={handleAssignToAdditionalTeam}
+            block={isMobile}
+          >
             Add to Team
           </Button>
         </Flex>
         <Divider />
         <Text strong style={{ display: 'block', marginBottom: '16px' }}>Current Memberships</Text>
-        <Table columns={userDrawerColumns} dataSource={userTeams} rowKey="team_id" pagination={false} size="small" />
+        <Table 
+          columns={userDrawerColumns} 
+          dataSource={userTeams} 
+          rowKey="team_id" 
+          pagination={false} 
+          size="small" 
+          scroll={{ x: 'max-content' }}
+        />
       </Drawer>
     </div>
   );

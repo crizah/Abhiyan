@@ -140,6 +140,19 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		}
 	}
 
+	// 5. Insert Attachments
+	for _, att := range req.Attachments {
+		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{UUID: task.ID, Valid: true},
+			TaskUpdateID:  uuid.NullUUID{}, // Null
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    aID,
+		})
+	}
+
 	if err := tx.Commit(); err != nil {
 		return db.Task{}, err
 	}
@@ -263,14 +276,29 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 		rems = []schemas.ReminderResponse{}
 	}
 
+	dbAtts, _ := s.queries.GetTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
+	var atts []schemas.AttachmentPayload
+	for _, a := range dbAtts {
+		atts = append(atts, schemas.AttachmentPayload{
+			FileName: a.FileName,
+			FileURL:  a.FileUrl,
+			FileType: a.FileType,
+			FileSize: a.FileSizeBytes.Int64,
+		})
+	}
+	if atts == nil {
+		atts = []schemas.AttachmentPayload{}
+	}
+
 	return &schemas.FullTaskDetailsResponse{
 		Participants: parts,
 		Reminders:    rems,
+		Attachments:  atts,
 	}, nil
 
 }
 
-func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest) error {
+func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest, userid string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -336,6 +364,20 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 			remParams.RecurrenceUnit = db.NullRecurrenceUnit{RecurrenceUnit: db.RecurrenceUnit(*rem.RecurrenceUnit), Valid: true}
 		}
 		_, _ = qtx.CreateReminder(ctx, remParams)
+	}
+
+	// Rebuild Task Attachments
+	uID := util.ParseUUID(userid)
+	_ = qtx.DeleteTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
+	for _, att := range req.Attachments {
+		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{UUID: tID, Valid: true},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uID, // Ensure you pass userID/adminID into UpdateTaskDetails now
+		})
 	}
 
 	return tx.Commit()
@@ -477,19 +519,37 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]sche
 		})
 	}
 
+	// Extract update IDs for batch attachment fetching
+	var updateIDs []uuid.UUID
+	for _, u := range updates {
+		updateIDs = append(updateIDs, u.ID)
+	}
+
+	dbUpdateAtts, _ := s.queries.GetTaskUpdateAttachments(ctx, updateIDs)
+	attMap := make(map[string][]schemas.AttachmentPayload)
+	for _, a := range dbUpdateAtts {
+		uIDStr := a.TaskUpdateID.UUID.String()
+		attMap[uIDStr] = append(attMap[uIDStr], schemas.AttachmentPayload{
+			FileName: a.FileName,
+			FileURL:  a.FileUrl,
+			FileType: a.FileType,
+			FileSize: a.FileSizeBytes.Int64,
+		})
+	}
 	// 3. Map together
 	var mapped []schemas.TaskUpdateResponse
 	for _, u := range updates {
 		uID := u.ID.String()
 		mapped = append(mapped, schemas.TaskUpdateResponse{
-			ID:        uID,
-			TaskID:    u.TaskID.String(),
-			UserID:    u.UserID.UUID.String(),
-			FirstName: u.FirstName.String,
-			LastName:  u.LastName.String,
-			Content:   u.Content,
-			CreatedAt: u.CreatedAt.Time.Format(time.RFC3339),
-			Comments:  commentsMap[uID], // Attach comments or nil
+			ID:          uID,
+			TaskID:      u.TaskID.String(),
+			UserID:      u.UserID.UUID.String(),
+			FirstName:   u.FirstName.String,
+			LastName:    u.LastName.String,
+			Content:     u.Content,
+			CreatedAt:   u.CreatedAt.Time.Format(time.RFC3339),
+			Comments:    commentsMap[uID], // Attach comments or nil
+			Attachments: attMap[uID],
 		})
 	}
 
@@ -510,13 +570,26 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 	uID := util.ParseUUID(userID)
 
 	// 1. Insert Update
-	_, err = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+	updateRec, err := qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
 		TaskID:  tID,
 		UserID:  uuid.NullUUID{UUID: uID, Valid: true},
 		Content: req.Content,
 	})
 	if err != nil {
 		return err
+	}
+
+	// update attachments
+	for _, att := range req.Attachments {
+		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{}, // Null
+			TaskUpdateID:  uuid.NullUUID{UUID: updateRec.ID, Valid: true},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uID,
+		})
 	}
 
 	// 2. Data for Notifications
@@ -562,6 +635,7 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 
 	return tx.Commit()
 }
+
 func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, req schemas.AddCommentRequest) error { // <-- UPDATED SIGNATURE
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -802,6 +876,19 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	for _, p := range participants {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID: p.ID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
+		})
+	}
+
+	// Rebuild Task Attachments
+	_ = qtx.DeleteTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
+	for _, att := range req.Attachments {
+		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{UUID: tID, Valid: true},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uID,
 		})
 	}
 

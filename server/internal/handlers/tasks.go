@@ -126,13 +126,14 @@ func (h *TaskHandler) GetFullTaskDetails(c *gin.Context) {
 
 func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 	taskID := c.Param("task_id")
+	userID := c.MustGet("user_id").(string)
 	var req schemas.UpdateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req); err != nil {
+	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 		return
 	}

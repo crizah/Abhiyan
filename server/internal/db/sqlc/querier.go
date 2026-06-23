@@ -6,7 +6,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -29,6 +28,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
@@ -48,11 +48,13 @@ type Querier interface {
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
-	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error)
+	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error)
+	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
 	GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error)
+	GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskUpdateAttachmentsRow, error)
 	GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.NullUUID, error)
 	GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error)
 	GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error)
@@ -75,6 +77,7 @@ type Querier interface {
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
+	InsertAttachment(ctx context.Context, arg InsertAttachmentParams) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const addTaskParticipant = `-- name: AddTaskParticipant :exec
@@ -168,6 +169,15 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteTaskAttachments = `-- name: DeleteTaskAttachments :exec
+DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL
+`
+
+func (q *Queries) DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskAttachments, taskID)
+	return err
 }
 
 const deleteTaskParticipants = `-- name: DeleteTaskParticipants :exec
@@ -405,19 +415,60 @@ FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE'
 `
 
-func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error) {
+func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, getTaskAssigneePhones, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []sql.NullString
+	var items []string
 	for rows.Next() {
-		var phone_number sql.NullString
+		var phone_number string
 		if err := rows.Scan(&phone_number); err != nil {
 			return nil, err
 		}
 		items = append(items, phone_number)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskAttachments = `-- name: GetTaskAttachments :many
+SELECT file_name, file_url, file_type, file_size_bytes 
+FROM attachments 
+WHERE task_id = $1
+`
+
+type GetTaskAttachmentsRow struct {
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+}
+
+func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskAttachments, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskAttachmentsRow
+	for rows.Next() {
+		var i GetTaskAttachmentsRow
+		if err := rows.Scan(
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileType,
+			&i.FileSizeBytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -530,6 +581,49 @@ func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Rem
 			&i.RecurrenceUnit,
 			&i.CreatedAt,
 			&i.IsSystemSpawned,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskUpdateAttachments = `-- name: GetTaskUpdateAttachments :many
+SELECT task_update_id, file_name, file_url, file_type, file_size_bytes 
+FROM attachments 
+WHERE task_update_id = ANY($1::uuid[])
+`
+
+type GetTaskUpdateAttachmentsRow struct {
+	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+}
+
+func (q *Queries) GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskUpdateAttachmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdateAttachments, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskUpdateAttachmentsRow
+	for rows.Next() {
+		var i GetTaskUpdateAttachmentsRow
+		if err := rows.Scan(
+			&i.TaskUpdateID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileType,
+			&i.FileSizeBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -712,6 +806,37 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertAttachment = `-- name: InsertAttachment :exec
+INSERT INTO attachments (
+    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+)
+`
+
+type InsertAttachmentParams struct {
+	TaskID        uuid.NullUUID `json:"task_id"`
+	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+	UploadedBy    uuid.UUID     `json:"uploaded_by"`
+}
+
+func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentParams) error {
+	_, err := q.db.ExecContext(ctx, insertAttachment,
+		arg.TaskID,
+		arg.TaskUpdateID,
+		arg.FileName,
+		arg.FileUrl,
+		arg.FileType,
+		arg.FileSizeBytes,
+		arg.UploadedBy,
+	)
+	return err
 }
 
 const listTasksByTeam = `-- name: ListTasksByTeam :many

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -61,6 +62,10 @@ func main() {
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
 	taskService := services.NewTaskService(dbConn, onionApp)
+	s3Service, err := services.NewS3Service(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize AWS S3 service: %v", err)
+	}
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -68,6 +73,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 	taskHandler := handlers.NewTaskHandler(taskService)
+	uploadHandler := handlers.NewUploadHandler(s3Service)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -112,6 +118,7 @@ func main() {
 			general.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // i just dont wanna update it to completely general
+			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
 		}
 
 		// ADMIN DOMAIN

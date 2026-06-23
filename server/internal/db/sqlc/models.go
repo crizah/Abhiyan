@@ -441,6 +441,18 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type Attachment struct {
+	ID            uuid.UUID     `json:"id"`
+	TaskID        uuid.NullUUID `json:"task_id"`
+	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+	UploadedBy    uuid.UUID     `json:"uploaded_by"`
+	CreatedAt     sql.NullTime  `json:"created_at"`
+}
+
 type Notification struct {
 	ID        uuid.UUID    `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
@@ -525,7 +537,7 @@ type User struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber sql.NullString `json:"phone_number"`
+	PhoneNumber string         `json:"phone_number"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }
 

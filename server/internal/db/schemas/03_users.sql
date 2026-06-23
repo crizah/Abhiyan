@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,
-    phone_number TEXT UNIQUE NOT NULL,
+    phone_number TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

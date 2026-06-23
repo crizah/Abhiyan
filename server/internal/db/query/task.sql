@@ -159,3 +159,23 @@ WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE';
 SELECT u.phone_number 
 FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE';
+
+-- name: InsertAttachment :exec
+INSERT INTO attachments (
+    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+);
+
+-- name: GetTaskAttachments :many
+SELECT file_name, file_url, file_type, file_size_bytes 
+FROM attachments 
+WHERE task_id = $1;
+
+-- name: GetTaskUpdateAttachments :many
+SELECT task_update_id, file_name, file_url, file_type, file_size_bytes 
+FROM attachments 
+WHERE task_update_id = ANY($1::uuid[]);
+
+-- name: DeleteTaskAttachments :exec
+DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;

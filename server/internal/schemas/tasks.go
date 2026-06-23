@@ -59,6 +59,11 @@ type TaskResponse struct {
 	CreatedAt         *time.Time `json:"created_at"`
 }
 
+type PaginatedTaskResponse struct {
+	TotalCount int64          `json:"total_count"`
+	Tasks      []TaskResponse `json:"tasks"`
+}
+
 // FIX: Clean mapping to prevent React `{String, Valid}` crash
 type TaskUpdateResponse struct {
 	ID          string                      `json:"id"`

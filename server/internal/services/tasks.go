@@ -712,16 +712,24 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 }
 
 // 2. Fetch tasks where the employee is an Assignee or Subscriber
-func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string) ([]schemas.TaskResponse, error) {
+func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
 	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
 		TeamID: util.ParseUUID(teamID),
 		UserID: util.ParseUUID(userID),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
 		var dueDate *time.Time
 		if t.DueDate.Valid {
@@ -746,10 +754,15 @@ func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userI
 			CreatedAt:         createdAt,
 		})
 	}
+
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
-	return tasks, nil
+
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {

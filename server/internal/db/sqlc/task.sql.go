@@ -314,18 +314,29 @@ func (q *Queries) GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, er
 }
 
 const getEmployeeTasks = `-- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-       t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN task_participants tp ON t.id = tp.task_id
-WHERE t.team_id = $1 AND tp.user_id = $2
-ORDER BY t.created_at DESC
+WITH distinct_tasks AS (
+    SELECT DISTINCT 
+        t.id, t.team_id, t.title, t.description, t.status, 
+        t.fulfillment_status, t.review_status, t.created_by, 
+        t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN task_participants tp ON t.id = tp.task_id
+    WHERE t.team_id = $1 AND tp.user_id = $2
+)
+SELECT 
+    id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, 
+    COUNT(*) OVER() AS total_count
+FROM distinct_tasks
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4
 `
 
 type GetEmployeeTasksParams struct {
 	TeamID uuid.UUID `json:"team_id"`
 	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
 type GetEmployeeTasksRow struct {
@@ -341,10 +352,16 @@ type GetEmployeeTasksRow struct {
 	CreatedAt         sql.NullTime              `json:"created_at"`
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
 func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getEmployeeTasks, arg.TeamID, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, getEmployeeTasks,
+		arg.TeamID,
+		arg.UserID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +382,7 @@ func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksPara
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

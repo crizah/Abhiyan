@@ -111,13 +111,22 @@ ORDER BY c.created_at ASC;
 SELECT user_id FROM task_updates WHERE id = $1;
 
 -- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-       t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN task_participants tp ON t.id = tp.task_id
-WHERE t.team_id = $1 AND tp.user_id = $2
-ORDER BY t.created_at DESC;
+WITH distinct_tasks AS (
+    SELECT DISTINCT 
+        t.id, t.team_id, t.title, t.description, t.status, 
+        t.fulfillment_status, t.review_status, t.created_by, 
+        t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN task_participants tp ON t.id = tp.task_id
+    WHERE t.team_id = $1 AND tp.user_id = $2
+)
+SELECT 
+    *, 
+    COUNT(*) OVER() AS total_count
+FROM distinct_tasks
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4;
 
 -- name: SubmitTaskState :exec
 UPDATE tasks SET fulfillment_status = 'COMPLETED', review_status = 'PENDING' WHERE id = $1;

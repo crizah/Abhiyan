@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/services"
@@ -213,12 +214,31 @@ func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
 	userID := c.MustGet("user_id").(string)
 
-	tasks, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID)
+	// 1. Parse pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	} // safety cap
+
+	// 2. Calculate offset
+	offset := (page - 1) * limit
+
+	// 3. Call service
+	paginatedResponse, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
-	c.JSON(http.StatusOK, tasks)
+
+	c.JSON(http.StatusOK, paginatedResponse)
 }
 
 func (h *TaskHandler) SubmitTask(c *gin.Context) {

@@ -6,13 +6,13 @@ export const customTheme = {
     colorInfo: '#1A365D',    // Navy Blue accent
     colorTextBase: '#1f2937', // Dark Grey/Black for text
     colorBgBase: '#ffffff',
-    colorBgLayout: '#f9fafb', // Light grey for app background
+    colorBgLayout: '#ffffff', // Light grey for app background
     borderRadius: 6,
     wireframe: false,
   },
   components: {
     Button: {
-      colorPrimary: '#FF4B33',
+      colorPrimary: '#ff4b33',
       colorPrimaryHover: '#FF333D',
       colorPrimaryActive: '#CC8810',
     },

@@ -113,8 +113,9 @@ func main() {
 			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)
 
 			// Re-use existing comment/update routes for employees
-			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates) // shpuldnt get ALL
+			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
 			general.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
+			general.GET("/tasks/:task_id/updates/:update_id/comments", taskHandler.GetUpdateComments)
 			general.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // doesnt need to be paginated
@@ -161,11 +162,12 @@ func main() {
 			teamAdminGroup.GET("/users/:user_id/teams", adminHandler.GetUserTeams)
 
 			teamAdminGroup.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // depends
-			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)  // depends
+			teamAdminGroup.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
 			teamAdminGroup.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
+			teamAdminGroup.GET("/tasks/:task_id/updates/:update_id/comments", taskHandler.GetUpdateComments)
 			teamAdminGroup.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			teamAdminGroup.PUT("/tasks/:task_id", taskHandler.UpdateTaskDetails)
-			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks) // needs to be paginated
+			teamAdminGroup.GET("/tasks", taskHandler.GetAdminAllTasks)
 			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 
 			teamAdminGroup.PUT("/tasks/:task_id/approve", taskHandler.ApproveTask)

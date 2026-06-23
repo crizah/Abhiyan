@@ -80,13 +80,49 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 func (h *TaskHandler) GetTaskUpdates(c *gin.Context) {
 	taskID := c.Param("task_id")
 
-	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updates"})
 		return
 	}
 
 	c.JSON(http.StatusOK, updates)
+}
+
+func (h *TaskHandler) GetUpdateComments(c *gin.Context) {
+	updateID := c.Param("update_id")
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	comments, err := h.taskService.GetUpdateComments(c.Request.Context(), updateID, int32(limit), int32(offset))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, comments)
 }
 
 func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {

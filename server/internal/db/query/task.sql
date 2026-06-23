@@ -61,11 +61,14 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetTaskUpdates :many
-SELECT tu.*, u.first_name, u.last_name
+SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at,
+       u.first_name, u.last_name,
+       (SELECT COUNT(*) FROM task_update_comments c WHERE c.task_update_id = tu.id) AS comment_count
 FROM task_updates tu
 JOIN users u ON tu.user_id = u.id
 WHERE tu.task_id = $1
-ORDER BY tu.created_at ASC;
+ORDER BY tu.created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: CreateReminder :one
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit, is_system_spawned)
@@ -111,13 +114,22 @@ INSERT INTO task_update_comments (task_update_id, user_id, content)
 VALUES ($1, $2, $3) RETURNING id;
 
 -- name: GetTaskUpdateComments :many
-SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
        u.first_name, u.last_name
 FROM task_update_comments c
 JOIN task_updates tu ON c.task_update_id = tu.id
 LEFT JOIN users u ON c.user_id = u.id
 WHERE tu.task_id = $1
 ORDER BY c.created_at ASC;
+
+-- name: GetUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
+       u.first_name, u.last_name
+FROM task_update_comments c
+LEFT JOIN users u ON c.user_id = u.id
+WHERE c.task_update_id = $1
+ORDER BY c.created_at ASC
+LIMIT $2 OFFSET $3;
 
 -- name: GetTaskUpdateAuthor :one
 SELECT user_id FROM task_updates WHERE id = $1;

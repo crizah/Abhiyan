@@ -516,33 +516,18 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	return tx.Commit()
 }
 
-func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]schemas.TaskUpdateResponse, error) {
+func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, offset int32) ([]schemas.TaskUpdateResponse, error) {
 	tID := util.ParseUUID(taskID)
 
-	// 1. Fetch Updates
-	updates, err := s.queries.GetTaskUpdates(ctx, tID)
+	updates, err := s.queries.GetTaskUpdates(ctx, db.GetTaskUpdatesParams{
+		TaskID: tID,
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Fetch all Comments for this entire task
-	dbComments, _ := s.queries.GetTaskUpdateComments(ctx, tID)
-
-	// Group comments by their parent Update ID
-	commentsMap := make(map[string][]schemas.TaskUpdateCommentResponse)
-	for _, c := range dbComments {
-		uID := c.TaskUpdateID.String()
-		commentsMap[uID] = append(commentsMap[uID], schemas.TaskUpdateCommentResponse{
-			ID:        c.ID.String(),
-			UserID:    c.UserID.UUID.String(),
-			FirstName: c.FirstName.String,
-			LastName:  c.LastName.String,
-			Content:   c.Content,
-			CreatedAt: c.CreatedAt.Time.Format(time.RFC3339),
-		})
-	}
-
-	// Extract update IDs for batch attachment fetching
 	var updateIDs []uuid.UUID
 	for _, u := range updates {
 		updateIDs = append(updateIDs, u.ID)
@@ -559,20 +544,20 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]sche
 			FileSize: a.FileSizeBytes.Int64,
 		})
 	}
-	// 3. Map together
+
 	var mapped []schemas.TaskUpdateResponse
 	for _, u := range updates {
 		uID := u.ID.String()
 		mapped = append(mapped, schemas.TaskUpdateResponse{
-			ID:          uID,
-			TaskID:      u.TaskID.String(),
-			UserID:      u.UserID.UUID.String(),
-			FirstName:   u.FirstName.String,
-			LastName:    u.LastName.String,
-			Content:     u.Content,
-			CreatedAt:   u.CreatedAt.Time.Format(time.RFC3339),
-			Comments:    commentsMap[uID], // Attach comments or nil
-			Attachments: attMap[uID],
+			ID:           uID,
+			TaskID:       u.TaskID.String(),
+			UserID:       u.UserID.UUID.String(),
+			FirstName:    u.FirstName.String,
+			LastName:     u.LastName.String,
+			Content:      u.Content,
+			CreatedAt:    u.CreatedAt.Time.Format(time.RFC3339),
+			CommentCount: u.CommentCount,
+			Attachments:  attMap[uID],
 		})
 	}
 
@@ -580,6 +565,36 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]sche
 		mapped = []schemas.TaskUpdateResponse{}
 	}
 	return mapped, nil
+}
+
+func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, limit, offset int32) ([]schemas.TaskUpdateCommentResponse, error) {
+	uID := util.ParseUUID(updateID)
+
+	dbComments, err := s.queries.GetUpdateComments(ctx, db.GetUpdateCommentsParams{
+		TaskUpdateID: uID,
+		Limit:        limit,
+		Offset:       offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var comments []schemas.TaskUpdateCommentResponse
+	for _, c := range dbComments {
+		comments = append(comments, schemas.TaskUpdateCommentResponse{
+			ID:        c.ID.String(),
+			UserID:    c.UserID.UUID.String(),
+			FirstName: c.FirstName.String,
+			LastName:  c.LastName.String,
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt.Time.Format(time.RFC3339),
+		})
+	}
+
+	if comments == nil {
+		comments = []schemas.TaskUpdateCommentResponse{}
+	}
+	return comments, nil
 }
 func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
 	tx, err := s.db.BeginTx(ctx, nil)

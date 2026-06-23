@@ -681,7 +681,7 @@ func (q *Queries) GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.N
 }
 
 const getTaskUpdateComments = `-- name: GetTaskUpdateComments :many
-SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
        u.first_name, u.last_name
 FROM task_update_comments c
 JOIN task_updates tu ON c.task_update_id = tu.id
@@ -732,25 +732,35 @@ func (q *Queries) GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) (
 }
 
 const getTaskUpdates = `-- name: GetTaskUpdates :many
-SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at, u.first_name, u.last_name
+SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at,
+       u.first_name, u.last_name,
+       (SELECT COUNT(*) FROM task_update_comments c WHERE c.task_update_id = tu.id) AS comment_count
 FROM task_updates tu
 JOIN users u ON tu.user_id = u.id
 WHERE tu.task_id = $1
-ORDER BY tu.created_at ASC
+ORDER BY tu.created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type GetTaskUpdatesRow struct {
-	ID        uuid.UUID      `json:"id"`
-	TaskID    uuid.UUID      `json:"task_id"`
-	UserID    uuid.NullUUID  `json:"user_id"`
-	Content   string         `json:"content"`
-	CreatedAt sql.NullTime   `json:"created_at"`
-	FirstName sql.NullString `json:"first_name"`
-	LastName  sql.NullString `json:"last_name"`
+type GetTaskUpdatesParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
-func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTaskUpdates, taskID)
+type GetTaskUpdatesRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskID       uuid.UUID      `json:"task_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+	CommentCount int64          `json:"comment_count"`
+}
+
+func (q *Queries) GetTaskUpdates(ctx context.Context, arg GetTaskUpdatesParams) ([]GetTaskUpdatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdates, arg.TaskID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -766,6 +776,7 @@ func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTa
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.CommentCount,
 		); err != nil {
 			return nil, err
 		}
@@ -840,6 +851,63 @@ func (q *Queries) GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]G
 			&i.FirstName,
 			&i.LastName,
 			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUpdateComments = `-- name: GetUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
+       u.first_name, u.last_name
+FROM task_update_comments c
+LEFT JOIN users u ON c.user_id = u.id
+WHERE c.task_update_id = $1
+ORDER BY c.created_at ASC
+LIMIT $2 OFFSET $3
+`
+
+type GetUpdateCommentsParams struct {
+	TaskUpdateID uuid.UUID `json:"task_update_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+}
+
+type GetUpdateCommentsRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskUpdateID uuid.UUID      `json:"task_update_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetUpdateComments(ctx context.Context, arg GetUpdateCommentsParams) ([]GetUpdateCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUpdateComments, arg.TaskUpdateID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUpdateCommentsRow
+	for rows.Next() {
+		var i GetUpdateCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskUpdateID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
 		); err != nil {
 			return nil, err
 		}

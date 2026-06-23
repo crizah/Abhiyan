@@ -66,15 +66,15 @@ type PaginatedTaskResponse struct {
 
 // FIX: Clean mapping to prevent React `{String, Valid}` crash
 type TaskUpdateResponse struct {
-	ID          string                      `json:"id"`
-	TaskID      string                      `json:"task_id"`
-	UserID      string                      `json:"user_id"`
-	FirstName   string                      `json:"first_name"`
-	LastName    string                      `json:"last_name"`
-	Content     string                      `json:"content"`
-	CreatedAt   string                      `json:"created_at"`
-	Comments    []TaskUpdateCommentResponse `json:"comments"`
-	Attachments []AttachmentPayload         `json:"attachments"`
+	ID           string              `json:"id"`
+	TaskID       string              `json:"task_id"`
+	UserID       string              `json:"user_id"`
+	FirstName    string              `json:"first_name"`
+	LastName     string              `json:"last_name"`
+	Content      string              `json:"content"`
+	CreatedAt    string              `json:"created_at"`
+	CommentCount int64               `json:"comment_count"`
+	Attachments  []AttachmentPayload `json:"attachments"`
 }
 
 type TaskParticipantResponse struct {

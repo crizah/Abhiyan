@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm, Mentions, Tabs, Upload, List } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined, EditOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
@@ -8,6 +8,75 @@ import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+function CommentInput({ updateId, onSubmit, disabled, mentionOptions }) {
+  const [text, setText] = useState('');
+  
+  const handleSubmit = () => {
+    if (!text.trim()) return;
+    onSubmit(updateId, text);
+    setText('');
+  };
+  
+  return (
+    <Flex gap="small" style={{ marginTop: '8px' }}>
+      <Mentions
+        style={{ flex: 1 }}
+        size="small"
+        placeholder="Write a comment... use @ to mention"
+        value={text}
+        onChange={setText}
+        onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+        options={mentionOptions}
+        disabled={disabled}
+      />
+      <Button type="primary" size="small" icon={<SendOutlined />} onClick={handleSubmit} disabled={!text.trim() || disabled}>
+        Reply
+      </Button>
+    </Flex>
+  );
+}
+
+function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge }) {
+  const [text, setText] = useState(''); 
+
+  const handleUpdateClick = () => {
+    if (!text.trim() && drawerFileList.length === 0) return;
+    onPostUpdate(text); 
+    setText(''); 
+  };
+
+  return (
+    <div style={{ paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+      {drawerFileList.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {drawerFileList.map(f => (
+            <Tag closable onClose={() => setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid))} key={f.uid}>
+              {f.name}
+            </Tag>
+          ))}
+        </div>
+      )}
+      <Flex gap="small" align="center">
+        <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setDrawerFileList)} fileList={drawerFileList} onChange={({fileList}) => setDrawerFileList(fileList)} showUploadList={false} multiple>
+          <Button icon={<PaperClipOutlined />} />
+        </Upload>
+        <AudioRecorder onUploadSuccess={(fileObj) => setDrawerFileList(prev => [...prev, fileObj])} />
+
+        <Mentions
+          style={{ flex: 1 }}
+          placeholder="Type an update... use @ to mention team members"
+          value={text}
+          onChange={setText}
+          options={mentionOptions}
+        />
+        <Button type="primary" icon={<SendOutlined />} onClick={handleUpdateClick} disabled={!text.trim() && drawerFileList.length === 0}>
+          Post
+        </Button>
+      </Flex>
+    </div>
+  );
+}
 
 export default function TeamTasksPage() {
   const [form] = Form.useForm();
@@ -34,9 +103,34 @@ export default function TeamTasksPage() {
   const [taskDetails, setTaskDetails] = useState(null);
   
   const [taskUpdates, setTaskUpdates] = useState([]);
-  const [newUpdateText, setNewUpdateText] = useState('');
-  const [commentDrafts, setCommentDrafts] = useState({});
+  const [updateOffset, setUpdateOffset] = useState(0);
+  const [hasMoreUpdates, setHasMoreUpdates] = useState(false);
+  const [loadingUpdates, setLoadingUpdates] = useState(false);
+  const UPDATE_LIMIT = 20;
+
+  const [commentsMap, setCommentsMap] = useState({});       // updateId -> comments[]
+  const [commentOffsets, setCommentOffsets] = useState({}); // updateId -> offset
+  const [hasMoreComments, setHasMoreComments] = useState({}); // updateId -> bool
+  const [loadingComments, setLoadingComments] = useState({}); // updateId -> bool
+  const COMMENT_LIMIT = 20;
+
   const [expandedComments, setExpandedComments] = useState({});
+  const updatesContainerRef = useRef(null);
+
+  // Memoize team members to prevent Mentions array recreation on every keystroke
+  const cachedMentionOptions = React.useMemo(() => {
+    return teamMembers.map(m => ({ 
+      value: m.full_name.replace(/\s+/g, ''), 
+      label: m.full_name 
+    }));
+  }, [teamMembers]);
+
+  // Scroll to bottom on fresh load (offset=0) and after posting
+  useEffect(() => {
+    if (updateOffset <= UPDATE_LIMIT && updatesContainerRef.current) {
+      updatesContainerRef.current.scrollTop = updatesContainerRef.current.scrollHeight;
+    }
+  }, [taskUpdates]);
 
   // Managed File Array Hooks
   const [createFileList, setCreateFileList] = useState([]);
@@ -209,32 +303,76 @@ export default function TeamTasksPage() {
     setSelectedTask(task);
     setIsDrawerOpen(true);
     setDrawerFileList([]);
-    fetchTaskUpdates(task.id);
+    setTaskUpdates([]);
+    setUpdateOffset(0);
+    setHasMoreUpdates(false);
+    setCommentsMap({});
+    setCommentOffsets({});
+    setHasMoreComments({});
+    setExpandedComments({});
+    fetchTaskUpdates(task.id, 0);
     try {
       const res = await apiClient.get(`/admin/tasks/${task.id}/details`);
       setTaskDetails(res.data);
     } catch(err) {}
   };
 
-  const fetchTaskUpdates = async (taskId) => {
+  const fetchTaskUpdates = async (taskId, offset) => {
+    setLoadingUpdates(true);
     try {
-      const res = await apiClient.get(`/admin/tasks/${taskId}/updates`);
-      setTaskUpdates(res.data || []);
+      const res = await apiClient.get(`/admin/tasks/${taskId}/updates`, { params: { limit: UPDATE_LIMIT, offset } });
+      const fetched = res.data || [];
+      // API returns newest-first; for "load older" we append at the bottom of the reversed list
+      if (offset === 0) {
+        setTaskUpdates([...fetched].reverse());
+      } else {
+        setTaskUpdates(prev => [[...fetched].reverse(), ...prev].flat());
+      }
+      setUpdateOffset(offset + fetched.length);
+      setHasMoreUpdates(fetched.length === UPDATE_LIMIT);
     } catch (err) {}
+    finally { setLoadingUpdates(false); }
   };
 
-  const postTaskUpdate = async () => {
-    if (!newUpdateText.trim() && drawerFileList.length === 0) return;
+  const fetchComments = async (taskId, updateId, offset) => {
+    setLoadingComments(prev => ({ ...prev, [updateId]: true }));
     try {
-      const mentionedIds = teamMembers.filter(m => newUpdateText.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
-      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates`, { 
-        content: newUpdateText,
+      const res = await apiClient.get(`/admin/tasks/${taskId}/updates/${updateId}/comments`, { params: { limit: COMMENT_LIMIT, offset } });
+      const fetched = res.data || [];
+      if (offset === 0) {
+        setCommentsMap(prev => ({ ...prev, [updateId]: fetched }));
+      } else {
+        setCommentsMap(prev => ({ ...prev, [updateId]: [...(prev[updateId] || []), ...fetched] }));
+      }
+      setCommentOffsets(prev => ({ ...prev, [updateId]: offset + fetched.length }));
+      setHasMoreComments(prev => ({ ...prev, [updateId]: fetched.length === COMMENT_LIMIT }));
+    } catch (err) {}
+    finally { setLoadingComments(prev => ({ ...prev, [updateId]: false })); }
+  };
+
+  const toggleComments = (updateId) => {
+    const nowExpanded = !expandedComments[updateId];
+    setExpandedComments(prev => ({ ...prev, [updateId]: nowExpanded }));
+    // Fetch on first open only
+    if (nowExpanded && !commentsMap[updateId]) {
+      fetchComments(selectedTask.id, updateId, 0);
+    }
+  };
+
+  const postTaskUpdate = async (submittedText) => {
+    if (!submittedText.trim() && drawerFileList.length === 0) return;
+    try {
+      const mentionedIds = teamMembers.filter(m => submittedText.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
+      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates`, {
+        content: submittedText,
         mentioned_user_ids: mentionedIds,
         attachments: getS3Attachments(drawerFileList)
       });
-      setNewUpdateText('');
       setDrawerFileList([]);
-      fetchTaskUpdates(selectedTask.id);
+      // Reset and refetch from top to show the new update at the bottom
+      setTaskUpdates([]);
+      setUpdateOffset(0);
+      fetchTaskUpdates(selectedTask.id, 0);
       window.dispatchEvent(new Event('refresh-notifications'));
     } catch (err) { message.error("Failed to post update."); }
   };
@@ -259,17 +397,16 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to update status."); }
   };
 
-  const postComment = async (updateId) => {
-    const text = commentDrafts[updateId];
-    if (!text?.trim()) return;
+  const postComment = async (updateId, text) => {
     try {
       const mentionedIds = teamMembers.filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
-      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, { 
+      await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, {
         content: text,
-        mentioned_user_ids: mentionedIds 
+        mentioned_user_ids: mentionedIds
       });
-      setCommentDrafts(prev => ({ ...prev, [updateId]: '' }));
-      fetchTaskUpdates(selectedTask.id);
+      setCommentOffsets(prev => ({ ...prev, [updateId]: 0 }));
+      fetchComments(selectedTask.id, updateId, 0);
+      setTaskUpdates(prev => prev.map(u => u.id === updateId ? { ...u, comment_count: u.comment_count + 1 } : u));
       window.dispatchEvent(new Event('refresh-notifications'));
     } catch (err) { message.error("Failed to post comment"); }
   };
@@ -506,13 +643,20 @@ export default function TeamTasksPage() {
               )}
             </Tabs.TabPane>
 
-            {/* FULLY RESTORED TIMELINE & COMMENTS */}
+            {/* TIMELINE & COMMENTS */}
             <Tabs.TabPane tab="Activity & Updates" key="2">
               <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
-                <div style={{ flex: 1, overflowY: 'auto', paddingRight: 8 }}>
-                  {taskUpdates.length === 0 ? <Text type="secondary">No updates yet.</Text> : (
-                    <Timeline 
-                      items={taskUpdates.map(u => ({ 
+                <div ref={updatesContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 8 }}>
+                  {hasMoreUpdates && (
+                    <Flex justify="center" style={{ marginBottom: 12 }}>
+                      <Button size="small" loading={loadingUpdates} onClick={() => fetchTaskUpdates(selectedTask.id, updateOffset)}>
+                        Load older
+                      </Button>
+                    </Flex>
+                  )}
+                  {taskUpdates.length === 0 && !loadingUpdates ? <Text type="secondary">No updates yet.</Text> : (
+                    <Timeline
+                      items={taskUpdates.map(u => ({
                         color: getTimelineColor(u.content),
                         children: (
                           <>
@@ -523,93 +667,58 @@ export default function TeamTasksPage() {
                             <Paragraph style={{ margin: '4px 0 8px 0' }}>{u.content}</Paragraph>
 
                             {u.attachments?.map((file, idx) => (
-                               <div key={idx} style={{ marginBottom: 8 }}>
-                                 {file.file_type.startsWith('audio/') ? (
-                                   <audio controls src={file.file_url} style={{ height: 30 }} />
-                                 ) : (
-                                   <Tag icon={<PaperClipOutlined />}><a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a></Tag>
-                                 )}
-                               </div>
+                              <div key={idx} style={{ marginBottom: 8 }}>
+                                {file.file_type.startsWith('audio/') ? (
+                                  <audio controls src={file.file_url} style={{ height: 30 }} />
+                                ) : (
+                                  <Tag icon={<PaperClipOutlined />}><a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a></Tag>
+                                )}
+                              </div>
                             ))}
-                            
+
                             <div style={{ backgroundColor: '#fafafa', padding: '8px', borderRadius: '6px', border: '1px solid #f0f0f0' }}>
-                              <Flex justify="space-between" align="center" style={{ cursor: 'pointer', marginBottom: expandedComments[u.id] ? 8 : 0 }} onClick={() => setExpandedComments(prev => ({ ...prev, [u.id]: !prev[u.id] }))}>
-                                <Text type="secondary" style={{ fontSize: 12 }}><CommentOutlined /> {u.comments?.length || 0} Comments</Text>
+                              <Flex justify="space-between" align="center" style={{ cursor: 'pointer', marginBottom: expandedComments[u.id] ? 8 : 0 }} onClick={() => toggleComments(u.id)}>
+                                <Text type="secondary" style={{ fontSize: 12 }}><CommentOutlined /> {u.comment_count || 0} Comments</Text>
                                 <Text type="secondary" style={{ fontSize: 11 }}>{expandedComments[u.id] ? 'Collapse' : 'Reply'}</Text>
                               </Flex>
-                              
+
                               {expandedComments[u.id] && (
                                 <>
-                                  {u.comments?.map(c => (
+                                  {loadingComments[u.id] && !commentsMap[u.id]?.length && (
+                                    <Text type="secondary" style={{ fontSize: 12 }}>Loading...</Text>
+                                  )}
+                                  {(commentsMap[u.id] || []).map(c => (
                                     <div key={c.id} style={{ marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid #e6f7ff' }}>
                                       <Text strong style={{ fontSize: 12 }}>{c.first_name}</Text> <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(c.created_at).format('MMM D, h:mm A')}</Text>
                                       <div style={{ fontSize: 13 }}>{c.content}</div>
                                     </div>
                                   ))}
+                                  {hasMoreComments[u.id] && (
+                                    <Button size="small" type="link" loading={loadingComments[u.id]} onClick={() => fetchComments(selectedTask.id, u.id, commentOffsets[u.id] || 0)}>
+                                      Load more comments
+                                    </Button>
+                                  )}
                                   {selectedTask.status === 'OPEN' && (
-                                    <Flex gap="small" style={{ marginTop: '8px' }}>
-                                      <Mentions 
-                                        style={{ flex: 1 }}
-                                        size="small" placeholder="Write a comment... use @ to mention" 
-                                        value={commentDrafts[u.id] || ''} 
-                                        onChange={value => setCommentDrafts({...commentDrafts, [u.id]: value})}
-                                        onPressEnter={(e) => {
-                                          if (!e.shiftKey) {
-                                            e.preventDefault();
-                                            postComment(u.id);
-                                          }
-                                        }}
-                                        options={teamMembers.map(m => ({
-                                          value: m.full_name.replace(/\s+/g, ''),
-                                          label: m.full_name
-                                        }))}
-                                      />
-                                      <Button 
-                                        type="primary" 
-                                        size="small" 
-                                        icon={<SendOutlined />} 
-                                        onClick={() => postComment(u.id)}
-                                        disabled={!commentDrafts[u.id]?.trim()}
-                                      >
-                                        Reply
-                                      </Button>
-                                    </Flex>
+                                    <CommentInput updateId={u.id} onSubmit={postComment} mentionOptions={cachedMentionOptions} />
                                   )}
                                 </>
                               )}
                             </div>
                           </>
-                        ) 
-                      }))} 
+                        )
+                      }))}
                     />
                   )}
                 </div>
 
                 {selectedTask.status === 'OPEN' && (
-                  <div style={{ paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
-                    
-                    {drawerFileList.length > 0 && (
-                      <div style={{ marginBottom: 8 }}>
-                        {drawerFileList.map(f => <Tag closable onClose={() => setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid))} key={f.uid}>{f.name}</Tag>)}
-                      </div>
-                    )}
-
-                    <Flex gap="small" align="center">
-                      <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setDrawerFileList)} fileList={drawerFileList} onChange={({fileList}) => setDrawerFileList(fileList)} showUploadList={false} multiple>
-                        <Button icon={<PaperClipOutlined />} />
-                      </Upload>
-                      <AudioRecorder onUploadSuccess={(fileObj) => setDrawerFileList(prev => [...prev, fileObj])} />
-
-                      <Mentions
-                        style={{ flex: 1 }}
-                        placeholder="Type an update... use @ to mention team members"
-                        value={newUpdateText}
-                        onChange={setNewUpdateText}
-                        options={teamMembers.map(m => ({ value: m.full_name.replace(/\s+/g, ''), label: m.full_name }))}
-                      />
-                      <Button type="primary" icon={<SendOutlined />} onClick={postTaskUpdate} disabled={!newUpdateText.trim() && drawerFileList.length === 0}>Post</Button>
-                    </Flex>
-                  </div>
+                  <UpdateComposer 
+                    drawerFileList={drawerFileList}
+                    setDrawerFileList={setDrawerFileList}
+                    onPostUpdate={postTaskUpdate}
+                    mentionOptions={cachedMentionOptions}
+                    handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  />
                 )}
               </div>
             </Tabs.TabPane>

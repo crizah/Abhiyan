@@ -31,6 +31,16 @@ func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service) *TaskService {
 	}
 }
 
+func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, params db.InsertAttachmentParams) {
+	attID, err := qtx.InsertAttachment(ctx, params)
+	if err != nil {
+		return
+	}
+	if strings.HasPrefix(params.FileType, "audio/") {
+		qtx.InsertTranscription(ctx, attID)
+	}
+}
+
 func (s *TaskService) diffAttachments(
 	ctx context.Context,
 	qtx *db.Queries,
@@ -64,7 +74,7 @@ func (s *TaskService) diffAttachments(
 		if att.ID != "" {
 			continue
 		}
-		qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
 			TaskID:        taskIDNullable,
 			TaskUpdateID:  uuid.NullUUID{},
 			FileName:      att.FileName,
@@ -191,9 +201,9 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 
 	// 5. Insert Attachments
 	for _, att := range req.Attachments {
-		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
 			TaskID:        uuid.NullUUID{UUID: task.ID, Valid: true},
-			TaskUpdateID:  uuid.NullUUID{}, // Null
+			TaskUpdateID:  uuid.NullUUID{},
 			FileName:      att.FileName,
 			FileUrl:       att.FileURL,
 			FileType:      att.FileType,
@@ -334,15 +344,31 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 	}
 
 	dbAtts, _ := s.queries.GetTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
+
+	var attIDs []uuid.UUID
+	for _, a := range dbAtts {
+		attIDs = append(attIDs, a.ID)
+	}
+	transcriptions, _ := s.queries.GetTranscriptionsByAttachmentIDs(ctx, attIDs)
+	txMap := make(map[string]db.GetTranscriptionsByAttachmentIDsRow)
+	for _, t := range transcriptions {
+		txMap[t.AttachmentID.String()] = t
+	}
+
 	var atts []schemas.AttachmentPayload
 	for _, a := range dbAtts {
-		atts = append(atts, schemas.AttachmentPayload{
+		att := schemas.AttachmentPayload{
 			ID:       a.ID.String(),
 			FileName: a.FileName,
 			FileURL:  a.FileUrl,
 			FileType: a.FileType,
 			FileSize: a.FileSizeBytes.Int64,
-		})
+		}
+		if tx, ok := txMap[a.ID.String()]; ok {
+			att.TranscriptionStatus = string(tx.Status.TranscriptionStatus)
+			att.TranscriptionText = tx.TranscriptText.String
+		}
+		atts = append(atts, att)
 	}
 	if atts == nil {
 		atts = []schemas.AttachmentPayload{}
@@ -584,12 +610,18 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, 
 	attMap := make(map[string][]schemas.AttachmentPayload)
 	for _, a := range dbUpdateAtts {
 		uIDStr := a.TaskUpdateID.UUID.String()
-		attMap[uIDStr] = append(attMap[uIDStr], schemas.AttachmentPayload{
+		att := schemas.AttachmentPayload{
+			ID:       a.ID.String(),
 			FileName: a.FileName,
 			FileURL:  a.FileUrl,
 			FileType: a.FileType,
 			FileSize: a.FileSizeBytes.Int64,
-		})
+		}
+		if a.TranscriptionStatus.Valid {
+			att.TranscriptionStatus = string(a.TranscriptionStatus.TranscriptionStatus)
+			att.TranscriptionText = a.TranscriptText.String
+		}
+		attMap[uIDStr] = append(attMap[uIDStr], att)
 	}
 
 	var mapped []schemas.TaskUpdateResponse
@@ -666,8 +698,8 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 
 	// update attachments
 	for _, att := range req.Attachments {
-		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
-			TaskID:        uuid.NullUUID{}, // Null
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{},
 			TaskUpdateID:  uuid.NullUUID{UUID: updateRec.ID, Valid: true},
 			FileName:      att.FileName,
 			FileUrl:       att.FileURL,
@@ -1010,4 +1042,17 @@ func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]sc
 		teams = []schemas.TeamResponse{}
 	}
 	return teams, nil
+}
+
+func (s *TaskService) GetTranscription(ctx context.Context, attachmentID string) (*schemas.TranscriptionResponse, error) {
+	aID := util.ParseUUID(attachmentID)
+	t, err := s.queries.GetTranscriptionByAttachmentID(ctx, aID)
+	if err != nil {
+		return nil, err
+	}
+	return &schemas.TranscriptionResponse{
+		Status:         string(t.Status.TranscriptionStatus),
+		TranscriptText: t.TranscriptText.String,
+		ErrorMessage:   t.ErrorMessage.String,
+	}, nil
 }

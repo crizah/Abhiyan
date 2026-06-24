@@ -314,3 +314,13 @@ func (h *TaskHandler) SubmitTask(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task submitted for review"})
 }
+
+func (h *TaskHandler) GetTranscription(c *gin.Context) {
+	attachmentID := c.Param("attachment_id")
+	result, err := h.taskService.GetTranscription(c.Request.Context(), attachmentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Transcription not found"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}

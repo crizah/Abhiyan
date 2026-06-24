@@ -118,7 +118,8 @@ func main() {
 			general.GET("/tasks/:task_id/updates/:update_id/comments", taskHandler.GetUpdateComments)
 			general.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
-			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // doesnt need to be paginated
+			general.GET("/attachments/:attachment_id/transcription", taskHandler.GetTranscription)
+			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
 		}

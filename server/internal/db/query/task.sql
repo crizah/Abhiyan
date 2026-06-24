@@ -193,12 +193,12 @@ SELECT u.phone_number
 FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE';
 
--- name: InsertAttachment :exec
+-- name: InsertAttachment :one
 INSERT INTO attachments (
     task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
-);
+) RETURNING id;
 
 -- name: GetTaskAttachments :many
 SELECT id, file_name, file_url, file_type, file_size_bytes
@@ -206,9 +206,11 @@ FROM attachments
 WHERE task_id = $1;
 
 -- name: GetTaskUpdateAttachments :many
-SELECT task_update_id, file_name, file_url, file_type, file_size_bytes 
-FROM attachments 
-WHERE task_update_id = ANY($1::uuid[]);
+SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_update_id = ANY($1::uuid[]);
 
 -- name: DeleteTaskAttachments :exec
 DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;

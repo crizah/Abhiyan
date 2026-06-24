@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -73,6 +74,28 @@ func (s *S3Service) DeleteObjects(ctx context.Context, fileURLs []string) {
 			Key:    aws.String(key),
 		})
 	}
+}
+
+func (s *S3Service) DownloadFile(ctx context.Context, fileURL string) ([]byte, error) {
+	key := s.extractKeyFromURL(fileURL)
+	if key == "" {
+		return nil, fmt.Errorf("could not extract key from URL: %s", fileURL)
+	}
+
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to download from S3: %w", err)
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read S3 object body: %w", err)
+	}
+	return data, nil
 }
 
 func (s *S3Service) extractKeyFromURL(fileURL string) string {

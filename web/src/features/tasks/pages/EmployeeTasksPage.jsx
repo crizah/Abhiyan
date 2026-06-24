@@ -4,6 +4,7 @@ import { SendOutlined, InfoCircleOutlined, CheckCircleOutlined, CommentOutlined,
 import apiClient from '../../../config/axios'; 
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
+import AudioAttachment from '../../../components/AudioAttachment';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -387,13 +388,17 @@ export default function EmployeeTasksPage() {
                     dataSource={taskDetails.attachments}
                     renderItem={(file) => (
                       <List.Item
-                        extra={<Button icon={<DownloadOutlined />} type="text" onClick={() => handleDownload(file.file_url, file.file_name)} title="Download" />}
+                        extra={!file.file_type.startsWith('audio/') && <Button icon={<DownloadOutlined />} type="text" onClick={() => handleDownload(file.file_url, file.file_name)} title="Download" />}
                       >
-                        <List.Item.Meta
-                          avatar={file.file_type.startsWith('audio/') ? <AudioOutlined style={{ fontSize: 24, color: '#1890ff' }}/> : <PaperClipOutlined style={{ fontSize: 24 }} />}
-                          title={<a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a>}
-                          description={file.file_type.startsWith('audio/') ? <audio controls src={file.file_url} style={{ height: 30, marginTop: 8 }} /> : `${(file.file_size / 1024).toFixed(2)} KB`}
-                        />
+                        {file.file_type.startsWith('audio/') ? (
+                          <AudioAttachment file={file} />
+                        ) : (
+                          <List.Item.Meta
+                            avatar={<PaperClipOutlined style={{ fontSize: 24 }} />}
+                            title={<a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a>}
+                            description={`${(file.file_size / 1024).toFixed(2)} KB`}
+                          />
+                        )}
                       </List.Item>
                     )}
                   />
@@ -427,10 +432,7 @@ export default function EmployeeTasksPage() {
                             {u.attachments?.map((file, idx) => (
                               <div key={idx} style={{ marginBottom: 8 }}>
                                 {file.file_type.startsWith('audio/') ? (
-                                  <Flex gap="small" align="center">
-                                    <audio controls src={file.file_url} style={{ height: 30 }} />
-                                    <Button icon={<DownloadOutlined />} size="small" type="text" onClick={() => handleDownload(file.file_url, file.file_name)} />
-                                  </Flex>
+                                  <AudioAttachment file={file} />
                                 ) : file.file_type.startsWith('image/') ? (
                                   <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
                                     <Image 

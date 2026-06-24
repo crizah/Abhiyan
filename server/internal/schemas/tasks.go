@@ -121,10 +121,18 @@ type TaskUpdateCommentResponse struct { // <-- NEW
 	Attachments []AttachmentPayload `json:"attachments"`
 }
 
+type TranscriptionResponse struct {
+	Status         string `json:"status"`
+	TranscriptText string `json:"transcript_text,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+}
+
 type AttachmentPayload struct {
-	ID       string `json:"id,omitempty"`
-	FileName string `json:"file_name"`
-	FileURL  string `json:"file_url"`
-	FileType string `json:"file_type"`
-	FileSize int64  `json:"file_size"`
+	ID                    string `json:"id,omitempty"`
+	FileName              string `json:"file_name"`
+	FileURL               string `json:"file_url"`
+	FileType              string `json:"file_type"`
+	FileSize              int64  `json:"file_size"`
+	TranscriptionStatus   string `json:"transcription_status,omitempty"`
+	TranscriptionText     string `json:"transcription_text,omitempty"`
 }

@@ -42,6 +42,12 @@ func main() {
 	bp := os.Getenv("PHONE_ID")
 	whatsappService := services.NewWhatsappService(context.Background(), wa, bp)
 
+	s3Service, err := services.NewS3Service(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize S3 service: %v", err)
+	}
+	whisperService := services.NewWhisperService()
+
 	// 2. Initialize Onion App
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
@@ -70,20 +76,31 @@ func main() {
 	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(queries, onionApp))
 	onionApp.Register("send_reminder_whatsapp", tasks.NewSendReminderWhatsappTask(whatsappService))
 
+	// register transcription
+	onionApp.Register("poll_pending_transcriptions", tasks.NewPollPendingTranscriptionsTask(queries, onionApp))
+	onionApp.Register("transcribe_audio", tasks.NewTranscribeAudioTask(queries, s3Service, whisperService))
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
-			"send_invite_email":      "critical",
-			"send_reminder_email":    "reminders",
-			"send_reminder_whatsapp": "reminders",
-			"poll_due_reminders":     "polling",
+			"send_invite_email":            "critical",
+			"send_reminder_email":          "reminders",
+			"send_reminder_whatsapp":       "reminders",
+			"poll_due_reminders":           "polling",
+			"poll_pending_transcriptions":  "polling",
+			"transcribe_audio":            "default",
 		},
 	})
 
-	// Schedule the Tick (Runs every 60 seconds)
+	// Schedule the Ticks
 	err = onionApp.Schedule("system_reminder_tick", "poll_due_reminders", "@every 1m", nil)
 	if err != nil {
 		log.Fatalf("failed to schedule reminder tick: %v", err)
+	}
+
+	err = onionApp.Schedule("system_transcription_tick", "poll_pending_transcriptions", "@every 30s", nil)
+	if err != nil {
+		log.Fatalf("failed to schedule transcription tick: %v", err)
 	}
 
 	// 4. Start Worker

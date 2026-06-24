@@ -398,6 +398,50 @@ func (ns NullTeamRoleEnum) Value() (driver.Value, error) {
 	return string(ns.TeamRoleEnum), nil
 }
 
+type TranscriptionStatus string
+
+const (
+	TranscriptionStatusPENDING    TranscriptionStatus = "PENDING"
+	TranscriptionStatusPROCESSING TranscriptionStatus = "PROCESSING"
+	TranscriptionStatusCOMPLETED  TranscriptionStatus = "COMPLETED"
+	TranscriptionStatusFAILED     TranscriptionStatus = "FAILED"
+)
+
+func (e *TranscriptionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TranscriptionStatus(s)
+	case string:
+		*e = TranscriptionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TranscriptionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTranscriptionStatus struct {
+	TranscriptionStatus TranscriptionStatus `json:"transcription_status"`
+	Valid               bool                `json:"valid"` // Valid is true if TranscriptionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTranscriptionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TranscriptionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TranscriptionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTranscriptionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TranscriptionStatus), nil
+}
+
 type UserStatus string
 
 const (
@@ -528,6 +572,16 @@ type TeamMember struct {
 	UserID   uuid.UUID    `json:"user_id"`
 	TeamRole TeamRoleEnum `json:"team_role"`
 	JoinedAt sql.NullTime `json:"joined_at"`
+}
+
+type Transcription struct {
+	ID             uuid.UUID               `json:"id"`
+	AttachmentID   uuid.UUID               `json:"attachment_id"`
+	Status         NullTranscriptionStatus `json:"status"`
+	TranscriptText sql.NullString          `json:"transcript_text"`
+	ErrorMessage   sql.NullString          `json:"error_message"`
+	CreatedAt      sql.NullTime            `json:"created_at"`
+	UpdatedAt      sql.NullTime            `json:"updated_at"`
 }
 
 type User struct {

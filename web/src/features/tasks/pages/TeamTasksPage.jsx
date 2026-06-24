@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm, Mentions, Tabs, Upload, List } from 'antd';
-import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined, EditOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined } from '@ant-design/icons';
+import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm, Mentions, Tabs, Upload, List, Image } from 'antd';
+import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined, EditOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined, DownloadOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
@@ -8,6 +8,26 @@ import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+// Helper to force cross-origin file downloads from S3
+const handleDownload = async (url, filename) => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Network response was not ok');
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename || 'download';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error('Download failed, falling back to opening in new tab', error);
+    window.open(url, '_blank');
+  }
+};
 
 function CommentInput({ updateId, onSubmit, disabled, mentionOptions }) {
   const [text, setText] = useState('');
@@ -630,7 +650,9 @@ export default function TeamTasksPage() {
                     itemLayout="horizontal"
                     dataSource={taskDetails.attachments}
                     renderItem={(file) => (
-                      <List.Item>
+                      <List.Item
+                        extra={<Button icon={<DownloadOutlined />} type="text" onClick={() => handleDownload(file.file_url, file.file_name)} title="Download" />}
+                      >
                         <List.Item.Meta
                           avatar={file.file_type.startsWith('audio/') ? <AudioOutlined style={{ fontSize: 24, color: '#1890ff' }}/> : <PaperClipOutlined style={{ fontSize: 24 }} />}
                           title={<a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a>}
@@ -669,9 +691,42 @@ export default function TeamTasksPage() {
                             {u.attachments?.map((file, idx) => (
                               <div key={idx} style={{ marginBottom: 8 }}>
                                 {file.file_type.startsWith('audio/') ? (
-                                  <audio controls src={file.file_url} style={{ height: 30 }} />
+                                  <Flex gap="small" align="center">
+                                    <audio controls src={file.file_url} style={{ height: 30 }} />
+                                    <Button icon={<DownloadOutlined />} size="small" type="text" onClick={() => handleDownload(file.file_url, file.file_name)} />
+                                  </Flex>
+                                ) : file.file_type.startsWith('image/') ? (
+                                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
+                                    <Image 
+                                      src={file.file_url} 
+                                      alt={file.file_name} 
+                                      style={{ maxHeight: 150, borderRadius: 8, objectFit: 'cover' }} 
+                                    />
+                                    <Button 
+                                      icon={<DownloadOutlined />} 
+                                      size="small" 
+                                      type="link" 
+                                      onClick={() => handleDownload(file.file_url, file.file_name)}
+                                      style={{ padding: 0, height: 'auto', alignSelf: 'flex-start' }}
+                                    >
+                                      Download
+                                    </Button>
+                                  </div>
                                 ) : (
-                                  <Tag icon={<PaperClipOutlined />}><a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a></Tag>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '8px', backgroundColor: '#fff' }}>
+                                    <PaperClipOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
+                                    <a href={file.file_url} target="_blank" rel="noreferrer" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.file_name}>
+                                      {file.file_name}
+                                    </a>
+                                    <Divider type="vertical" style={{ margin: 0 }} />
+                                    <Button 
+                                      icon={<DownloadOutlined />} 
+                                      size="small" 
+                                      type="text" 
+                                      onClick={() => handleDownload(file.file_url, file.file_name)}
+                                      title="Download"
+                                    />
+                                  </div>
                                 )}
                               </div>
                             ))}

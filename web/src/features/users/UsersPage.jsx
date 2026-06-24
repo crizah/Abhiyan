@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Input, Select, Typography, Tag, Avatar, Flex, message, ConfigProvider, Button, Drawer, Divider, Popconfirm } from 'antd';
-import { UserOutlined, SearchOutlined, SettingOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UserOutlined, SearchOutlined, SettingOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
+import ScoreBreakdown from '../../components/ScoreBreakdown';
 
 const { Title, Text } = Typography;
 
@@ -26,6 +27,7 @@ export default function UsersPage() {
   // Cross-Team State
   const [userTeams, setUserTeams] = useState([]);
   const [teamToAssign, setTeamToAssign] = useState(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
 
   // Fetch teams once on mount
   useEffect(() => {
@@ -126,6 +128,23 @@ export default function UsersPage() {
     }
   };
 
+  const handleDownloadOrgReport = async () => {
+    setDownloadingReport(true);
+    try {
+      const res = await apiClient.get('/admin/reports/score-download', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'org_performance_report.csv';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error('Failed to download report');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   const removeTeamMember = async (teamId) => {
     try {
       await apiClient.delete(`/admin/teams/${teamId}/members/${selectedUser.id}`);
@@ -209,16 +228,16 @@ export default function UsersPage() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Title level={3}>Users Directory</Title>
 
-      <Flex gap="middle" style={{ marginBottom: '24px' }}>
+      <Flex gap="middle" style={{ marginBottom: '24px' }} align="center">
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#fa8c16', hoverBorderColor: '#fa8c16' } } }}>
-          <Input 
-            placeholder="Search by name or email..." 
-            prefix={<SearchOutlined />} 
+          <Input
+            placeholder="Search by name or email..."
+            prefix={<SearchOutlined />}
             style={{ width: '300px' }}
             onChange={(e) => setSearchText(e.target.value)}
           />
         </ConfigProvider>
-        
+
         <Select defaultValue="ALL" style={{ width: 150 }} onChange={setRoleFilter}
           options={[
             { value: 'ALL', label: 'All Roles' },
@@ -236,6 +255,15 @@ export default function UsersPage() {
             { value: 'SUSPENDED', label: 'Suspended' },
           ]}
         />
+
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleDownloadOrgReport}
+          loading={downloadingReport}
+          style={{ marginLeft: 'auto' }}
+        >
+          Performance Report
+        </Button>
       </Flex>
 
       <Table 
@@ -289,6 +317,13 @@ export default function UsersPage() {
           </Button>
         </Flex>
         <Table columns={userDrawerColumns} dataSource={userTeams} rowKey="team_id" pagination={false} size="small" />
+
+        <Divider />
+
+        <Text strong style={{ display: 'block', marginBottom: '12px' }}>Performance Overview</Text>
+        {selectedUser && (
+          <ScoreBreakdown userId={selectedUser.id} basePath="/admin/users" />
+        )}
       </Drawer>
     </div>
   );

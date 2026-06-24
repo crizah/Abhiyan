@@ -80,6 +80,9 @@ func main() {
 	onionApp.Register("poll_pending_transcriptions", tasks.NewPollPendingTranscriptionsTask(queries, onionApp))
 	onionApp.Register("transcribe_audio", tasks.NewTranscribeAudioTask(queries, s3Service, whisperService))
 
+	// register missed deadline poller
+	onionApp.Register("poll_missed_deadlines", tasks.NewPollMissedDeadlinesTask(queries))
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
@@ -89,6 +92,7 @@ func main() {
 			"poll_due_reminders":           "polling",
 			"poll_pending_transcriptions":  "polling",
 			"transcribe_audio":            "default",
+			"poll_missed_deadlines":       "polling",
 		},
 	})
 
@@ -101,6 +105,11 @@ func main() {
 	err = onionApp.Schedule("system_transcription_tick", "poll_pending_transcriptions", "@every 30s", nil)
 	if err != nil {
 		log.Fatalf("failed to schedule transcription tick: %v", err)
+	}
+
+	err = onionApp.Schedule("system_missed_deadline_tick", "poll_missed_deadlines", "@every 5m", nil)
+	if err != nil {
+		log.Fatalf("failed to schedule missed deadline tick: %v", err)
 	}
 
 	// 4. Start Worker

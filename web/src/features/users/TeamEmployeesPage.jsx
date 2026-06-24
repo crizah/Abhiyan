@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Input, Select, Space, Typography, Tag, Avatar, Dropdown, Flex, message, ConfigProvider, Drawer } from 'antd';
-import { UserOutlined, SearchOutlined, MoreOutlined, EditOutlined } from '@ant-design/icons';
+import { UserOutlined, SearchOutlined, MoreOutlined, EditOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
+import ScoreBreakdown from '../../components/ScoreBreakdown';
 
 const { Title, Text } = Typography;
 
@@ -42,6 +43,7 @@ export default function TeamEmployeesPage() {
   // Drawer State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
 
   useEffect(() => {
     fetchTeamOptions();
@@ -96,16 +98,37 @@ export default function TeamEmployeesPage() {
     setIsDrawerOpen(true);
   };
 
+  const handleDownloadAllReports = async () => {
+    setDownloadingReport(true);
+    try {
+      const params = teamFilter !== 'ALL' ? { team: teamFilter } : {};
+      const res = await apiClient.get('/admin/reports/score-download', {
+        params,
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'performance_report.csv';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error('Failed to download report');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   const getActionMenu = (record) => (
     <div style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px' }}>
-      <div 
+      <div
         onClick={() => handleManageAccess(record)}
         style={{ padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '4px' }}
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
       >
-        <EditOutlined style={{ color: '#fa8c16' }} />
-        <Text>Manage Access</Text>
+        <BarChartOutlined style={{ color: '#fa8c16' }} />
+        <Text>View Performance</Text>
       </div>
     </div>
   );
@@ -172,11 +195,11 @@ export default function TeamEmployeesPage() {
         Employees
       </Title>
 
-      <Flex gap="small" wrap="wrap" style={{ marginBottom: '24px' }}>
+      <Flex gap="small" wrap="wrap" style={{ marginBottom: '24px' }} align="center">
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#fa8c16', hoverBorderColor: '#fa8c16' } } }}>
-          <Input 
-            placeholder="Search by name or email..." 
-            prefix={<SearchOutlined />} 
+          <Input
+            placeholder="Search by name or email..."
+            prefix={<SearchOutlined />}
             style={{ width: isMobile ? '100%' : '300px' }}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -200,9 +223,9 @@ export default function TeamEmployeesPage() {
           ]}
         />
 
-        <Select 
-          value={statusFilter} 
-          style={{ width: isMobile ? '100%' : 150 }} 
+        <Select
+          value={statusFilter}
+          style={{ width: isMobile ? '100%' : 150 }}
           onChange={setStatusFilter}
           options={[
             { value: 'ALL', label: 'All Statuses' },
@@ -211,6 +234,15 @@ export default function TeamEmployeesPage() {
             { value: 'SUSPENDED', label: 'Suspended' },
           ]}
         />
+
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleDownloadAllReports}
+          loading={downloadingReport}
+          style={{ marginLeft: 'auto' }}
+        >
+          {!isMobile && 'Performance Report'}
+        </Button>
       </Flex>
 
       <div style={{ overflow: 'hidden' }}>
@@ -235,14 +267,16 @@ export default function TeamEmployeesPage() {
 
       {/* DRAWER: Manage Access */}
       <Drawer
-        title={selectedUser ? `Manage Access: ${selectedUser.full_name}` : 'Manage Access'}
+        title={selectedUser ? `Performance: ${selectedUser.full_name}` : 'Performance'}
         placement="right"
         width={drawerWidth}
         onClose={() => setIsDrawerOpen(false)}
         open={isDrawerOpen}
         styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
       >
-        <Text>Manage access options for {selectedUser?.full_name} will go here.</Text>
+        {selectedUser && (
+          <ScoreBreakdown userId={selectedUser.id} basePath="/admin/employees" />
+        )}
       </Drawer>
     </div>
   );

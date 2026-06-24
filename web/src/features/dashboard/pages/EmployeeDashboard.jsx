@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Spin, message, theme, Flex } from 'antd';
 import { TeamOutlined, ApartmentOutlined, UserOutlined } from '@ant-design/icons';
-import { useAuth } from '../../../context/AuthContext'; // Adjust path if needed
+import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
+import Leaderboard from '../../../components/Leaderboard';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -12,6 +13,9 @@ export default function EmployeeDashboard() {
   
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -27,6 +31,22 @@ export default function EmployeeDashboard() {
 
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      setLeaderboardLoading(true);
+      try {
+        const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
+        const res = await apiClient.get('/leaderboard', { params });
+        setLeaderboardData(res.data.entries || []);
+      } catch {
+        // Leaderboard may not be enabled — silently handle
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, [leaderboardTeamFilter]);
 
   return (
     <div>
@@ -105,6 +125,23 @@ export default function EmployeeDashboard() {
                 </div>
               )}
             </div>
+
+            {/* Leaderboard Section — only shown if data is available */}
+            {(leaderboardData.length > 0 || leaderboardLoading) && (
+              <div style={{ marginTop: '48px' }}>
+                <Leaderboard
+                  entries={leaderboardData}
+                  loading={leaderboardLoading}
+                  currentUserId={user?.user_id}
+                  teamOptions={teams
+                    .filter(t => t.role !== 'TEAM_ADMIN')
+                    .map(t => ({ value: t.id, label: t.name }))}
+                  onTeamFilterChange={setLeaderboardTeamFilter}
+                  teamFilter={leaderboardTeamFilter}
+                  showVisibilityToggle={false}
+                />
+              </div>
+            )}
           </>
         )}
       </div>

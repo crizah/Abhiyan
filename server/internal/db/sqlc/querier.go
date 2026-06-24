@@ -41,18 +41,24 @@ type Querier interface {
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error)
+	GetAggregatedLeaderboard(ctx context.Context, dollar_1 []uuid.UUID) ([]GetAggregatedLeaderboardRow, error)
 	GetAssignedOrgUsers(ctx context.Context, arg GetAssignedOrgUsersParams) ([]GetAssignedOrgUsersRow, error)
+	GetBulkUserScoreBreakdowns(ctx context.Context, dollar_1 []uuid.UUID) ([]GetBulkUserScoreBreakdownsRow, error)
 	GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, error)
 	GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error)
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
 	GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error)
 	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
+	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
+	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
+	GetMissedDeadlineCandidates(ctx context.Context) ([]GetMissedDeadlineCandidatesRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetPendingTranscriptions(ctx context.Context) ([]GetPendingTranscriptionsRow, error)
 	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
 	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error)
+	GetTaskAssigneesWithContext(ctx context.Context, taskID uuid.UUID) ([]GetTaskAssigneesWithContextRow, error)
 	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
@@ -65,6 +71,7 @@ type Querier interface {
 	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
 	GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
+	GetTeamLeaderboard(ctx context.Context, teamID uuid.UUID) ([]GetTeamLeaderboardRow, error)
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
@@ -77,6 +84,9 @@ type Querier interface {
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
+	GetUserScoreBreakdown(ctx context.Context, arg GetUserScoreBreakdownParams) (GetUserScoreBreakdownRow, error)
+	GetUserScoreEvents(ctx context.Context, arg GetUserScoreEventsParams) ([]GetUserScoreEventsRow, error)
+	GetUserScoreReportData(ctx context.Context, userID uuid.UUID) ([]GetUserScoreReportDataRow, error)
 	GetUserStatus(ctx context.Context, id uuid.UUID) (NullUserStatus, error)
 	// NEW: Fetches all roles assigned to a user
 	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
@@ -85,6 +95,7 @@ type Querier interface {
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
 	InsertAttachment(ctx context.Context, arg InsertAttachmentParams) (uuid.UUID, error)
+	InsertScoreEvent(ctx context.Context, arg InsertScoreEventParams) (EmployeeScore, error)
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
@@ -96,6 +107,7 @@ type Querier interface {
 	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
+	SupersedeScoreEvents(ctx context.Context, arg SupersedeScoreEventsParams) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error
@@ -103,6 +115,7 @@ type Querier interface {
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
+	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }
 

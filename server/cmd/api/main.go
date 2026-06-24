@@ -65,7 +65,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize AWS S3 service: %v", err)
 	}
-	taskService := services.NewTaskService(dbConn, onionApp, s3Service)
+	scoreService := services.NewScoreService(dbConn)
+	taskService := services.NewTaskService(dbConn, onionApp, s3Service, scoreService)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -74,6 +75,7 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	uploadHandler := handlers.NewUploadHandler(s3Service)
+	scoreHandler := handlers.NewScoreHandler(scoreService, adminService)
 
 	// 3. Setup Gin Router
 	r := gin.Default()
@@ -122,6 +124,7 @@ func main() {
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
+			general.GET("/leaderboard", scoreHandler.GetEmployeeLeaderboard)
 		}
 
 		// ADMIN DOMAIN
@@ -144,6 +147,9 @@ func main() {
 			superAdminGroup.POST("/teams/transfer", adminHandler.TransferTeamMember)
 			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers) // needs to be paginated
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
+			superAdminGroup.GET("/users/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
+			superAdminGroup.GET("/leaderboard", scoreHandler.GetAdminLeaderboard)
+			superAdminGroup.GET("/reports/score-download", scoreHandler.DownloadScoreReport)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---
@@ -174,6 +180,11 @@ func main() {
 
 			teamAdminGroup.PUT("/tasks/:task_id/approve", taskHandler.ApproveTask)
 			teamAdminGroup.PUT("/tasks/:task_id/action/:action", taskHandler.ActionTask) // reject or reopen
+
+			teamAdminGroup.GET("/employees/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
+			teamAdminGroup.GET("/leaderboard", scoreHandler.GetAdminLeaderboard)
+			teamAdminGroup.PUT("/teams/:team_id/leaderboard-visibility", scoreHandler.ToggleLeaderboardVisibility)
+			teamAdminGroup.GET("/reports/score-download", scoreHandler.DownloadScoreReport)
 		}
 
 		users := v1.Group("/users")

@@ -16,18 +16,20 @@ import (
 )
 
 type TaskService struct {
-	db        *sql.DB
-	queries   *db.Queries
-	onionApp  *app.App
-	s3Service *S3Service
+	db           *sql.DB
+	queries      *db.Queries
+	onionApp     *app.App
+	s3Service    *S3Service
+	scoreService *ScoreService
 }
 
-func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service) *TaskService {
+func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service, sc *ScoreService) *TaskService {
 	return &TaskService{
-		db:        dbConn,
-		queries:   db.New(dbConn),
-		onionApp:  o,
-		s3Service: s3,
+		db:           dbConn,
+		queries:      db.New(dbConn),
+		onionApp:     o,
+		s3Service:    s3,
+		scoreService: sc,
 	}
 }
 
@@ -931,7 +933,8 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 		return err
 	}
 
-	// 1. Just delete the reminders directly from the DB
+	_ = s.scoreService.RecordApprovalTx(ctx, qtx, tID, time.Now())
+
 	_ = qtx.DeleteTaskReminders(ctx, tID)
 
 	_, _ = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
@@ -976,6 +979,12 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	}
 	if err != nil {
 		return err
+	}
+
+	if action == "REJECT" {
+		_ = s.scoreService.RecordRejectionTx(ctx, qtx, tID)
+	} else {
+		_ = s.scoreService.RecordReopenTx(ctx, qtx, tID)
 	}
 
 	if strings.TrimSpace(req.Note) != "" {

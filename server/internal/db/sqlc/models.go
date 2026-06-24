@@ -185,6 +185,50 @@ func (ns NullReminderStatus) Value() (driver.Value, error) {
 	return string(ns.ReminderStatus), nil
 }
 
+type ScoreEventType string
+
+const (
+	ScoreEventTypeONTIMECOMPLETION ScoreEventType = "ON_TIME_COMPLETION"
+	ScoreEventTypeLATECOMPLETION   ScoreEventType = "LATE_COMPLETION"
+	ScoreEventTypeMISSEDDEADLINE   ScoreEventType = "MISSED_DEADLINE"
+	ScoreEventTypeREJECTION        ScoreEventType = "REJECTION"
+)
+
+func (e *ScoreEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ScoreEventType(s)
+	case string:
+		*e = ScoreEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ScoreEventType: %T", src)
+	}
+	return nil
+}
+
+type NullScoreEventType struct {
+	ScoreEventType ScoreEventType `json:"score_event_type"`
+	Valid          bool           `json:"valid"` // Valid is true if ScoreEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullScoreEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ScoreEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ScoreEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullScoreEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ScoreEventType), nil
+}
+
 type SystemRole string
 
 const (
@@ -497,6 +541,20 @@ type Attachment struct {
 	CreatedAt     sql.NullTime  `json:"created_at"`
 }
 
+type EmployeeScore struct {
+	ID              uuid.UUID      `json:"id"`
+	TaskID          uuid.UUID      `json:"task_id"`
+	UserID          uuid.UUID      `json:"user_id"`
+	TeamID          uuid.UUID      `json:"team_id"`
+	OrgID           uuid.UUID      `json:"org_id"`
+	EventType       ScoreEventType `json:"event_type"`
+	PointsAwarded   int32          `json:"points_awarded"`
+	DueDateSnapshot sql.NullTime   `json:"due_date_snapshot"`
+	EventAt         time.Time      `json:"event_at"`
+	Superseded      bool           `json:"superseded"`
+	CreatedAt       sql.NullTime   `json:"created_at"`
+}
+
 type Notification struct {
 	ID        uuid.UUID    `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
@@ -565,6 +623,13 @@ type Team struct {
 	OrgID     uuid.UUID    `json:"org_id"`
 	Name      string       `json:"name"`
 	CreatedAt sql.NullTime `json:"created_at"`
+}
+
+type TeamLeaderboardSetting struct {
+	TeamID             uuid.UUID     `json:"team_id"`
+	LeaderboardVisible bool          `json:"leaderboard_visible"`
+	UpdatedBy          uuid.NullUUID `json:"updated_by"`
+	UpdatedAt          sql.NullTime  `json:"updated_at"`
 }
 
 type TeamMember struct {

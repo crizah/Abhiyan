@@ -21,11 +21,18 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetTeamTasks :many
-SELECT t.*, u.first_name, u.last_name 
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-WHERE t.team_id = $1
-ORDER BY t.created_at DESC;
+WITH base AS (
+    SELECT t.id, t.team_id, t.title, t.description, t.status,
+           t.fulfillment_status, t.review_status, t.created_by,
+           t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    WHERE t.team_id = $1
+)
+SELECT *, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: UpdateTaskFulfillment :exec
 UPDATE tasks 
@@ -54,11 +61,14 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetTaskUpdates :many
-SELECT tu.*, u.first_name, u.last_name
+SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at,
+       u.first_name, u.last_name,
+       (SELECT COUNT(*) FROM task_update_comments c WHERE c.task_update_id = tu.id) AS comment_count
 FROM task_updates tu
 JOIN users u ON tu.user_id = u.id
 WHERE tu.task_id = $1
-ORDER BY tu.created_at ASC;
+ORDER BY tu.created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: CreateReminder :one
 INSERT INTO reminders (task_id, scheduled_at, channel, recurrence_value, recurrence_unit, is_system_spawned)
@@ -79,17 +89,22 @@ DELETE FROM task_participants WHERE task_id = $1;
 DELETE FROM reminders WHERE task_id = $1;
 
 -- name: GetAdminAllTasks :many
-SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-    t.created_by, t.due_date, t.created_at, 
-    u.first_name, u.last_name, 
-    tm.name as team_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN teams tm ON t.team_id = tm.id
-JOIN team_members tmem ON tm.id = tmem.team_id
-WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
-ORDER BY t.created_at DESC;
+WITH base AS (
+    SELECT DISTINCT
+        t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
+        t.created_by, t.due_date, t.created_at,
+        u.first_name, u.last_name,
+        tm.name AS team_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN teams tm ON t.team_id = tm.id
+    JOIN team_members tmem ON tm.id = tmem.team_id
+    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+)
+SELECT *, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: UpdateTaskDeadline :exec
 UPDATE tasks SET due_date = $2 WHERE id = $1;
@@ -99,7 +114,7 @@ INSERT INTO task_update_comments (task_update_id, user_id, content)
 VALUES ($1, $2, $3) RETURNING id;
 
 -- name: GetTaskUpdateComments :many
-SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
        u.first_name, u.last_name
 FROM task_update_comments c
 JOIN task_updates tu ON c.task_update_id = tu.id
@@ -107,17 +122,35 @@ LEFT JOIN users u ON c.user_id = u.id
 WHERE tu.task_id = $1
 ORDER BY c.created_at ASC;
 
+-- name: GetUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
+       u.first_name, u.last_name
+FROM task_update_comments c
+LEFT JOIN users u ON c.user_id = u.id
+WHERE c.task_update_id = $1
+ORDER BY c.created_at ASC
+LIMIT $2 OFFSET $3;
+
 -- name: GetTaskUpdateAuthor :one
 SELECT user_id FROM task_updates WHERE id = $1;
 
 -- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-       t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN task_participants tp ON t.id = tp.task_id
-WHERE t.team_id = $1 AND tp.user_id = $2
-ORDER BY t.created_at DESC;
+WITH distinct_tasks AS (
+    SELECT DISTINCT 
+        t.id, t.team_id, t.title, t.description, t.status, 
+        t.fulfillment_status, t.review_status, t.created_by, 
+        t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN task_participants tp ON t.id = tp.task_id
+    WHERE t.team_id = $1 AND tp.user_id = $2
+)
+SELECT 
+    *, 
+    COUNT(*) OVER() AS total_count
+FROM distinct_tasks
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4;
 
 -- name: SubmitTaskState :exec
 UPDATE tasks SET fulfillment_status = 'COMPLETED', review_status = 'PENDING' WHERE id = $1;
@@ -159,3 +192,29 @@ WHERE tp.task_id = $1 AND tp.role = 'ASSIGNEE';
 SELECT u.phone_number 
 FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE';
+
+-- name: InsertAttachment :one
+INSERT INTO attachments (
+    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING id;
+
+-- name: GetTaskAttachments :many
+SELECT id, file_name, file_url, file_type, file_size_bytes
+FROM attachments
+WHERE task_id = $1;
+
+-- name: GetTaskUpdateAttachments :many
+SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_update_id = ANY($1::uuid[]);
+
+-- name: DeleteTaskAttachments :exec
+DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;
+
+-- name: DeleteAttachmentsByIDs :many
+DELETE FROM attachments WHERE id = ANY($1::uuid[])
+RETURNING file_url;

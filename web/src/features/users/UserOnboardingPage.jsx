@@ -8,6 +8,7 @@ const { Title, Text, Paragraph } = Typography;
 export default function UserOnboardingPage() {
   const [isInviting, setIsInviting] = useState(false);
   const [unassignedUsers, setUnassignedUsers] = useState([]);
+  const [unassignedTotal, setUnassignedTotal] = useState(0);
   const [loadingQueue, setLoadingQueue] = useState(true);
   const [inviteForm] = Form.useForm();
 
@@ -18,10 +19,12 @@ export default function UserOnboardingPage() {
   const fetchUnassignedQueue = async () => {
     setLoadingQueue(true);
     try {
-      const response = await apiClient.get('/admin/users/unassigned');
-      setUnassignedUsers(response.data || []);
+      const response = await apiClient.get('/admin/users/unassigned', { params: { page: 1, limit: 20 } });
+      setUnassignedUsers(response.data.users || []);
+      setUnassignedTotal(response.data.total_count || 0);
     } catch (error) {
       setUnassignedUsers([]);
+      setUnassignedTotal(0);
     } finally {
       setLoadingQueue(false);
     }
@@ -77,7 +80,7 @@ export default function UserOnboardingPage() {
       <div style={{ width: '350px', borderLeft: '1px solid #f0f0f0', backgroundColor: '#fafafa', padding: '24px', display: 'flex', flexDirection: 'column' }}>
         <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
           <Title level={5} style={{ margin: 0 }}>Unassigned Queue</Title>
-          <Badge count={unassignedUsers.length} style={{ backgroundColor: '#fa8c16' }} />
+          <Badge count={unassignedTotal} style={{ backgroundColor: '#fa8c16' }} />
         </Flex>
         <Text type="secondary" style={{ fontSize: '12px', marginBottom: '16px', display: 'block' }}>
           Users requiring team assignment

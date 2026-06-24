@@ -398,6 +398,50 @@ func (ns NullTeamRoleEnum) Value() (driver.Value, error) {
 	return string(ns.TeamRoleEnum), nil
 }
 
+type TranscriptionStatus string
+
+const (
+	TranscriptionStatusPENDING    TranscriptionStatus = "PENDING"
+	TranscriptionStatusPROCESSING TranscriptionStatus = "PROCESSING"
+	TranscriptionStatusCOMPLETED  TranscriptionStatus = "COMPLETED"
+	TranscriptionStatusFAILED     TranscriptionStatus = "FAILED"
+)
+
+func (e *TranscriptionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TranscriptionStatus(s)
+	case string:
+		*e = TranscriptionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TranscriptionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTranscriptionStatus struct {
+	TranscriptionStatus TranscriptionStatus `json:"transcription_status"`
+	Valid               bool                `json:"valid"` // Valid is true if TranscriptionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTranscriptionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TranscriptionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TranscriptionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTranscriptionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TranscriptionStatus), nil
+}
+
 type UserStatus string
 
 const (
@@ -439,6 +483,18 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.UserStatus), nil
+}
+
+type Attachment struct {
+	ID            uuid.UUID     `json:"id"`
+	TaskID        uuid.NullUUID `json:"task_id"`
+	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+	UploadedBy    uuid.UUID     `json:"uploaded_by"`
+	CreatedAt     sql.NullTime  `json:"created_at"`
 }
 
 type Notification struct {
@@ -518,6 +574,16 @@ type TeamMember struct {
 	JoinedAt sql.NullTime `json:"joined_at"`
 }
 
+type Transcription struct {
+	ID             uuid.UUID               `json:"id"`
+	AttachmentID   uuid.UUID               `json:"attachment_id"`
+	Status         NullTranscriptionStatus `json:"status"`
+	TranscriptText sql.NullString          `json:"transcript_text"`
+	ErrorMessage   sql.NullString          `json:"error_message"`
+	CreatedAt      sql.NullTime            `json:"created_at"`
+	UpdatedAt      sql.NullTime            `json:"updated_at"`
+}
+
 type User struct {
 	ID          uuid.UUID      `json:"id"`
 	OrgID       uuid.UUID      `json:"org_id"`
@@ -525,7 +591,7 @@ type User struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber sql.NullString `json:"phone_number"`
+	PhoneNumber string         `json:"phone_number"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }
 

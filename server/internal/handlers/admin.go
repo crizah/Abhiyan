@@ -122,16 +122,28 @@ func (h *AdminHandler) GetAdminTeamOptions(c *gin.Context) {
 }
 
 func (h *AdminHandler) GetUnassignedUsers(c *gin.Context) {
-	// Super Admins operate at the Org level
 	orgID := c.MustGet("org_id").(string)
 
-	users, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.adminService.GetUnassignedOrgUsers(c.Request.Context(), orgID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch unassigned users"})
 		return
 	}
 
-	c.JSON(http.StatusOK, users)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *AdminHandler) CreateTeam(c *gin.Context) {
@@ -236,12 +248,26 @@ func (h *AdminHandler) TransferTeamMember(c *gin.Context) {
 
 func (h *AdminHandler) GetAssignedUsers(c *gin.Context) {
 	orgID := c.MustGet("org_id").(string)
-	users, err := h.adminService.GetAssignedOrgUsers(c.Request.Context(), orgID)
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.adminService.GetAssignedOrgUsers(c.Request.Context(), orgID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch assigned users"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *AdminHandler) GetUserTeams(c *gin.Context) {

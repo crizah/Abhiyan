@@ -125,19 +125,29 @@ ORDER BY u.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: GetUnassignedOrgUsers :many
-SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
-FROM users u
-LEFT JOIN team_members tm ON u.id = tm.user_id
-WHERE u.org_id = $1 
-  AND tm.team_id IS NULL
-ORDER BY u.created_at DESC;
+WITH base AS (
+    SELECT u.id, u.first_name, u.last_name, u.email_id, u.status, u.created_at
+    FROM users u
+    LEFT JOIN team_members tm ON u.id = tm.user_id
+    WHERE u.org_id = $1
+      AND tm.team_id IS NULL
+)
+SELECT id, first_name, last_name, email_id, status, created_at, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: GetAssignedOrgUsers :many
-SELECT u.id, u.first_name, u.last_name, u.email_id, u.status
-FROM users u
-WHERE u.org_id = $1 
-  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
-ORDER BY u.created_at DESC;
+WITH base AS (
+    SELECT u.id, u.first_name, u.last_name, u.email_id, u.status, u.created_at
+    FROM users u
+    WHERE u.org_id = $1
+      AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+)
+SELECT id, first_name, last_name, email_id, status, created_at, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: DeleteUserSystemRoles :exec
 DELETE FROM user_system_roles WHERE user_id = $1;

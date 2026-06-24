@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/services"
@@ -37,13 +38,26 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 func (h *TaskHandler) GetTeamTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
 
-	tasks, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
@@ -66,13 +80,49 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 func (h *TaskHandler) GetTaskUpdates(c *gin.Context) {
 	taskID := c.Param("task_id")
 
-	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updates"})
 		return
 	}
 
 	c.JSON(http.StatusOK, updates)
+}
+
+func (h *TaskHandler) GetUpdateComments(c *gin.Context) {
+	updateID := c.Param("update_id")
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	comments, err := h.taskService.GetUpdateComments(c.Request.Context(), updateID, int32(limit), int32(offset))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, comments)
 }
 
 func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {
@@ -126,13 +176,14 @@ func (h *TaskHandler) GetFullTaskDetails(c *gin.Context) {
 
 func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 	taskID := c.Param("task_id")
+	userID := c.MustGet("user_id").(string)
 	var req schemas.UpdateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req); err != nil {
+	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 		return
 	}
@@ -142,13 +193,26 @@ func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
 
-	tasks, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	result, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *TaskHandler) ReopenTask(c *gin.Context) {
@@ -212,12 +276,31 @@ func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
 	userID := c.MustGet("user_id").(string)
 
-	tasks, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID)
+	// 1. Parse pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	} // safety cap
+
+	// 2. Calculate offset
+	offset := (page - 1) * limit
+
+	// 3. Call service
+	paginatedResponse, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID, int32(limit), int32(offset))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
-	c.JSON(http.StatusOK, tasks)
+
+	c.JSON(http.StatusOK, paginatedResponse)
 }
 
 func (h *TaskHandler) SubmitTask(c *gin.Context) {
@@ -230,4 +313,14 @@ func (h *TaskHandler) SubmitTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task submitted for review"})
+}
+
+func (h *TaskHandler) GetTranscription(c *gin.Context) {
+	attachmentID := c.Param("attachment_id")
+	result, err := h.taskService.GetTranscription(c.Request.Context(), attachmentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Transcription not found"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }

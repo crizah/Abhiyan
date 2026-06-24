@@ -16,17 +16,76 @@ import (
 )
 
 type TaskService struct {
-	db       *sql.DB
-	queries  *db.Queries
-	onionApp *app.App
+	db        *sql.DB
+	queries   *db.Queries
+	onionApp  *app.App
+	s3Service *S3Service
 }
 
-func NewTaskService(dbConn *sql.DB, o *app.App) *TaskService {
+func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service) *TaskService {
 	return &TaskService{
-		db:       dbConn,
-		queries:  db.New(dbConn),
-		onionApp: o,
+		db:        dbConn,
+		queries:   db.New(dbConn),
+		onionApp:  o,
+		s3Service: s3,
 	}
+}
+
+func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, params db.InsertAttachmentParams) {
+	attID, err := qtx.InsertAttachment(ctx, params)
+	if err != nil {
+		return
+	}
+	if strings.HasPrefix(params.FileType, "audio/") {
+		qtx.InsertTranscription(ctx, attID)
+	}
+}
+
+func (s *TaskService) diffAttachments(
+	ctx context.Context,
+	qtx *db.Queries,
+	taskIDNullable uuid.NullUUID,
+	uploaderID uuid.UUID,
+	incoming []schemas.AttachmentPayload,
+) []string {
+	existing, _ := qtx.GetTaskAttachments(ctx, taskIDNullable)
+
+	incomingIDs := make(map[string]bool)
+	for _, att := range incoming {
+		if att.ID != "" {
+			incomingIDs[att.ID] = true
+		}
+	}
+
+	var toDeleteIDs []uuid.UUID
+	var s3URLsToDelete []string
+	for _, e := range existing {
+		if !incomingIDs[e.ID.String()] {
+			toDeleteIDs = append(toDeleteIDs, e.ID)
+			s3URLsToDelete = append(s3URLsToDelete, e.FileUrl)
+		}
+	}
+
+	if len(toDeleteIDs) > 0 {
+		qtx.DeleteAttachmentsByIDs(ctx, toDeleteIDs)
+	}
+
+	for _, att := range incoming {
+		if att.ID != "" {
+			continue
+		}
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
+			TaskID:        taskIDNullable,
+			TaskUpdateID:  uuid.NullUUID{},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uploaderID,
+		})
+	}
+
+	return s3URLsToDelete
 }
 
 // CalculateNextReminder computes the next trigger date based on custom intervals
@@ -140,6 +199,19 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		}
 	}
 
+	// 5. Insert Attachments
+	for _, att := range req.Attachments {
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{UUID: task.ID, Valid: true},
+			TaskUpdateID:  uuid.NullUUID{},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    aID,
+		})
+	}
+
 	if err := tx.Commit(); err != nil {
 		return db.Task{}, err
 	}
@@ -147,48 +219,56 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	return task, nil
 }
 
-func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string) ([]schemas.TaskResponse, error) {
-	dbTasks, err := s.queries.GetTeamTasks(ctx, util.ParseUUID(teamID))
+func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+	dbTasks, err := s.queries.GetTeamTasks(ctx, db.GetTeamTasksParams{
+		TeamID: util.ParseUUID(teamID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
-		// Safely unwrap nullable dates
 		var dueDate *time.Time
 		if t.DueDate.Valid {
 			dueDate = &t.DueDate.Time
 		}
-
 		var createdAt *time.Time
 		if t.CreatedAt.Valid {
 			createdAt = &t.CreatedAt.Time
 		}
 
-		creatorName := strings.TrimSpace(t.FirstName.String + " " + t.LastName.String)
-
 		tasks = append(tasks, schemas.TaskResponse{
 			ID:                t.ID.String(),
 			TeamID:            t.TeamID.String(),
 			Title:             t.Title,
-			Description:       t.Description.String, // will be "" if not valid
+			Description:       t.Description.String,
 			Status:            string(t.Status.TaskStatus),
 			FulfillmentStatus: string(t.FulfillmentStatus.TaskFulfillmentStatus),
 			ReviewStatus:      string(t.ReviewStatus),
 			CreatedBy:         t.CreatedBy.String(),
-			CreatorName:       creatorName,
+			CreatorName:       strings.TrimSpace(t.FirstName.String + " " + t.LastName.String),
 			DueDate:           dueDate,
 			CreatedAt:         createdAt,
 		})
 	}
 
-	// Prevent returning a null JSON object if the slice is empty
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
 
-	return tasks, nil
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
@@ -263,14 +343,46 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 		rems = []schemas.ReminderResponse{}
 	}
 
+	dbAtts, _ := s.queries.GetTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
+
+	var attIDs []uuid.UUID
+	for _, a := range dbAtts {
+		attIDs = append(attIDs, a.ID)
+	}
+	transcriptions, _ := s.queries.GetTranscriptionsByAttachmentIDs(ctx, attIDs)
+	txMap := make(map[string]db.GetTranscriptionsByAttachmentIDsRow)
+	for _, t := range transcriptions {
+		txMap[t.AttachmentID.String()] = t
+	}
+
+	var atts []schemas.AttachmentPayload
+	for _, a := range dbAtts {
+		att := schemas.AttachmentPayload{
+			ID:       a.ID.String(),
+			FileName: a.FileName,
+			FileURL:  a.FileUrl,
+			FileType: a.FileType,
+			FileSize: a.FileSizeBytes.Int64,
+		}
+		if tx, ok := txMap[a.ID.String()]; ok {
+			att.TranscriptionStatus = string(tx.Status.TranscriptionStatus)
+			att.TranscriptionText = tx.TranscriptText.String
+		}
+		atts = append(atts, att)
+	}
+	if atts == nil {
+		atts = []schemas.AttachmentPayload{}
+	}
+
 	return &schemas.FullTaskDetailsResponse{
 		Participants: parts,
 		Reminders:    rems,
+		Attachments:  atts,
 	}, nil
 
 }
 
-func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest) error {
+func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest, userid string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -338,16 +450,37 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		_, _ = qtx.CreateReminder(ctx, remParams)
 	}
 
-	return tx.Commit()
+	// Diff Task Attachments instead of wiping
+	uID := util.ParseUUID(userid)
+	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if len(s3URLsToDelete) > 0 {
+		go s.s3Service.DeleteObjects(context.Background(), s3URLsToDelete)
+	}
+	return nil
 }
 
-func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]schemas.TaskResponse, error) {
-	dbTasks, err := s.queries.GetAdminAllTasks(ctx, util.ParseUUID(adminID))
+func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+	dbTasks, err := s.queries.GetAdminAllTasks(ctx, db.GetAdminAllTasksParams{
+		UserID: util.ParseUUID(adminID),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
 		var dueDate *time.Time
 		if t.DueDate.Valid {
@@ -361,7 +494,7 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 		tasks = append(tasks, schemas.TaskResponse{
 			ID:                t.ID.String(),
 			TeamID:            t.TeamID.String(),
-			TeamName:          t.TeamName, // Map the team name
+			TeamName:          t.TeamName,
 			Title:             t.Title,
 			Description:       t.Description.String,
 			Status:            string(t.Status.TaskStatus),
@@ -373,10 +506,15 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string) ([]s
 			CreatedAt:         createdAt,
 		})
 	}
+
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
-	return tasks, nil
+
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest) error {
@@ -451,23 +589,78 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	return tx.Commit()
 }
 
-func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]schemas.TaskUpdateResponse, error) {
+func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, offset int32) ([]schemas.TaskUpdateResponse, error) {
 	tID := util.ParseUUID(taskID)
 
-	// 1. Fetch Updates
-	updates, err := s.queries.GetTaskUpdates(ctx, tID)
+	updates, err := s.queries.GetTaskUpdates(ctx, db.GetTaskUpdatesParams{
+		TaskID: tID,
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Fetch all Comments for this entire task
-	dbComments, _ := s.queries.GetTaskUpdateComments(ctx, tID)
+	var updateIDs []uuid.UUID
+	for _, u := range updates {
+		updateIDs = append(updateIDs, u.ID)
+	}
 
-	// Group comments by their parent Update ID
-	commentsMap := make(map[string][]schemas.TaskUpdateCommentResponse)
+	dbUpdateAtts, _ := s.queries.GetTaskUpdateAttachments(ctx, updateIDs)
+	attMap := make(map[string][]schemas.AttachmentPayload)
+	for _, a := range dbUpdateAtts {
+		uIDStr := a.TaskUpdateID.UUID.String()
+		att := schemas.AttachmentPayload{
+			ID:       a.ID.String(),
+			FileName: a.FileName,
+			FileURL:  a.FileUrl,
+			FileType: a.FileType,
+			FileSize: a.FileSizeBytes.Int64,
+		}
+		if a.TranscriptionStatus.Valid {
+			att.TranscriptionStatus = string(a.TranscriptionStatus.TranscriptionStatus)
+			att.TranscriptionText = a.TranscriptText.String
+		}
+		attMap[uIDStr] = append(attMap[uIDStr], att)
+	}
+
+	var mapped []schemas.TaskUpdateResponse
+	for _, u := range updates {
+		uID := u.ID.String()
+		mapped = append(mapped, schemas.TaskUpdateResponse{
+			ID:           uID,
+			TaskID:       u.TaskID.String(),
+			UserID:       u.UserID.UUID.String(),
+			FirstName:    u.FirstName.String,
+			LastName:     u.LastName.String,
+			Content:      u.Content,
+			CreatedAt:    u.CreatedAt.Time.Format(time.RFC3339),
+			CommentCount: u.CommentCount,
+			Attachments:  attMap[uID],
+		})
+	}
+
+	if mapped == nil {
+		mapped = []schemas.TaskUpdateResponse{}
+	}
+	return mapped, nil
+}
+
+func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, limit, offset int32) ([]schemas.TaskUpdateCommentResponse, error) {
+	uID := util.ParseUUID(updateID)
+
+	dbComments, err := s.queries.GetUpdateComments(ctx, db.GetUpdateCommentsParams{
+		TaskUpdateID: uID,
+		Limit:        limit,
+		Offset:       offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var comments []schemas.TaskUpdateCommentResponse
 	for _, c := range dbComments {
-		uID := c.TaskUpdateID.String()
-		commentsMap[uID] = append(commentsMap[uID], schemas.TaskUpdateCommentResponse{
+		comments = append(comments, schemas.TaskUpdateCommentResponse{
 			ID:        c.ID.String(),
 			UserID:    c.UserID.UUID.String(),
 			FirstName: c.FirstName.String,
@@ -477,26 +670,10 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string) ([]sche
 		})
 	}
 
-	// 3. Map together
-	var mapped []schemas.TaskUpdateResponse
-	for _, u := range updates {
-		uID := u.ID.String()
-		mapped = append(mapped, schemas.TaskUpdateResponse{
-			ID:        uID,
-			TaskID:    u.TaskID.String(),
-			UserID:    u.UserID.UUID.String(),
-			FirstName: u.FirstName.String,
-			LastName:  u.LastName.String,
-			Content:   u.Content,
-			CreatedAt: u.CreatedAt.Time.Format(time.RFC3339),
-			Comments:  commentsMap[uID], // Attach comments or nil
-		})
+	if comments == nil {
+		comments = []schemas.TaskUpdateCommentResponse{}
 	}
-
-	if mapped == nil {
-		mapped = []schemas.TaskUpdateResponse{}
-	}
-	return mapped, nil
+	return comments, nil
 }
 func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -510,13 +687,26 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 	uID := util.ParseUUID(userID)
 
 	// 1. Insert Update
-	_, err = qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
+	updateRec, err := qtx.AddTaskUpdate(ctx, db.AddTaskUpdateParams{
 		TaskID:  tID,
 		UserID:  uuid.NullUUID{UUID: uID, Valid: true},
 		Content: req.Content,
 	})
 	if err != nil {
 		return err
+	}
+
+	// update attachments
+	for _, att := range req.Attachments {
+		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{},
+			TaskUpdateID:  uuid.NullUUID{UUID: updateRec.ID, Valid: true},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uID,
+		})
 	}
 
 	// 2. Data for Notifications
@@ -562,6 +752,7 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 
 	return tx.Commit()
 }
+
 func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, req schemas.AddCommentRequest) error { // <-- UPDATED SIGNATURE
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -638,16 +829,24 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 }
 
 // 2. Fetch tasks where the employee is an Assignee or Subscriber
-func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string) ([]schemas.TaskResponse, error) {
+func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
 	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
 		TeamID: util.ParseUUID(teamID),
 		UserID: util.ParseUUID(userID),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	var tasks []schemas.TaskResponse
+	var totalCount int64 = 0
+
+	if len(dbTasks) > 0 {
+		totalCount = dbTasks[0].TotalCount
+	}
+
 	for _, t := range dbTasks {
 		var dueDate *time.Time
 		if t.DueDate.Valid {
@@ -672,10 +871,15 @@ func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userI
 			CreatedAt:         createdAt,
 		})
 	}
+
 	if tasks == nil {
 		tasks = []schemas.TaskResponse{}
 	}
-	return tasks, nil
+
+	return &schemas.PaginatedTaskResponse{
+		TotalCount: totalCount,
+		Tasks:      tasks,
+	}, nil
 }
 
 func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
@@ -805,7 +1009,17 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 		})
 	}
 
-	return tx.Commit()
+	// Diff Task Attachments instead of wiping
+	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if len(s3URLsToDelete) > 0 {
+		go s.s3Service.DeleteObjects(context.Background(), s3URLsToDelete)
+	}
+	return nil
 }
 
 func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
@@ -828,4 +1042,17 @@ func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]sc
 		teams = []schemas.TeamResponse{}
 	}
 	return teams, nil
+}
+
+func (s *TaskService) GetTranscription(ctx context.Context, attachmentID string) (*schemas.TranscriptionResponse, error) {
+	aID := util.ParseUUID(attachmentID)
+	t, err := s.queries.GetTranscriptionByAttachmentID(ctx, aID)
+	if err != nil {
+		return nil, err
+	}
+	return &schemas.TranscriptionResponse{
+		Status:         string(t.Status.TranscriptionStatus),
+		TranscriptText: t.TranscriptText.String,
+		ErrorMessage:   t.ErrorMessage.String,
+	}, nil
 }

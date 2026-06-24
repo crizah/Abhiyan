@@ -64,11 +64,12 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 
 	// 4. Create Super Admin User (Status ACTIVE, Role SUPERADMIN)
 	user, err := qtx.CreateUser(ctx, db.CreateUserParams{
-		OrgID:       org.ID,
-		FirstName:   sql.NullString{String: req.AdminFirstName, Valid: true},
-		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
-		EmailID:     req.AdminEmail,
-		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+		OrgID:     org.ID,
+		FirstName: sql.NullString{String: req.AdminFirstName, Valid: true},
+		LastName:  sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
+		EmailID:   req.AdminEmail,
+		// PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+		PhoneNumber: req.AdminPhone,
 		Status:      db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
 	})
 	if err != nil {
@@ -246,9 +247,10 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 
 	// 4. Update the User profile and flip status to ACTIVE
 	user, err := qtx.UpdateUserOnboarding(ctx, db.UpdateUserOnboardingParams{
-		FirstName:   sql.NullString{String: req.FirstName, Valid: true},
-		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
-		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
+		FirstName: sql.NullString{String: req.FirstName, Valid: true},
+		LastName:  sql.NullString{String: req.LastName, Valid: req.LastName != ""},
+		// PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
+		PhoneNumber: req.Phone,
 		EmailID:     claims.Email, // Extracted safely from the signed JWT, not user input!
 		// status already active here
 	})

@@ -6,7 +6,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +20,7 @@ type Querier interface {
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
+	CompleteTranscription(ctx context.Context, arg CompleteTranscriptionParams) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
@@ -29,16 +29,19 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
+	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
-	GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error)
+	FailTranscription(ctx context.Context, arg FailTranscriptionParams) error
+	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
 	// 1. Identify teams where this user is an admin
 	// 2. Fetch all members attached to those specific teams for aggregate counting
 	GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error)
 	GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error)
-	GetAssignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetAssignedOrgUsersRow, error)
+	GetAssignedOrgUsers(ctx context.Context, arg GetAssignedOrgUsersParams) ([]GetAssignedOrgUsersRow, error)
 	GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, error)
 	GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error)
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
@@ -47,23 +50,29 @@ type Querier interface {
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
+	GetPendingTranscriptions(ctx context.Context) ([]GetPendingTranscriptionsRow, error)
 	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
-	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error)
+	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error)
+	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
 	GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error)
+	GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskUpdateAttachmentsRow, error)
 	GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.NullUUID, error)
 	GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdateCommentsRow, error)
-	GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error)
+	GetTaskUpdates(ctx context.Context, arg GetTaskUpdatesParams) ([]GetTaskUpdatesRow, error)
 	GetTeamAdminCount(ctx context.Context, teamID uuid.UUID) (int64, error)
 	GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmployeesPaginatedParams) ([]GetTeamEmployeesPaginatedRow, error)
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
-	GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error)
+	GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
-	GetUnassignedOrgUsers(ctx context.Context, orgID uuid.UUID) ([]GetUnassignedOrgUsersRow, error)
+	GetTranscriptionByAttachmentID(ctx context.Context, attachmentID uuid.UUID) (GetTranscriptionByAttachmentIDRow, error)
+	GetTranscriptionsByAttachmentIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTranscriptionsByAttachmentIDsRow, error)
+	GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOrgUsersParams) ([]GetUnassignedOrgUsersRow, error)
+	GetUpdateComments(ctx context.Context, arg GetUpdateCommentsParams) ([]GetUpdateCommentsRow, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
@@ -75,6 +84,8 @@ type Querier interface {
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
+	InsertAttachment(ctx context.Context, arg InsertAttachmentParams) (uuid.UUID, error)
+	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
@@ -83,6 +94,7 @@ type Querier interface {
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
 	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
+	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error

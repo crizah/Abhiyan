@@ -34,6 +34,11 @@ type UnassignedUserResponse struct {
 	Status   string `json:"status"`
 }
 
+type PaginatedUnassignedUsersResponse struct {
+	TotalCount int64                    `json:"total_count"`
+	Users      []UnassignedUserResponse `json:"users"`
+}
+
 type TeamResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -68,6 +73,11 @@ type AssignedUserResponse struct {
 	FullName string `json:"full_name"`
 	EmailID  string `json:"email_id"`
 	Status   string `json:"status"`
+}
+
+type PaginatedAssignedUsersResponse struct {
+	TotalCount int64                  `json:"total_count"`
+	Users      []AssignedUserResponse `json:"users"`
 }
 
 type UserTeamResponse struct {

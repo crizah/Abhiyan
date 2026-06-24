@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const addTaskParticipant = `-- name: AddTaskParticipant :exec
@@ -170,6 +171,43 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 	return i, err
 }
 
+const deleteAttachmentsByIDs = `-- name: DeleteAttachmentsByIDs :many
+DELETE FROM attachments WHERE id = ANY($1::uuid[])
+RETURNING file_url
+`
+
+func (q *Queries) DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteAttachmentsByIDs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var file_url string
+		if err := rows.Scan(&file_url); err != nil {
+			return nil, err
+		}
+		items = append(items, file_url)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteTaskAttachments = `-- name: DeleteTaskAttachments :exec
+DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL
+`
+
+func (q *Queries) DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTaskAttachments, taskID)
+	return err
+}
+
 const deleteTaskParticipants = `-- name: DeleteTaskParticipants :exec
 DELETE FROM task_participants WHERE task_id = $1
 `
@@ -189,18 +227,29 @@ func (q *Queries) DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) err
 }
 
 const getAdminAllTasks = `-- name: GetAdminAllTasks :many
-SELECT 
-    t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-    t.created_by, t.due_date, t.created_at, 
-    u.first_name, u.last_name, 
-    tm.name as team_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN teams tm ON t.team_id = tm.id
-JOIN team_members tmem ON tm.id = tmem.team_id
-WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
-ORDER BY t.created_at DESC
+WITH base AS (
+    SELECT DISTINCT
+        t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
+        t.created_by, t.due_date, t.created_at,
+        u.first_name, u.last_name,
+        tm.name AS team_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN teams tm ON t.team_id = tm.id
+    JOIN team_members tmem ON tm.id = tmem.team_id
+    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+)
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, team_name, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
+
+type GetAdminAllTasksParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
 
 type GetAdminAllTasksRow struct {
 	ID                uuid.UUID                 `json:"id"`
@@ -216,10 +265,11 @@ type GetAdminAllTasksRow struct {
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
 	TeamName          string                    `json:"team_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
-func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]GetAdminAllTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, userID)
+func (q *Queries) GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +291,7 @@ func (q *Queries) GetAdminAllTasks(ctx context.Context, userID uuid.UUID) ([]Get
 			&i.FirstName,
 			&i.LastName,
 			&i.TeamName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -304,18 +355,29 @@ func (q *Queries) GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, er
 }
 
 const getEmployeeTasks = `-- name: GetEmployeeTasks :many
-SELECT DISTINCT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status,
-       t.created_by, t.due_date, t.created_at, u.first_name, u.last_name
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-JOIN task_participants tp ON t.id = tp.task_id
-WHERE t.team_id = $1 AND tp.user_id = $2
-ORDER BY t.created_at DESC
+WITH distinct_tasks AS (
+    SELECT DISTINCT 
+        t.id, t.team_id, t.title, t.description, t.status, 
+        t.fulfillment_status, t.review_status, t.created_by, 
+        t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    JOIN task_participants tp ON t.id = tp.task_id
+    WHERE t.team_id = $1 AND tp.user_id = $2
+)
+SELECT 
+    id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, 
+    COUNT(*) OVER() AS total_count
+FROM distinct_tasks
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4
 `
 
 type GetEmployeeTasksParams struct {
 	TeamID uuid.UUID `json:"team_id"`
 	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
 type GetEmployeeTasksRow struct {
@@ -331,10 +393,16 @@ type GetEmployeeTasksRow struct {
 	CreatedAt         sql.NullTime              `json:"created_at"`
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
 func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getEmployeeTasks, arg.TeamID, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, getEmployeeTasks,
+		arg.TeamID,
+		arg.UserID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +423,7 @@ func (q *Queries) GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksPara
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -405,19 +474,62 @@ FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE'
 `
 
-func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error) {
+func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, getTaskAssigneePhones, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []sql.NullString
+	var items []string
 	for rows.Next() {
-		var phone_number sql.NullString
+		var phone_number string
 		if err := rows.Scan(&phone_number); err != nil {
 			return nil, err
 		}
 		items = append(items, phone_number)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskAttachments = `-- name: GetTaskAttachments :many
+SELECT id, file_name, file_url, file_type, file_size_bytes
+FROM attachments
+WHERE task_id = $1
+`
+
+type GetTaskAttachmentsRow struct {
+	ID            uuid.UUID     `json:"id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+}
+
+func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskAttachments, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskAttachmentsRow
+	for rows.Next() {
+		var i GetTaskAttachmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileType,
+			&i.FileSizeBytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -544,6 +656,57 @@ func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Rem
 	return items, nil
 }
 
+const getTaskUpdateAttachments = `-- name: GetTaskUpdateAttachments :many
+SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_update_id = ANY($1::uuid[])
+`
+
+type GetTaskUpdateAttachmentsRow struct {
+	ID                  uuid.UUID               `json:"id"`
+	TaskUpdateID        uuid.NullUUID           `json:"task_update_id"`
+	FileName            string                  `json:"file_name"`
+	FileUrl             string                  `json:"file_url"`
+	FileType            string                  `json:"file_type"`
+	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
+	TranscriptText      sql.NullString          `json:"transcript_text"`
+}
+
+func (q *Queries) GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskUpdateAttachmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdateAttachments, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskUpdateAttachmentsRow
+	for rows.Next() {
+		var i GetTaskUpdateAttachmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskUpdateID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileType,
+			&i.FileSizeBytes,
+			&i.TranscriptionStatus,
+			&i.TranscriptText,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskUpdateAuthor = `-- name: GetTaskUpdateAuthor :one
 SELECT user_id FROM task_updates WHERE id = $1
 `
@@ -556,7 +719,7 @@ func (q *Queries) GetTaskUpdateAuthor(ctx context.Context, id uuid.UUID) (uuid.N
 }
 
 const getTaskUpdateComments = `-- name: GetTaskUpdateComments :many
-SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at, 
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
        u.first_name, u.last_name
 FROM task_update_comments c
 JOIN task_updates tu ON c.task_update_id = tu.id
@@ -607,25 +770,35 @@ func (q *Queries) GetTaskUpdateComments(ctx context.Context, taskID uuid.UUID) (
 }
 
 const getTaskUpdates = `-- name: GetTaskUpdates :many
-SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at, u.first_name, u.last_name
+SELECT tu.id, tu.task_id, tu.user_id, tu.content, tu.created_at,
+       u.first_name, u.last_name,
+       (SELECT COUNT(*) FROM task_update_comments c WHERE c.task_update_id = tu.id) AS comment_count
 FROM task_updates tu
 JOIN users u ON tu.user_id = u.id
 WHERE tu.task_id = $1
-ORDER BY tu.created_at ASC
+ORDER BY tu.created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type GetTaskUpdatesRow struct {
-	ID        uuid.UUID      `json:"id"`
-	TaskID    uuid.UUID      `json:"task_id"`
-	UserID    uuid.NullUUID  `json:"user_id"`
-	Content   string         `json:"content"`
-	CreatedAt sql.NullTime   `json:"created_at"`
-	FirstName sql.NullString `json:"first_name"`
-	LastName  sql.NullString `json:"last_name"`
+type GetTaskUpdatesParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
-func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTaskUpdatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTaskUpdates, taskID)
+type GetTaskUpdatesRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskID       uuid.UUID      `json:"task_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+	CommentCount int64          `json:"comment_count"`
+}
+
+func (q *Queries) GetTaskUpdates(ctx context.Context, arg GetTaskUpdatesParams) ([]GetTaskUpdatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskUpdates, arg.TaskID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -641,6 +814,7 @@ func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTa
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.CommentCount,
 		); err != nil {
 			return nil, err
 		}
@@ -656,12 +830,25 @@ func (q *Queries) GetTaskUpdates(ctx context.Context, taskID uuid.UUID) ([]GetTa
 }
 
 const getTeamTasks = `-- name: GetTeamTasks :many
-SELECT t.id, t.team_id, t.title, t.description, t.status, t.fulfillment_status, t.review_status, t.created_by, t.due_date, t.created_at, u.first_name, u.last_name 
-FROM tasks t
-JOIN users u ON t.created_by = u.id
-WHERE t.team_id = $1
-ORDER BY t.created_at DESC
+WITH base AS (
+    SELECT t.id, t.team_id, t.title, t.description, t.status,
+           t.fulfillment_status, t.review_status, t.created_by,
+           t.due_date, t.created_at, u.first_name, u.last_name
+    FROM tasks t
+    JOIN users u ON t.created_by = u.id
+    WHERE t.team_id = $1
+)
+SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, COUNT(*) OVER() AS total_count
+FROM base
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
+
+type GetTeamTasksParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
 
 type GetTeamTasksRow struct {
 	ID                uuid.UUID                 `json:"id"`
@@ -676,10 +863,11 @@ type GetTeamTasksRow struct {
 	CreatedAt         sql.NullTime              `json:"created_at"`
 	FirstName         sql.NullString            `json:"first_name"`
 	LastName          sql.NullString            `json:"last_name"`
+	TotalCount        int64                     `json:"total_count"`
 }
 
-func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeamTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTeamTasks, teamID)
+func (q *Queries) GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamTasks, arg.TeamID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -700,6 +888,7 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 			&i.CreatedAt,
 			&i.FirstName,
 			&i.LastName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -712,6 +901,96 @@ func (q *Queries) GetTeamTasks(ctx context.Context, teamID uuid.UUID) ([]GetTeam
 		return nil, err
 	}
 	return items, nil
+}
+
+const getUpdateComments = `-- name: GetUpdateComments :many
+SELECT c.id, c.task_update_id, c.user_id, c.content, c.created_at,
+       u.first_name, u.last_name
+FROM task_update_comments c
+LEFT JOIN users u ON c.user_id = u.id
+WHERE c.task_update_id = $1
+ORDER BY c.created_at ASC
+LIMIT $2 OFFSET $3
+`
+
+type GetUpdateCommentsParams struct {
+	TaskUpdateID uuid.UUID `json:"task_update_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+}
+
+type GetUpdateCommentsRow struct {
+	ID           uuid.UUID      `json:"id"`
+	TaskUpdateID uuid.UUID      `json:"task_update_id"`
+	UserID       uuid.NullUUID  `json:"user_id"`
+	Content      string         `json:"content"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	FirstName    sql.NullString `json:"first_name"`
+	LastName     sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetUpdateComments(ctx context.Context, arg GetUpdateCommentsParams) ([]GetUpdateCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUpdateComments, arg.TaskUpdateID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUpdateCommentsRow
+	for rows.Next() {
+		var i GetUpdateCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskUpdateID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertAttachment = `-- name: InsertAttachment :one
+INSERT INTO attachments (
+    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING id
+`
+
+type InsertAttachmentParams struct {
+	TaskID        uuid.NullUUID `json:"task_id"`
+	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	FileName      string        `json:"file_name"`
+	FileUrl       string        `json:"file_url"`
+	FileType      string        `json:"file_type"`
+	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+	UploadedBy    uuid.UUID     `json:"uploaded_by"`
+}
+
+func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertAttachment,
+		arg.TaskID,
+		arg.TaskUpdateID,
+		arg.FileName,
+		arg.FileUrl,
+		arg.FileType,
+		arg.FileSizeBytes,
+		arg.UploadedBy,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listTasksByTeam = `-- name: ListTasksByTeam :many

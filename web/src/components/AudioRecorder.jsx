@@ -1,22 +1,42 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button, Space, Typography, Badge, message } from 'antd';
-import { AudioOutlined, DeleteOutlined, SendOutlined, StopOutlined } from '@ant-design/icons';
+import { 
+  AudioOutlined, 
+  DeleteOutlined, 
+  SendOutlined, 
+  StopOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined 
+} from '@ant-design/icons';
 import { uploadFileToS3 } from '../utils/S3Upload';
 
 const { Text } = Typography;
 
 export const AudioRecorder = ({ onUploadSuccess }) => {
   const [recording, setRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null); // Stores the finished audio for review
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null); // FIX 1: Safely store the URL
   const [uploading, setUploading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); 
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null); 
+  const audioPlayerRef = useRef(null);
+
+  // Cleanup to prevent memory leaks when destroying the blob URL
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
 
   const startRecording = async () => {
     audioChunksRef.current = [];
     setAudioBlob(null); 
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setIsPlaying(false);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -29,11 +49,14 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
       };
 
       mediaRecorder.onstop = () => {
-        // Create the audio file but DO NOT upload it yet. Save it to state for review.
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
+        // FIX 2: Let the browser use its native format to prevent Safari/iOS failures
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const url = URL.createObjectURL(blob);
         
-        // Kill the microphone light/stream
+        setAudioBlob(blob);
+        setAudioUrl(url); // Set it once, so React doesn't regenerate it on every click
+        
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
         }
@@ -55,7 +78,10 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
   };
 
   const handleDiscard = () => {
-    setAudioBlob(null); // Trashes the recording and returns to the initial state
+    setAudioBlob(null); 
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setIsPlaying(false);
     audioChunksRef.current = [];
   };
 
@@ -63,7 +89,9 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
     if (!audioBlob) return;
     setUploading(true);
     
-    const voiceFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' });
+    // Ensure the file extension matches what the browser actually recorded
+    const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
+    const voiceFile = new File([audioBlob], `voice-note-${Date.now()}.${extension}`, { type: audioBlob.type });
     
     try {
       const s3Data = await uploadFileToS3(voiceFile);
@@ -74,7 +102,7 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
         url: s3Data.file_url,
         s3Data: s3Data
       });
-      setAudioBlob(null); 
+      handleDiscard(); // Wipe everything clean on success
     } catch (err) {
       message.error("Failed to upload voice note.");
     } finally {
@@ -82,10 +110,20 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
     }
   };
 
+  const togglePlayback = () => {
+    if (!audioPlayerRef.current) return;
+    
+    if (isPlaying) {
+      audioPlayerRef.current.pause();
+    } else {
+      audioPlayerRef.current.play().catch(e => console.error("Playback error:", e));
+    }
+    setIsPlaying(!isPlaying);
+  };
+
   return (
     <Space style={{ padding: '4px 0' }}>
-      {!audioBlob ? (
-        /* STATE 1: Ready to Record or Actively Recording */
+      {!audioUrl ? (
         recording ? (
           <Button type="primary" danger icon={<StopOutlined />} onClick={stopRecording}>
             Stop Recording
@@ -96,27 +134,39 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
           </Button>
         )
       ) : (
-        /* STATE 2: Review UI (Listen back, Discard, or Send) */
-        <Space align="center" style={{ background: '#f5f5f5', padding: '8px', borderRadius: '8px' }}>
+        <Space align="center" style={{ background: '#f5f5f5', padding: '8px 12px', borderRadius: '32px' }}>
+          
           <audio 
-            src={URL.createObjectURL(audioBlob)} 
-            controls 
-            style={{ height: '40px', width: '250px' }} 
+            ref={audioPlayerRef}
+            src={audioUrl} // FIX 3: Using the stable URL from state
+            onEnded={() => setIsPlaying(false)} 
           />
+
           <Button 
+            type="primary" 
+            shape="circle" 
+            icon={isPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />} 
+            onClick={togglePlayback}
+          />
+          
+          <Text style={{ margin: '0 8px', color: '#555' }}>Voice Note Recorded</Text>
+
+          <Button 
+            type="text"
             danger 
             icon={<DeleteOutlined />} 
             onClick={handleDiscard} 
             disabled={uploading}
-            title="Discard Voice Note"
+            title="Discard"
           />
           <Button 
             type="primary" 
+            shape="round"
             icon={<SendOutlined />} 
             onClick={handleSend} 
             loading={uploading}
           >
-            {uploading ? 'Sending...' : 'Send'}
+            {uploading ? 'Sending' : 'Send'}
           </Button>
         </Space>
       )}

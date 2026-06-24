@@ -57,7 +57,7 @@ function CommentInput({ updateId, onSubmit, disabled, mentionOptions }) {
   );
 }
 
-function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge }) {
+function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge, deleteUnsavedS3File }) {
   const [text, setText] = useState(''); 
 
   const handleUpdateClick = () => {
@@ -71,7 +71,7 @@ function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, menti
       {drawerFileList.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           {drawerFileList.map(f => (
-            <Tag closable onClose={() => setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid))} key={f.uid}>
+            <Tag closable onClose={() => { deleteUnsavedS3File(f); setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid)); }} key={f.uid}>
               {f.name}
             </Tag>
           ))}
@@ -135,6 +135,8 @@ export default function TeamTasksPage() {
   const COMMENT_LIMIT = 20;
 
   const [expandedComments, setExpandedComments] = useState({});
+  const [editDirty, setEditDirty] = useState(false);
+  const editSnapshotRef = useRef(null);
   const updatesContainerRef = useRef(null);
 
   // Memoize team members to prevent Mentions array recreation on every keystroke
@@ -225,6 +227,16 @@ export default function TeamTasksPage() {
 
   const getS3Attachments = (list) => list.filter(f => f.status === 'done' && f.s3Data).map(f => f.s3Data);
 
+  const deleteUnsavedS3File = (file) => {
+    if (file?.s3Data?.file_url && !file.s3Data.id) {
+      apiClient.delete('/upload/s3-object', { data: { file_url: file.s3Data.file_url } }).catch(() => {});
+    }
+  };
+
+  const purgeUnsavedFiles = (fileList) => {
+    fileList.filter(f => f.s3Data?.file_url && !f.s3Data?.id).forEach(deleteUnsavedS3File);
+  };
+
   const handleCreateTask = async (values) => {
     try {
       const payload = {
@@ -247,6 +259,18 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to create task"); }
   };
 
+  const snapshotEditState = (formValues, fileList) => JSON.stringify({
+    ...formValues,
+    due_date: formValues.due_date ? formValues.due_date.toISOString() : null,
+    reminders: (formValues.reminders || []).map(r => ({ ...r, scheduled_at: r.scheduled_at?.toISOString() })),
+    attachmentUIDs: fileList.map(f => f.uid).sort()
+  });
+
+  const checkEditDirty = (currentValues, currentFileList) => {
+    const current = snapshotEditState(currentValues || editForm.getFieldsValue(), currentFileList || editFileList);
+    setEditDirty(current !== editSnapshotRef.current);
+  };
+
   const openEditModal = () => {
     editForm.setFieldsValue({
       title: selectedTask.title, description: selectedTask.description,
@@ -258,10 +282,13 @@ export default function TeamTasksPage() {
         recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
       }))
     });
-    setEditFileList((taskDetails?.attachments || []).map(att => ({
-      uid: att.file_url, name: att.file_name, status: 'done', url: att.file_url,
-      s3Data: { file_name: att.file_name, file_url: att.file_url, file_type: att.file_type, file_size: att.file_size }
-    })));
+    const initialFileList = (taskDetails?.attachments || []).map(att => ({
+      uid: att.id || att.file_url, name: att.file_name, status: 'done', url: att.file_url,
+      s3Data: { id: att.id, file_name: att.file_name, file_url: att.file_url, file_type: att.file_type, file_size: att.file_size }
+    }));
+    setEditFileList(initialFileList);
+    setEditDirty(false);
+    setTimeout(() => { editSnapshotRef.current = snapshotEditState(editForm.getFieldsValue(), initialFileList); }, 0);
     setIsEditModalOpen(true);
   };
 
@@ -294,7 +321,10 @@ export default function TeamTasksPage() {
         recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
       }))
     });
-    setActionFileList([]);
+    setActionFileList((taskDetails?.attachments || []).map(att => ({
+      uid: att.id || att.file_url, name: att.file_name, status: 'done', url: att.file_url,
+      s3Data: { id: att.id, file_name: att.file_name, file_url: att.file_url, file_type: att.file_type, file_size: att.file_size }
+    })));
     setIsActionModalOpen(true);
   };
 
@@ -478,13 +508,13 @@ export default function TeamTasksPage() {
       </Card>
 
       {/* CREATE MODAL */}
-      <Modal destroyOnClose title="Assign New Task" open={isCreateModalOpen} onCancel={() => setIsCreateModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => form.submit()}>Create Task</Button>]}>
+      <Modal destroyOnClose title="Assign New Task" open={isCreateModalOpen} onCancel={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }} width={700} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => form.submit()}>Create Task</Button>]}>
         <Form form={form} layout="vertical" onFinish={handleCreateTask}>
           <Form.Item name="title" label="Task Title" rules={[{ required: true }]}><Input size="large" /></Form.Item>
           <Form.Item name="description" label="Description"><TextArea rows={3} /></Form.Item>
-          
+
           <Form.Item label="Attachments">
-            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setCreateFileList)} fileList={createFileList} onChange={({fileList}) => setCreateFileList(fileList)} multiple>
+            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setCreateFileList)} fileList={createFileList} onRemove={deleteUnsavedS3File} onChange={({fileList}) => setCreateFileList(fileList)} multiple>
               <Button icon={<PaperClipOutlined />}>Upload Files</Button>
             </Upload>
             <Divider style={{ margin: '8px 0' }} />
@@ -519,17 +549,17 @@ export default function TeamTasksPage() {
       </Modal>
 
       {/* EDIT MODAL */}
-      <Modal destroyOnClose title="Edit Task Details" open={isEditModalOpen} onCancel={() => setIsEditModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => editForm.submit()}>Save Changes</Button>]}>
-        <Form form={editForm} layout="vertical" onFinish={handleEditTask}>
+      <Modal destroyOnClose title="Edit Task Details" open={isEditModalOpen} onCancel={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }} width={700} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" disabled={!editDirty} onClick={() => editForm.submit()}>Save Changes</Button>]}>
+        <Form form={editForm} layout="vertical" onFinish={handleEditTask} onValuesChange={() => checkEditDirty()}>
           <Form.Item name="title" label="Task Title" rules={[{ required: true }]}><Input size="large" /></Form.Item>
           <Form.Item name="description" label="Description"><TextArea rows={3} /></Form.Item>
-          
+
           <Form.Item label="Task Attachments">
-            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setEditFileList)} fileList={editFileList} onChange={({fileList}) => setEditFileList(fileList)} multiple>
+            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setEditFileList)} fileList={editFileList} onRemove={deleteUnsavedS3File} onChange={({fileList}) => { setEditFileList(fileList); checkEditDirty(null, fileList); }} multiple>
               <Button icon={<PaperClipOutlined />}>Add Files</Button>
             </Upload>
             <Divider style={{ margin: '8px 0' }} />
-            <AudioRecorder onUploadSuccess={(fileObj) => setEditFileList(prev => [...prev, fileObj])} />
+            <AudioRecorder onUploadSuccess={(fileObj) => setEditFileList(prev => { const next = [...prev, fileObj]; checkEditDirty(null, next); return next; })} />
           </Form.Item>
 
           <Flex gap="middle">
@@ -560,12 +590,12 @@ export default function TeamTasksPage() {
       </Modal>
 
       {/* ACTION MODAL (Reopen / Reject) */}
-      <Modal destroyOnClose title={selectedTask?.status === 'CLOSED' ? "Reopen Task" : "Reject Task"} open={isActionModalOpen} onCancel={() => setIsActionModalOpen(false)} width={700} footer={[<Button key="back" onClick={() => setIsActionModalOpen(false)}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => actionForm.submit()}>{selectedTask?.status === 'CLOSED' ? "Confirm Reopen" : "Confirm Rejection"}</Button>]}>
+      <Modal destroyOnClose title={selectedTask?.status === 'CLOSED' ? "Reopen Task" : "Reject Task"} open={isActionModalOpen} onCancel={() => { purgeUnsavedFiles(actionFileList); setIsActionModalOpen(false); }} width={700} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(actionFileList); setIsActionModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => actionForm.submit()}>{selectedTask?.status === 'CLOSED' ? "Confirm Reopen" : "Confirm Rejection"}</Button>]}>
         <Form form={actionForm} layout="vertical" onFinish={handleActionTask}>
           <Form.Item name="note" label="Action Note (Optional)"><TextArea rows={2} /></Form.Item>
-          
+
           <Form.Item label="Attach Evidence/Voice Explanations">
-            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setActionFileList)} fileList={actionFileList} onChange={({fileList}) => setActionFileList(fileList)} multiple>
+            <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setActionFileList)} fileList={actionFileList} onRemove={deleteUnsavedS3File} onChange={({fileList}) => setActionFileList(fileList)} multiple>
               <Button icon={<PaperClipOutlined />}>Upload Files</Button>
             </Upload>
             <Divider style={{ margin: '8px 0' }} />
@@ -596,7 +626,7 @@ export default function TeamTasksPage() {
       </Modal>
 
       {/* RESTORED DRAWER */}
-      <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={700} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
+      <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={700} onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }} open={isDrawerOpen}
         extra={
           <Flex gap="small">
             {selectedTask?.status === 'OPEN' ? (
@@ -767,12 +797,13 @@ export default function TeamTasksPage() {
                 </div>
 
                 {selectedTask.status === 'OPEN' && (
-                  <UpdateComposer 
+                  <UpdateComposer
                     drawerFileList={drawerFileList}
                     setDrawerFileList={setDrawerFileList}
                     onPostUpdate={postTaskUpdate}
                     mentionOptions={cachedMentionOptions}
                     handleS3UploadWithPurge={handleS3UploadWithPurge}
+                    deleteUnsavedS3File={deleteUnsavedS3File}
                   />
                 )}
               </div>

@@ -201,8 +201,8 @@ INSERT INTO attachments (
 );
 
 -- name: GetTaskAttachments :many
-SELECT file_name, file_url, file_type, file_size_bytes 
-FROM attachments 
+SELECT id, file_name, file_url, file_type, file_size_bytes
+FROM attachments
 WHERE task_id = $1;
 
 -- name: GetTaskUpdateAttachments :many
@@ -212,3 +212,7 @@ WHERE task_update_id = ANY($1::uuid[]);
 
 -- name: DeleteTaskAttachments :exec
 DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;
+
+-- name: DeleteAttachmentsByIDs :many
+DELETE FROM attachments WHERE id = ANY($1::uuid[])
+RETURNING file_url;

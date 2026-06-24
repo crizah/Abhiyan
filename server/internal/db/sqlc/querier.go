@@ -28,6 +28,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
+	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error

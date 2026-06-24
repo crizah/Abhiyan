@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,13 +15,13 @@ import (
 )
 
 type S3Service struct {
+	client        *s3.Client
 	presignClient *s3.PresignClient
 	bucketName    string
 	region        string
 }
 
 func NewS3Service(ctx context.Context) (*S3Service, error) {
-	// Automatically loads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION from env
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config: %w", err)
@@ -29,6 +31,7 @@ func NewS3Service(ctx context.Context) (*S3Service, error) {
 	presignClient := s3.NewPresignClient(client)
 
 	return &S3Service{
+		client:        client,
 		presignClient: presignClient,
 		bucketName:    os.Getenv("AWS_S3_BUCKET_NAME"),
 		region:        os.Getenv("AWS_REGION"),
@@ -57,4 +60,25 @@ func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename s
 	finalFileURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, objectKey)
 
 	return request.URL, finalFileURL, nil
+}
+
+func (s *S3Service) DeleteObjects(ctx context.Context, fileURLs []string) {
+	for _, fileURL := range fileURLs {
+		key := s.extractKeyFromURL(fileURL)
+		if key == "" {
+			continue
+		}
+		s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(s.bucketName),
+			Key:    aws.String(key),
+		})
+	}
+}
+
+func (s *S3Service) extractKeyFromURL(fileURL string) string {
+	parsed, err := url.Parse(fileURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(parsed.Path, "/")
 }

@@ -16,17 +16,66 @@ import (
 )
 
 type TaskService struct {
-	db       *sql.DB
-	queries  *db.Queries
-	onionApp *app.App
+	db        *sql.DB
+	queries   *db.Queries
+	onionApp  *app.App
+	s3Service *S3Service
 }
 
-func NewTaskService(dbConn *sql.DB, o *app.App) *TaskService {
+func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service) *TaskService {
 	return &TaskService{
-		db:       dbConn,
-		queries:  db.New(dbConn),
-		onionApp: o,
+		db:        dbConn,
+		queries:   db.New(dbConn),
+		onionApp:  o,
+		s3Service: s3,
 	}
+}
+
+func (s *TaskService) diffAttachments(
+	ctx context.Context,
+	qtx *db.Queries,
+	taskIDNullable uuid.NullUUID,
+	uploaderID uuid.UUID,
+	incoming []schemas.AttachmentPayload,
+) []string {
+	existing, _ := qtx.GetTaskAttachments(ctx, taskIDNullable)
+
+	incomingIDs := make(map[string]bool)
+	for _, att := range incoming {
+		if att.ID != "" {
+			incomingIDs[att.ID] = true
+		}
+	}
+
+	var toDeleteIDs []uuid.UUID
+	var s3URLsToDelete []string
+	for _, e := range existing {
+		if !incomingIDs[e.ID.String()] {
+			toDeleteIDs = append(toDeleteIDs, e.ID)
+			s3URLsToDelete = append(s3URLsToDelete, e.FileUrl)
+		}
+	}
+
+	if len(toDeleteIDs) > 0 {
+		qtx.DeleteAttachmentsByIDs(ctx, toDeleteIDs)
+	}
+
+	for _, att := range incoming {
+		if att.ID != "" {
+			continue
+		}
+		qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
+			TaskID:        taskIDNullable,
+			TaskUpdateID:  uuid.NullUUID{},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    uploaderID,
+		})
+	}
+
+	return s3URLsToDelete
 }
 
 // CalculateNextReminder computes the next trigger date based on custom intervals
@@ -288,6 +337,7 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 	var atts []schemas.AttachmentPayload
 	for _, a := range dbAtts {
 		atts = append(atts, schemas.AttachmentPayload{
+			ID:       a.ID.String(),
 			FileName: a.FileName,
 			FileURL:  a.FileUrl,
 			FileType: a.FileType,
@@ -374,21 +424,18 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		_, _ = qtx.CreateReminder(ctx, remParams)
 	}
 
-	// Rebuild Task Attachments
+	// Diff Task Attachments instead of wiping
 	uID := util.ParseUUID(userid)
-	_ = qtx.DeleteTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
-	for _, att := range req.Attachments {
-		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
-			TaskID:        uuid.NullUUID{UUID: tID, Valid: true},
-			FileName:      att.FileName,
-			FileUrl:       att.FileURL,
-			FileType:      att.FileType,
-			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
-			UploadedBy:    uID, // Ensure you pass userID/adminID into UpdateTaskDetails now
-		})
+	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
-	return tx.Commit()
+	if len(s3URLsToDelete) > 0 {
+		go s.s3Service.DeleteObjects(context.Background(), s3URLsToDelete)
+	}
+	return nil
 }
 
 func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
@@ -930,20 +977,17 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 		})
 	}
 
-	// Rebuild Task Attachments
-	_ = qtx.DeleteTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
-	for _, att := range req.Attachments {
-		_ = qtx.InsertAttachment(ctx, db.InsertAttachmentParams{
-			TaskID:        uuid.NullUUID{UUID: tID, Valid: true},
-			FileName:      att.FileName,
-			FileUrl:       att.FileURL,
-			FileType:      att.FileType,
-			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
-			UploadedBy:    uID,
-		})
+	// Diff Task Attachments instead of wiping
+	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
-	return tx.Commit()
+	if len(s3URLsToDelete) > 0 {
+		go s.s3Service.DeleteObjects(context.Background(), s3URLsToDelete)
+	}
+	return nil
 }
 
 func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {

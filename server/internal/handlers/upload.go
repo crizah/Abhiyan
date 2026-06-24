@@ -30,7 +30,20 @@ func (h *UploadHandler) GetPresignedURL(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"upload_url": uploadURL, // The frontend PUTs the file here
-		"file_url":   finalURL,  // The frontend saves this in the DB payload
+		"upload_url": uploadURL,
+		"file_url":   finalURL,
 	})
+}
+
+func (h *UploadHandler) DeleteS3Object(c *gin.Context) {
+	var req struct {
+		FileURL string `json:"file_url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file_url is required"})
+		return
+	}
+
+	h.s3Service.DeleteObjects(c.Request.Context(), []string{req.FileURL})
+	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }

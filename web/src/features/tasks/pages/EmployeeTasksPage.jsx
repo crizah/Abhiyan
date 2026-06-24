@@ -56,7 +56,7 @@ function CommentInput({ updateId, onSubmit, disabled, mentionOptions }) {
   );
 }
 
-function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge }) {
+function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge, deleteUnsavedS3File }) {
   const [text, setText] = useState(''); 
 
   const handleUpdateClick = () => {
@@ -70,7 +70,7 @@ function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, menti
       {drawerFileList.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           {drawerFileList.map(f => (
-            <Tag closable onClose={() => setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid))} key={f.uid}>
+            <Tag closable onClose={() => { deleteUnsavedS3File(f); setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid)); }} key={f.uid}>
               {f.name}
             </Tag>
           ))}
@@ -183,6 +183,16 @@ export default function EmployeeTasksPage() {
     } finally { 
       setLoading(false); 
     }
+  };
+
+  const deleteUnsavedS3File = (file) => {
+    if (file?.s3Data?.file_url && !file.s3Data.id) {
+      apiClient.delete('/upload/s3-object', { data: { file_url: file.s3Data.file_url } }).catch(() => {});
+    }
+  };
+
+  const purgeUnsavedFiles = (fileList) => {
+    fileList.filter(f => f.s3Data?.file_url && !f.s3Data?.id).forEach(deleteUnsavedS3File);
   };
 
   const handleS3UploadWithPurge = async (options, setterFunc) => {
@@ -339,7 +349,7 @@ export default function EmployeeTasksPage() {
         />
       </Card>
 
-      <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={700} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
+      <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={700} onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }} open={isDrawerOpen}
         extra={selectedTask?.status === 'OPEN' && selectedTask?.fulfillment_status !== 'COMPLETED' && (
           <Popconfirm title="Submit verification request?" onConfirm={submitTaskForReview}>
             <Button type="primary" style={{ backgroundColor: '#52c41a' }}>Submit for Review</Button>
@@ -497,12 +507,13 @@ export default function EmployeeTasksPage() {
                 </div>
                 
                 {selectedTask.status === 'OPEN' && (
-                  <UpdateComposer 
+                  <UpdateComposer
                     drawerFileList={drawerFileList}
                     setDrawerFileList={setDrawerFileList}
                     onPostUpdate={postTaskUpdate}
                     mentionOptions={cachedMentionOptions}
                     handleS3UploadWithPurge={handleS3UploadWithPurge}
+                    deleteUnsavedS3File={deleteUnsavedS3File}
                   />
                 )}
               </div>

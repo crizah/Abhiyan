@@ -171,6 +171,34 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 	return i, err
 }
 
+const deleteAttachmentsByIDs = `-- name: DeleteAttachmentsByIDs :many
+DELETE FROM attachments WHERE id = ANY($1::uuid[])
+RETURNING file_url
+`
+
+func (q *Queries) DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteAttachmentsByIDs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var file_url string
+		if err := rows.Scan(&file_url); err != nil {
+			return nil, err
+		}
+		items = append(items, file_url)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteTaskAttachments = `-- name: DeleteTaskAttachments :exec
 DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL
 `
@@ -470,12 +498,13 @@ func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) (
 }
 
 const getTaskAttachments = `-- name: GetTaskAttachments :many
-SELECT file_name, file_url, file_type, file_size_bytes 
-FROM attachments 
+SELECT id, file_name, file_url, file_type, file_size_bytes
+FROM attachments
 WHERE task_id = $1
 `
 
 type GetTaskAttachmentsRow struct {
+	ID            uuid.UUID     `json:"id"`
 	FileName      string        `json:"file_name"`
 	FileUrl       string        `json:"file_url"`
 	FileType      string        `json:"file_type"`
@@ -492,6 +521,7 @@ func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) 
 	for rows.Next() {
 		var i GetTaskAttachmentsRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.FileName,
 			&i.FileUrl,
 			&i.FileType,

@@ -61,11 +61,11 @@ func main() {
 	authService := services.NewAuthService(dbConn, s_byte, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
-	taskService := services.NewTaskService(dbConn, onionApp)
 	s3Service, err := services.NewS3Service(context.Background())
 	if err != nil {
 		log.Fatalf("Failed to initialize AWS S3 service: %v", err)
 	}
+	taskService := services.NewTaskService(dbConn, onionApp, s3Service)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -120,6 +120,7 @@ func main() {
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers) // doesnt need to be paginated
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
+			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
 		}
 
 		// ADMIN DOMAIN

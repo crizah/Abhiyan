@@ -148,8 +148,6 @@ func main() {
 			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers) // needs to be paginated
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 			superAdminGroup.GET("/users/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
-			superAdminGroup.GET("/leaderboard", scoreHandler.GetAdminLeaderboard)
-			superAdminGroup.GET("/reports/score-download", scoreHandler.DownloadScoreReport)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

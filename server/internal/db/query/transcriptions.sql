@@ -1,5 +1,5 @@
 -- name: InsertTranscription :exec
-INSERT INTO transcriptions (attachment_id) VALUES ($1);
+INSERT INTO transcriptions (attachment_id) VALUES ($1) ON CONFLICT (attachment_id) DO NOTHING;
 
 -- name: GetPendingTranscriptions :many
 SELECT t.id, t.attachment_id, a.file_url

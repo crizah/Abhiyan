@@ -1,105 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm, Mentions, Tabs, Upload, List, Image } from 'antd';
-import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined, EditOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Tabs, Upload } from 'antd';
+import { useAuth } from '../../../context/AuthContext';
+import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, InfoCircleOutlined, PaperClipOutlined, EditOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
-import AudioAttachment from '../../../components/AudioAttachment';
+import { UpdateFeed, UpdateComposer, AttachmentRow } from '../../../components/TaskDrawerShared';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
-// Helper to force cross-origin file downloads from S3
-const handleDownload = async (url, filename) => {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Network response was not ok');
-    const blob = await response.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = filename || 'download';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
-  } catch (error) {
-    console.error('Download failed, falling back to opening in new tab', error);
-    window.open(url, '_blank');
-  }
-};
-
-function CommentInput({ updateId, onSubmit, disabled, mentionOptions }) {
-  const [text, setText] = useState('');
-  
-  const handleSubmit = () => {
-    if (!text.trim()) return;
-    onSubmit(updateId, text);
-    setText('');
-  };
-  
-  return (
-    <Flex gap="small" style={{ marginTop: '8px' }}>
-      <Mentions
-        style={{ flex: 1 }}
-        size="small"
-        placeholder="Write a comment... use @ to mention"
-        value={text}
-        onChange={setText}
-        onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-        options={mentionOptions}
-        disabled={disabled}
-      />
-      <Button type="primary" size="small" icon={<SendOutlined />} onClick={handleSubmit} disabled={!text.trim() || disabled}>
-        Reply
-      </Button>
-    </Flex>
-  );
-}
-
-function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, mentionOptions, handleS3UploadWithPurge, deleteUnsavedS3File }) {
-  const [text, setText] = useState(''); 
-
-  const handleUpdateClick = () => {
-    if (!text.trim() && drawerFileList.length === 0) return;
-    onPostUpdate(text); 
-    setText(''); 
-  };
-
-  return (
-    <div style={{ paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
-      {drawerFileList.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          {drawerFileList.map(f => (
-            <Tag closable onClose={() => { deleteUnsavedS3File(f); setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid)); }} key={f.uid}>
-              {f.name}
-            </Tag>
-          ))}
-        </div>
-      )}
-      <Flex gap="small" align="center">
-        <Upload customRequest={(opt) => handleS3UploadWithPurge(opt, setDrawerFileList)} fileList={drawerFileList} onChange={({fileList}) => setDrawerFileList(fileList)} showUploadList={false} multiple>
-          <Button icon={<PaperClipOutlined />} />
-        </Upload>
-        <AudioRecorder onUploadSuccess={(fileObj) => setDrawerFileList(prev => [...prev, fileObj])} />
-
-        <Mentions
-          style={{ flex: 1 }}
-          placeholder="Type an update... use @ to mention team members"
-          value={text}
-          onChange={setText}
-          options={mentionOptions}
-        />
-        <Button type="primary" icon={<SendOutlined />} onClick={handleUpdateClick} disabled={!text.trim() && drawerFileList.length === 0}>
-          Post
-        </Button>
-      </Flex>
-    </div>
-  );
-}
-
 export default function TeamTasksPage() {
+  const { user } = useAuth();
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [actionForm] = Form.useForm();
@@ -448,12 +361,13 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to update status."); }
   };
 
-  const postComment = async (updateId, text) => {
+  const postComment = async (updateId, text, attachments = []) => {
     try {
       const mentionedIds = teamMembers.filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
       await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, {
         content: text,
-        mentioned_user_ids: mentionedIds
+        mentioned_user_ids: mentionedIds,
+        attachments,
       });
       setCommentOffsets(prev => ({ ...prev, [updateId]: 0 }));
       fetchComments(selectedTask.id, updateId, 0);
@@ -471,13 +385,6 @@ export default function TeamTasksPage() {
     { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => openTaskDrawer(record)}>View Task</Button> }
   ];
   const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
-
-  const getTimelineColor = (content) => {
-    if (content.includes("Task submitted") || content.includes("Task Approved")) return 'green';
-    if (content.includes("TASK REJECTED")) return 'red';
-    if (content.includes("TASK REOPENED")) return 'orange';
-    return 'blue';
-  };
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -626,8 +533,13 @@ export default function TeamTasksPage() {
         </Form>
       </Modal>
 
-      {/* RESTORED DRAWER */}
-      <Drawer title={selectedTask?.title || "Task Details"} placement="right" width={700} onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }} open={isDrawerOpen}
+      {/* TASK DRAWER */}
+      <Drawer
+        title={selectedTask?.title || "Task Details"}
+        placement="right"
+        width="65%"
+        onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }}
+        open={isDrawerOpen}
         extra={
           <Flex gap="small">
             {selectedTask?.status === 'OPEN' ? (
@@ -654,21 +566,37 @@ export default function TeamTasksPage() {
       >
         {selectedTask && (
           <Tabs defaultActiveKey="1" style={{ height: '100%' }}>
-            {/* FULLY RESTORED OVERVIEW */}
             <Tabs.TabPane tab="Overview" key="1">
-              <Card size="small" style={{ backgroundColor: '#f5f5f5', border: 'none', marginBottom: 16 }}>
-                <Paragraph style={{ margin: 0 }}>{selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}</Paragraph>
+              <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, marginBottom: 16 }}>
+                <Paragraph style={{ margin: 0 }}>
+                  {selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}
+                </Paragraph>
                 <Divider style={{ margin: '12px 0' }} />
-                <Flex justify="space-between">
-                  <Text><InfoCircleOutlined /> Task Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
+                <Flex justify="space-between" wrap="wrap" gap={8}>
+                  <Text><InfoCircleOutlined /> Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
                   <Text><CheckCircleOutlined /> Fulfillment: <Tag color={selectedTask.fulfillment_status === 'COMPLETED' ? 'success' : 'processing'}>{selectedTask.fulfillment_status}</Tag></Text>
+                  <Text>Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
                 </Flex>
-                <Flex justify="space-between" style={{ marginTop: 12 }}>
-                  <Text><InfoCircleOutlined /> Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
-                </Flex>
+
                 {taskDetails && (
                   <div style={{ marginTop: 12 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}</Text><br/>
+                    {(() => {
+                      const isCreator = taskDetails.task?.created_by && taskDetails.task.created_by === user?.id;
+                      const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
+                      const roles = [];
+                      if (isCreator) roles.push({ label: 'Task Creator', color: 'gold' });
+                      if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: 'blue' });
+                      else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: 'default' });
+                      return roles.length > 0 ? (
+                        <Flex align="center" gap={6} style={{ marginBottom: 8 }} wrap="wrap">
+                          <Text style={{ fontSize: 12 }}>Your role:</Text>
+                          {roles.map(r => <Tag key={r.label} color={r.color} style={{ margin: 0 }}>{r.label}</Tag>)}
+                        </Flex>
+                      ) : null;
+                    })()}
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}
+                    </Text><br />
                     <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders?.length || 0}</Text>
                   </div>
                 )}
@@ -676,127 +604,39 @@ export default function TeamTasksPage() {
 
               {taskDetails?.attachments?.length > 0 && (
                 <>
-                  <Title level={5}>Task Attachments</Title>
-                  <List
-                    itemLayout="horizontal"
-                    dataSource={taskDetails.attachments}
-                    renderItem={(file) => (
-                      <List.Item
-                        extra={!file.file_type.startsWith('audio/') && <Button icon={<DownloadOutlined />} type="text" onClick={() => handleDownload(file.file_url, file.file_name)} title="Download" />}
-                      >
-                        {file.file_type.startsWith('audio/') ? (
-                          <AudioAttachment file={file} />
-                        ) : (
-                          <List.Item.Meta
-                            avatar={<PaperClipOutlined style={{ fontSize: 24 }} />}
-                            title={<a href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a>}
-                            description={`${(file.file_size / 1024).toFixed(2)} KB`}
-                          />
-                        )}
-                      </List.Item>
-                    )}
-                  />
+                  <Title level={5} style={{ marginBottom: 10 }}>Task Attachments</Title>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {taskDetails.attachments.map((file, idx) => (
+                      <AttachmentRow key={idx} file={file} idx={idx} />
+                    ))}
+                  </div>
                 </>
               )}
             </Tabs.TabPane>
 
-            {/* TIMELINE & COMMENTS */}
             <Tabs.TabPane tab="Activity & Updates" key="2">
               <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
-                <div ref={updatesContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 8 }}>
-                  {hasMoreUpdates && (
-                    <Flex justify="center" style={{ marginBottom: 12 }}>
-                      <Button size="small" loading={loadingUpdates} onClick={() => fetchTaskUpdates(selectedTask.id, updateOffset)}>
-                        Load older
-                      </Button>
-                    </Flex>
-                  )}
-                  {taskUpdates.length === 0 && !loadingUpdates ? <Text type="secondary">No updates yet.</Text> : (
-                    <Timeline
-                      items={taskUpdates.map(u => ({
-                        color: getTimelineColor(u.content),
-                        children: (
-                          <>
-                            <Flex justify="space-between" align="baseline">
-                              <Text strong>{u.first_name} {u.last_name}</Text>
-                              <Text type="secondary" style={{ fontSize: '11px' }}>{dayjs(u.created_at).format('MMM D, h:mm A')}</Text>
-                            </Flex>
-                            <Paragraph style={{ margin: '4px 0 8px 0' }}>{u.content}</Paragraph>
-
-                            {u.attachments?.map((file, idx) => (
-                              <div key={idx} style={{ marginBottom: 8 }}>
-                                {file.file_type.startsWith('audio/') ? (
-                                  <AudioAttachment file={file} />
-                                ) : file.file_type.startsWith('image/') ? (
-                                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
-                                    <Image 
-                                      src={file.file_url} 
-                                      alt={file.file_name} 
-                                      style={{ maxHeight: 150, borderRadius: 8, objectFit: 'cover' }} 
-                                    />
-                                    <Button 
-                                      icon={<DownloadOutlined />} 
-                                      size="small" 
-                                      type="link" 
-                                      onClick={() => handleDownload(file.file_url, file.file_name)}
-                                      style={{ padding: 0, height: 'auto', alignSelf: 'flex-start' }}
-                                    >
-                                      Download
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '8px', backgroundColor: '#fff' }}>
-                                    <PaperClipOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
-                                    <a href={file.file_url} target="_blank" rel="noreferrer" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.file_name}>
-                                      {file.file_name}
-                                    </a>
-                                    <Divider type="vertical" style={{ margin: 0 }} />
-                                    <Button 
-                                      icon={<DownloadOutlined />} 
-                                      size="small" 
-                                      type="text" 
-                                      onClick={() => handleDownload(file.file_url, file.file_name)}
-                                      title="Download"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-
-                            <div style={{ backgroundColor: '#fafafa', padding: '8px', borderRadius: '6px', border: '1px solid #f0f0f0' }}>
-                              <Flex justify="space-between" align="center" style={{ cursor: 'pointer', marginBottom: expandedComments[u.id] ? 8 : 0 }} onClick={() => toggleComments(u.id)}>
-                                <Text type="secondary" style={{ fontSize: 12 }}><CommentOutlined /> {u.comment_count || 0} Comments</Text>
-                                <Text type="secondary" style={{ fontSize: 11 }}>{expandedComments[u.id] ? 'Collapse' : 'Reply'}</Text>
-                              </Flex>
-
-                              {expandedComments[u.id] && (
-                                <>
-                                  {loadingComments[u.id] && !commentsMap[u.id]?.length && (
-                                    <Text type="secondary" style={{ fontSize: 12 }}>Loading...</Text>
-                                  )}
-                                  {(commentsMap[u.id] || []).map(c => (
-                                    <div key={c.id} style={{ marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid #e6f7ff' }}>
-                                      <Text strong style={{ fontSize: 12 }}>{c.first_name}</Text> <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(c.created_at).format('MMM D, h:mm A')}</Text>
-                                      <div style={{ fontSize: 13 }}>{c.content}</div>
-                                    </div>
-                                  ))}
-                                  {hasMoreComments[u.id] && (
-                                    <Button size="small" type="link" loading={loadingComments[u.id]} onClick={() => fetchComments(selectedTask.id, u.id, commentOffsets[u.id] || 0)}>
-                                      Load more comments
-                                    </Button>
-                                  )}
-                                  {selectedTask.status === 'OPEN' && (
-                                    <CommentInput updateId={u.id} onSubmit={postComment} mentionOptions={cachedMentionOptions} />
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </>
-                        )
-                      }))}
-                    />
-                  )}
-                </div>
+                <UpdateFeed
+                  taskUpdates={taskUpdates}
+                  loadingUpdates={loadingUpdates}
+                  hasMoreUpdates={hasMoreUpdates}
+                  updateOffset={updateOffset}
+                  fetchTaskUpdates={fetchTaskUpdates}
+                  taskId={selectedTask.id}
+                  commentsMap={commentsMap}
+                  commentOffsets={commentOffsets}
+                  hasMoreComments={hasMoreComments}
+                  loadingComments={loadingComments}
+                  expandedComments={expandedComments}
+                  toggleComments={toggleComments}
+                  fetchComments={fetchComments}
+                  postComment={postComment}
+                  cachedMentionOptions={cachedMentionOptions}
+                  canPost={selectedTask.status === 'OPEN'}
+                  updatesContainerRef={updatesContainerRef}
+                  handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  deleteUnsavedS3File={deleteUnsavedS3File}
+                />
 
                 {selectedTask.status === 'OPEN' && (
                   <UpdateComposer

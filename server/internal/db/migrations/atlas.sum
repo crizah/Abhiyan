@@ -1,4 +1,4 @@
-h1:puzgFAPkx8uH+tzd17xf+yH9hbVYmMtK9/cFK9tyjwY=
+h1:1jFpouiRI7Xxnqbo0D/HhPpdK6hTvZAxDopqgVYIdkQ=
 20260609122837_initial_db_schemas.sql h1:Qlt9JvF4auI2yCUz7oDluImiRst+uVpfBkBVc7ToUYM=
 20260609125210_add_user_status_column.sql h1:NdZtJ6Bw7BEOZXUULmLGqKTbbs3FB8aLfoTjAdOZ55s=
 20260609132310_make_domain_nullable.sql h1:XIcLOCpbS2hEgRxp0f7PZZCZQZZtxl3hN//05Sv4hr8=
@@ -14,3 +14,5 @@ h1:puzgFAPkx8uH+tzd17xf+yH9hbVYmMtK9/cFK9tyjwY=
 20260623151606_dont_make_phone_number_unique.sql h1:CNQpX6po6bsmjqoZ5HArBaVe+ZFfMxu1vWrAtD1HQns=
 20260624105535_add_transcriptions_table.sql h1:qnOK3v5bygFFtDUNxu23RuLVlRaxuW0JPgO4IT8J/B0=
 20260624192110_add_employee_scores.sql h1:Rrc4BUk/9M8DQgsFhkzchwiuhp187q4h0g0HQK3c8bw=
+20260626145813_add_comments_to_attachments.sql h1:JMzoqFK1kOuNEPK9Qkze459K8zyHQXf9u1O+0cFM05Y=
+20260626160507_check_constrraint.sql h1:HZjhGPy30n/IKAn7kmHEHIbB5t7D0FzlGEb3RoFgwpQ=

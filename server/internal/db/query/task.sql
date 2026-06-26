@@ -195,15 +195,17 @@ WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE';
 
 -- name: InsertAttachment :one
 INSERT INTO attachments (
-    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+    task_id, task_update_id, task_comment_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING id;
 
 -- name: GetTaskAttachments :many
-SELECT id, file_name, file_url, file_type, file_size_bytes
-FROM attachments
-WHERE task_id = $1;
+SELECT a.id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_id = $1 AND a.task_update_id IS NULL;
 
 -- name: GetTaskUpdateAttachments :many
 SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
@@ -212,9 +214,22 @@ FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
 WHERE a.task_update_id = ANY($1::uuid[]);
 
+-- name: GetTaskCommentAttachments :many
+SELECT a.id, a.task_comment_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_comment_id = ANY($1::uuid[]);
+
 -- name: DeleteTaskAttachments :exec
 DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;
 
 -- name: DeleteAttachmentsByIDs :many
 DELETE FROM attachments WHERE id = ANY($1::uuid[])
 RETURNING file_url;
+
+-- name: IsTaskAssignee :one
+SELECT EXISTS (
+    SELECT 1 FROM task_participants
+    WHERE task_id = $1 AND user_id = $2 AND role = 'ASSIGNEE'
+);

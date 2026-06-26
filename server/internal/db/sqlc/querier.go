@@ -61,6 +61,7 @@ type Querier interface {
 	GetTaskAssigneesWithContext(ctx context.Context, taskID uuid.UUID) ([]GetTaskAssigneesWithContextRow, error)
 	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
+	GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskCommentAttachmentsRow, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
 	GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error)
@@ -98,6 +99,7 @@ type Querier interface {
 	InsertScoreEvent(ctx context.Context, arg InsertScoreEventParams) (EmployeeScore, error)
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
+	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error

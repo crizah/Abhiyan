@@ -3,6 +3,7 @@ import { Typography, Spin, message, theme, Flex } from 'antd';
 import { TeamOutlined, UserOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
+import Leaderboard from '../../../components/Leaderboard';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -11,6 +12,10 @@ export default function AdminDashboard() {
   const { token } = theme.useToken(); 
   const [stats, setStats] = useState({ total_users: 0, teams: [] });
   const [loading, setLoading] = useState(true);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
+  const [teamVisibility, setTeamVisibility] = useState([]);
 
 useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -32,6 +37,35 @@ useEffect(() => {
 
     fetchDashboardStats();
   }, []);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      setLeaderboardLoading(true);
+      try {
+        const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
+        const res = await apiClient.get('/admin/leaderboard', { params });
+        setLeaderboardData(res.data.entries || []);
+        setTeamVisibility(res.data.teams || []);
+      } catch {
+        // silent
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, [leaderboardTeamFilter]);
+
+  const handleToggleVisibility = async (teamId, visible) => {
+    try {
+      await apiClient.put(`/admin/teams/${teamId}/leaderboard-visibility`, { visible });
+      setTeamVisibility(prev => prev.map(t =>
+        t.team_id === teamId ? { ...t, leaderboard_visible: visible } : t
+      ));
+      message.success(`Leaderboard ${visible ? 'shown to' : 'hidden from'} employees`);
+    } catch {
+      message.error('Failed to update visibility');
+    }
+  };
 
   return (
     <div>
@@ -106,6 +140,20 @@ useEffect(() => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Leaderboard Section */}
+            <div style={{ marginTop: '48px' }}>
+              <Leaderboard
+                entries={leaderboardData}
+                loading={leaderboardLoading}
+                teamOptions={stats.teams.map(t => ({ value: t.team_id, label: t.team_name }))}
+                onTeamFilterChange={setLeaderboardTeamFilter}
+                teamFilter={leaderboardTeamFilter}
+                showVisibilityToggle={true}
+                teamVisibility={teamVisibility}
+                onToggleVisibility={handleToggleVisibility}
+              />
             </div>
           </>
         )}

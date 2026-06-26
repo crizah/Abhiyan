@@ -23,10 +23,9 @@ SELECT
     COALESCE(SUM(es.points_awarded), 0)::bigint AS total_points,
     COUNT(es.id) FILTER (WHERE es.event_type = 'ON_TIME_COMPLETION') AS on_time_count,
     COUNT(es.id) FILTER (WHERE es.event_type IN ('ON_TIME_COMPLETION', 'LATE_COMPLETION')) AS completed_count
-FROM team_members tm
-JOIN users u ON tm.user_id = u.id
-LEFT JOIN employee_scores es ON u.id = es.user_id AND es.superseded = false
-WHERE tm.team_id = ANY($1::uuid[])
+FROM (SELECT DISTINCT user_id FROM team_members WHERE team_id = ANY($1::uuid[])) AS members
+JOIN users u ON members.user_id = u.id
+LEFT JOIN employee_scores es ON u.id = es.user_id AND es.team_id = ANY($1::uuid[]) AND es.superseded = false
 GROUP BY u.id, u.first_name, u.last_name, u.email_id
 ORDER BY total_points DESC, u.first_name ASC
 `
@@ -83,10 +82,9 @@ SELECT
     COUNT(es.id) FILTER (WHERE es.event_type = 'LATE_COMPLETION') AS late_count,
     COUNT(es.id) FILTER (WHERE es.event_type = 'MISSED_DEADLINE') AS missed_count,
     COUNT(es.id) FILTER (WHERE es.event_type = 'REJECTION') AS rejection_count
-FROM team_members tm_member
-JOIN users u ON tm_member.user_id = u.id
-LEFT JOIN employee_scores es ON u.id = es.user_id AND es.superseded = false
-WHERE tm_member.team_id = ANY($1::uuid[])
+FROM (SELECT DISTINCT user_id FROM team_members WHERE team_id = ANY($1::uuid[])) AS members
+JOIN users u ON members.user_id = u.id
+LEFT JOIN employee_scores es ON u.id = es.user_id AND es.team_id = ANY($1::uuid[]) AND es.superseded = false
 GROUP BY u.id, u.first_name, u.last_name, u.email_id
 ORDER BY total_points DESC
 `

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Form, DatePicker, Timeline, Divider, Popconfirm, Mentions, Tabs, Upload, List, Image } from 'antd';
+import { useAuth } from '../../../context/AuthContext';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, SendOutlined, InfoCircleOutlined, EditOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined, DownloadOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
@@ -100,6 +101,7 @@ function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, menti
 }
 
 export default function TeamTasksPage() {
+  const { user } = useAuth();
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [actionForm] = Form.useForm();
@@ -668,6 +670,15 @@ export default function TeamTasksPage() {
                 </Flex>
                 {taskDetails && (
                   <div style={{ marginTop: 12 }}>
+                    {(() => {
+                      const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
+                      const roleColor = myParticipant?.role === 'ASSIGNEE' ? 'blue' : myParticipant?.role === 'SUBSCRIBER' ? 'default' : 'gold';
+                      const roleLabel = myParticipant?.role === 'ASSIGNEE' ? 'Assignee' : myParticipant?.role === 'SUBSCRIBER' ? 'Subscriber' : 'Task Admin';
+                      return <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
+                        <Text style={{ fontSize: 12 }}>Your role:</Text>
+                        <Tag color={roleColor} style={{ margin: 0 }}>{roleLabel}</Tag>
+                      </Flex>;
+                    })()}
                     <Text type="secondary" style={{ fontSize: 12 }}>Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}</Text><br/>
                     <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders?.length || 0}</Text>
                   </div>

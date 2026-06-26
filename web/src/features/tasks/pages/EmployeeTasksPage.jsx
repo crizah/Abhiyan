@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Card, Button, Table, Flex, Tag, Drawer, Select, message, Mentions, Tabs, Upload, List, Timeline, Divider, Popconfirm, Image } from 'antd';
 import { SendOutlined, InfoCircleOutlined, CheckCircleOutlined, CommentOutlined, PaperClipOutlined, AudioOutlined, DownloadOutlined } from '@ant-design/icons';
-import apiClient from '../../../config/axios'; 
+import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
 import AudioAttachment from '../../../components/AudioAttachment';
+import { useAuth } from '../../../context/AuthContext';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -99,6 +100,7 @@ function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate, menti
 }
 
 export default function EmployeeTasksPage() {
+  const { user } = useAuth();
   const [teams, setTeams] = useState([]);
   const [activeTeamId, setActiveTeamId] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -374,6 +376,18 @@ export default function EmployeeTasksPage() {
                 </Flex>
                 {taskDetails && taskDetails.participants && (
                   <div style={{ marginTop: 12 }}>
+                    {(() => {
+                      const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
+                      if (myParticipant) {
+                        const roleColor = myParticipant.role === 'ASSIGNEE' ? 'blue' : 'default';
+                        const roleLabel = myParticipant.role === 'ASSIGNEE' ? 'Assignee' : 'Subscriber';
+                        return <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
+                          <Text style={{ fontSize: 12 }}>Your role:</Text>
+                          <Tag color={roleColor} style={{ margin: 0 }}>{roleLabel}</Tag>
+                        </Flex>;
+                      }
+                      return null;
+                    })()}
                     <Text type="secondary" style={{ fontSize: 12 }}>Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}</Text><br/>
                     {taskDetails.reminders && <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders.length || 0}</Text>}
                   </div>

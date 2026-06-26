@@ -498,17 +498,21 @@ func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) (
 }
 
 const getTaskAttachments = `-- name: GetTaskAttachments :many
-SELECT id, file_name, file_url, file_type, file_size_bytes
-FROM attachments
-WHERE task_id = $1
+SELECT a.id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_id = $1 AND a.task_update_id IS NULL
 `
 
 type GetTaskAttachmentsRow struct {
-	ID            uuid.UUID     `json:"id"`
-	FileName      string        `json:"file_name"`
-	FileUrl       string        `json:"file_url"`
-	FileType      string        `json:"file_type"`
-	FileSizeBytes sql.NullInt64 `json:"file_size_bytes"`
+	ID                  uuid.UUID               `json:"id"`
+	FileName            string                  `json:"file_name"`
+	FileUrl             string                  `json:"file_url"`
+	FileType            string                  `json:"file_type"`
+	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
+	TranscriptText      sql.NullString          `json:"transcript_text"`
 }
 
 func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error) {
@@ -526,6 +530,8 @@ func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) 
 			&i.FileUrl,
 			&i.FileType,
 			&i.FileSizeBytes,
+			&i.TranscriptionStatus,
+			&i.TranscriptText,
 		); err != nil {
 			return nil, err
 		}

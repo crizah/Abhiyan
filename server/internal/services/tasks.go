@@ -347,16 +347,6 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 
 	dbAtts, _ := s.queries.GetTaskAttachments(ctx, uuid.NullUUID{UUID: tID, Valid: true})
 
-	var attIDs []uuid.UUID
-	for _, a := range dbAtts {
-		attIDs = append(attIDs, a.ID)
-	}
-	transcriptions, _ := s.queries.GetTranscriptionsByAttachmentIDs(ctx, attIDs)
-	txMap := make(map[string]db.GetTranscriptionsByAttachmentIDsRow)
-	for _, t := range transcriptions {
-		txMap[t.AttachmentID.String()] = t
-	}
-
 	var atts []schemas.AttachmentPayload
 	for _, a := range dbAtts {
 		att := schemas.AttachmentPayload{
@@ -366,9 +356,9 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 			FileType: a.FileType,
 			FileSize: a.FileSizeBytes.Int64,
 		}
-		if tx, ok := txMap[a.ID.String()]; ok {
-			att.TranscriptionStatus = string(tx.Status.TranscriptionStatus)
-			att.TranscriptionText = tx.TranscriptText.String
+		if a.TranscriptionStatus.Valid {
+			att.TranscriptionStatus = string(a.TranscriptionStatus.TranscriptionStatus)
+			att.TranscriptionText = a.TranscriptText.String
 		}
 		atts = append(atts, att)
 	}

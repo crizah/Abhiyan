@@ -140,7 +140,7 @@ func (q *Queries) GetTranscriptionsByAttachmentIDs(ctx context.Context, dollar_1
 }
 
 const insertTranscription = `-- name: InsertTranscription :exec
-INSERT INTO transcriptions (attachment_id) VALUES ($1)
+INSERT INTO transcriptions (attachment_id) VALUES ($1) ON CONFLICT (attachment_id) DO NOTHING
 `
 
 func (q *Queries) InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error {

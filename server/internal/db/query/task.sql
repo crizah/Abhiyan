@@ -201,9 +201,11 @@ INSERT INTO attachments (
 ) RETURNING id;
 
 -- name: GetTaskAttachments :many
-SELECT id, file_name, file_url, file_type, file_size_bytes
-FROM attachments
-WHERE task_id = $1;
+SELECT a.id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_id = $1 AND a.task_update_id IS NULL;
 
 -- name: GetTaskUpdateAttachments :many
 SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,

@@ -16,7 +16,6 @@ export default function SuperAdminDashboard() {
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
-  const [teamVisibility, setTeamVisibility] = useState([]);
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -50,24 +49,11 @@ export default function SuperAdminDashboard() {
         const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
         const res = await apiClient.get('/admin/leaderboard', { params });
         setLeaderboardData(res.data.entries || []);
-        setTeamVisibility(res.data.teams || []);
       } catch { /* silent */ }
       finally { setLeaderboardLoading(false); }
     };
     fetchLeaderboard();
   }, [leaderboardTeamFilter]);
-
-  const handleToggleVisibility = async (teamId, visible) => {
-    try {
-      await apiClient.put(`/admin/teams/${teamId}/leaderboard-visibility`, { visible });
-      setTeamVisibility(prev => prev.map(t =>
-        t.team_id === teamId ? { ...t, leaderboard_visible: visible } : t
-      ));
-      message.success(`Leaderboard ${visible ? 'shown to' : 'hidden from'} employees`);
-    } catch {
-      message.error('Failed to update visibility');
-    }
-  };
 
   return (
     <div>
@@ -107,9 +93,7 @@ export default function SuperAdminDashboard() {
             teamOptions={orgTeams.map(t => ({ value: t.id, label: t.name }))}
             onTeamFilterChange={setLeaderboardTeamFilter}
             teamFilter={leaderboardTeamFilter}
-            showVisibilityToggle={true}
-            teamVisibility={teamVisibility}
-            onToggleVisibility={handleToggleVisibility}
+            showVisibilityToggle={false}
           />
         </div>
       </div>

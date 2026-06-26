@@ -54,28 +54,32 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 
 	teamFilter := c.Query("team")
 
-	var teamIDs []uuid.UUID
+	// Fetch all teams for the role to build name map; used for both leaderboard and visibility panel
+	var allTeams []schemas.TeamResponse
+	var err error
+	if role == "SUPER_ADMIN" {
+		allTeams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
+	} else {
+		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
 
+	nameMap := make(map[string]string)
+	var allTeamIDs []uuid.UUID
+	for _, t := range allTeams {
+		allTeamIDs = append(allTeamIDs, util.ParseUUID(t.ID))
+		nameMap[t.ID] = t.Name
+	}
+
+	// teamIDs is used for leaderboard entries only (respects filter); visibility always shows all teams
+	var teamIDs []uuid.UUID
 	if teamFilter != "" && teamFilter != "ALL" {
 		teamIDs = []uuid.UUID{util.ParseUUID(teamFilter)}
-	} else if role == "SUPER_ADMIN" {
-		teams, err := h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
-			return
-		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
 	} else {
-		teams, err := h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
-			return
-		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
+		teamIDs = allTeamIDs
 	}
 
 	if len(teamIDs) == 0 {
@@ -83,7 +87,12 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 		return
 	}
 
-	visSettings, _ := h.scoreService.GetLeaderboardVisibilityBulk(c.Request.Context(), teamIDs)
+	visSettings, _ := h.scoreService.GetLeaderboardVisibilityBulk(c.Request.Context(), allTeamIDs)
+	for i := range visSettings {
+		if name, ok := nameMap[visSettings[i].TeamID]; ok {
+			visSettings[i].TeamName = name
+		}
+	}
 
 	result, err := h.scoreService.GetLeaderboard(c.Request.Context(), teamIDs, userID)
 	if err != nil {
@@ -99,6 +108,11 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 func (h *ScoreHandler) ToggleLeaderboardVisibility(c *gin.Context) {
 	teamID := c.Param("team_id")
 	userID := c.MustGet("user_id").(string)
+	roleVal, _ := c.Get("role")
+	if role, _ := roleVal.(string); role == "SUPER_ADMIN" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Super admins cannot manage leaderboard visibility"})
+		return
+	}
 
 	var req schemas.ToggleLeaderboardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

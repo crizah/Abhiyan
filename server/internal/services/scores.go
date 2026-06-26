@@ -297,9 +297,6 @@ func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string
 
 	var teamIDs []uuid.UUID
 	for _, t := range userTeams {
-		if string(t.TeamRole) == "TEAM_ADMIN" {
-			continue
-		}
 		teamIDs = append(teamIDs, t.ID)
 	}
 

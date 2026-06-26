@@ -26,7 +26,7 @@ SELECT
 FROM team_members tm
 JOIN users u ON tm.user_id = u.id
 LEFT JOIN employee_scores es ON u.id = es.user_id AND es.superseded = false
-WHERE tm.team_id = ANY($1::uuid[]) AND tm.team_role = 'MEMBER'
+WHERE tm.team_id = ANY($1::uuid[])
 GROUP BY u.id, u.first_name, u.last_name, u.email_id
 ORDER BY total_points DESC, u.first_name ASC
 `
@@ -86,7 +86,7 @@ SELECT
 FROM team_members tm_member
 JOIN users u ON tm_member.user_id = u.id
 LEFT JOIN employee_scores es ON u.id = es.user_id AND es.superseded = false
-WHERE tm_member.team_id = ANY($1::uuid[]) AND tm_member.team_role = 'MEMBER'
+WHERE tm_member.team_id = ANY($1::uuid[])
 GROUP BY u.id, u.first_name, u.last_name, u.email_id
 ORDER BY total_points DESC
 `
@@ -284,7 +284,7 @@ SELECT
 FROM team_members tm
 JOIN users u ON tm.user_id = u.id
 LEFT JOIN employee_scores es ON u.id = es.user_id AND es.team_id = tm.team_id AND es.superseded = false
-WHERE tm.team_id = $1 AND tm.team_role = 'MEMBER'
+WHERE tm.team_id = $1
 GROUP BY u.id, u.first_name, u.last_name, u.email_id
 ORDER BY total_points DESC, u.first_name ASC
 `

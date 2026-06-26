@@ -149,7 +149,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 			return db.Task{}, err
 		}
 
-		email, _ := qtx.GetEmailByUser(ctx, uID)
+		email, _ := qtx.GetEmailByUser(ctx, uID) // n+1
 		assigneeEmails = append(assigneeEmails, email)
 
 	}

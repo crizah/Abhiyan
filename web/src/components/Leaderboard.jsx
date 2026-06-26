@@ -1,6 +1,6 @@
 import React from 'react';
-import { Table, Select, Switch, Typography, Avatar, Flex, Tag, Empty, Space, theme } from 'antd';
-import { TrophyOutlined, UserOutlined, CrownFilled } from '@ant-design/icons';
+import { Table, Select, Typography, Avatar, Flex, Tag, Empty, Space, Tooltip, theme } from 'antd';
+import { TrophyOutlined, UserOutlined, CrownFilled, InfoCircleOutlined } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
 
@@ -115,28 +115,46 @@ export default function Leaderboard({
         </Space>
       </Flex>
 
-      {showVisibilityToggle && teamVisibility.length > 0 && (
-        <Flex wrap="wrap" gap={12} style={{
-          marginBottom: 16, padding: '12px 16px',
-          background: token.colorBgLayout,
-          borderRadius: token.borderRadiusLG,
-          border: `1px solid ${token.colorBorderSecondary}`,
-        }}>
-          <Text type="secondary" style={{ marginRight: 8, alignSelf: 'center', fontSize: 13 }}>
-            Employee visibility:
-          </Text>
-          {teamVisibility.map(tv => (
-            <Flex key={tv.team_id} align="center" gap={6}>
-              <Switch
-                size="small"
-                checked={tv.leaderboard_visible}
-                onChange={(checked) => onToggleVisibility?.(tv.team_id, checked)}
-              />
-              <Text style={{ fontSize: 13 }}>{tv.team_name || tv.team_id.slice(0, 8)}</Text>
-            </Flex>
-          ))}
-        </Flex>
-      )}
+      {showVisibilityToggle && teamVisibility.length > 0 && (() => {
+        const visibleIds = teamVisibility.filter(tv => tv.leaderboard_visible).map(tv => tv.team_id);
+        const allIds = teamVisibility.map(tv => tv.team_id);
+        const allSelected = allIds.length > 0 && allIds.every(id => visibleIds.includes(id));
+        const ALL_KEY = '__select_all__';
+
+        const handleChange = (newValues) => {
+          if (newValues.includes(ALL_KEY)) {
+            teamVisibility.forEach(tv => { if (!tv.leaderboard_visible) onToggleVisibility?.(tv.team_id, true); });
+            return;
+          }
+          const prev = new Set(visibleIds);
+          const next = new Set(newValues);
+          next.forEach(id => { if (!prev.has(id)) onToggleVisibility?.(id, true); });
+          prev.forEach(id => { if (!next.has(id)) onToggleVisibility?.(id, false); });
+        };
+
+        return (
+          <Flex align="center" gap={8} style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+            <Tooltip title="Employees in selected teams will be able to see the leaderboard">
+              <Space style={{ cursor: 'default' }}>
+                <InfoCircleOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+                <Text type="secondary" style={{ fontSize: 13 }}>Employee visibility:</Text>
+              </Space>
+            </Tooltip>
+            <Select
+              mode="multiple"
+              style={{ minWidth: 260 }}
+              placeholder="No teams can see leaderboard"
+              value={visibleIds}
+              onChange={handleChange}
+              maxTagCount="responsive"
+              options={[
+                { value: ALL_KEY, label: 'Select All', disabled: allSelected },
+                ...teamVisibility.map(tv => ({ value: tv.team_id, label: tv.team_name || tv.team_id.slice(0, 8) })),
+              ]}
+            />
+          </Flex>
+        );
+      })()}
 
       <Table
         columns={columns}

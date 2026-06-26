@@ -35,10 +35,10 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 				assigneePhones, _ := queries.GetTaskAssigneePhones(ctx, rem.TaskID)
 
 				for _, n := range assigneePhones {
-					// // skip if the database value was NULL or empty
-					// if !n.Valid || n.String == "" {
-					// 	continue
-					// }
+					// skip if the database value was NULL or empty
+					if !n.Valid || n.String == "" {
+						continue
+					}
 
 					err := onionApp.Enqueue(ctx, "send_reminder_whatsapp", map[string]any{
 						"rPN":      n,

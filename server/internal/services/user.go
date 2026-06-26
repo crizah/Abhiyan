@@ -71,13 +71,12 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schem
 			TeamAdminEmails: emails,
 		})
 	}
-
 	return &schemas.UserProfileResponse{
 		ID:          baseProfile.ID.String(),
 		FirstName:   baseProfile.FirstName.String,
 		LastName:    baseProfile.LastName.String,
 		EmailID:     baseProfile.EmailID,
-		PhoneNumber: baseProfile.PhoneNumber,
+		PhoneNumber: baseProfile.PhoneNumber.String,
 		Status:      string(baseProfile.Status.UserStatus),
 		OrgName:     baseProfile.OrgName,
 		SystemRoles: systemRoles,
@@ -92,7 +91,7 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req 
 		ID:          uid,
 		FirstName:   sql.NullString{String: req.FirstName, Valid: req.FirstName != ""},
 		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
-		PhoneNumber: req.PhoneNumber,
+		PhoneNumber: sql.NullString{String: req.PhoneNumber, Valid: req.PhoneNumber != ""},
 	}
 
 	_, err := s.queries.UpdateUserProfile(ctx, params)

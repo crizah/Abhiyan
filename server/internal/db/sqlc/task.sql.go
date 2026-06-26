@@ -474,15 +474,15 @@ FROM users u JOIN task_participants tp on u.id = tp.user_id
 WHERE tp.task_id = $1 and tp.role = 'ASSIGNEE'
 `
 
-func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error) {
+func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error) {
 	rows, err := q.db.QueryContext(ctx, getTaskAssigneePhones, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []sql.NullString
 	for rows.Next() {
-		var phone_number string
+		var phone_number sql.NullString
 		if err := rows.Scan(&phone_number); err != nil {
 			return nil, err
 		}

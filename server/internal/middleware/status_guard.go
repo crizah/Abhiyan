@@ -17,8 +17,14 @@ func BlockSuspendedUsers(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		userID, ok := userIDVal.(uuid.UUID)
+		userIDStr, ok := userIDVal.(string)
 		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user context"})
+			c.Abort()
+			return
+		}
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user context"})
 			c.Abort()
 			return

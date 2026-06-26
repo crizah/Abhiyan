@@ -78,7 +78,7 @@ type CreateUserParams struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -219,7 +219,7 @@ type GetFullUserProfileRow struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 	Status      NullUserStatus `json:"status"`
 	OrgName     string         `json:"org_name"`
 }
@@ -637,7 +637,7 @@ RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, cre
 type UpdateUserOnboardingParams struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 	EmailID     string         `json:"email_id"`
 }
 
@@ -673,14 +673,14 @@ type UpdateUserProfileParams struct {
 	ID          uuid.UUID      `json:"id"`
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 }
 
 type UpdateUserProfileRow struct {
 	ID          uuid.UUID      `json:"id"`
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
-	PhoneNumber string         `json:"phone_number"`
+	PhoneNumber sql.NullString `json:"phone_number"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {

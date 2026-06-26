@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -57,7 +58,7 @@ type Querier interface {
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetPendingTranscriptions(ctx context.Context) ([]GetPendingTranscriptionsRow, error)
 	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
-	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]string, error)
+	GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) ([]sql.NullString, error)
 	GetTaskAssigneesWithContext(ctx context.Context, taskID uuid.UUID) ([]GetTaskAssigneesWithContextRow, error)
 	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)

@@ -536,7 +536,7 @@ export default function TeamTasksPage() {
       <Drawer
         title={selectedTask?.title || "Task Details"}
         placement="right"
-        width="60%"
+        width="65%"
         onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }}
         open={isDrawerOpen}
         extra={

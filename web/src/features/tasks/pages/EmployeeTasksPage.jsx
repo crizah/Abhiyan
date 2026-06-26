@@ -252,7 +252,7 @@ export default function EmployeeTasksPage() {
       <Drawer
         title={selectedTask?.title || "Task Details"}
         placement="right"
-        width="80%"
+        width="65%"
         onClose={() => { purgeUnsavedFiles(drawerFileList); setDrawerFileList([]); setIsDrawerOpen(false); }}
         open={isDrawerOpen}
         extra={canSubmit && (

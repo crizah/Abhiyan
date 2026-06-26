@@ -993,6 +993,25 @@ func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentPara
 	return id, err
 }
 
+const isTaskAssignee = `-- name: IsTaskAssignee :one
+SELECT EXISTS (
+    SELECT 1 FROM task_participants
+    WHERE task_id = $1 AND user_id = $2 AND role = 'ASSIGNEE'
+)
+`
+
+type IsTaskAssigneeParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isTaskAssignee, arg.TaskID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listTasksByTeam = `-- name: ListTasksByTeam :many
 SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at FROM tasks
 WHERE team_id = $1

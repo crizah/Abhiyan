@@ -376,7 +376,33 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 		atts = []schemas.AttachmentPayload{}
 	}
 
+	dbTask, err := s.queries.GetTaskByID(ctx, tID)
+	if err != nil {
+		return nil, err
+	}
+	var dueDate *time.Time
+	if dbTask.DueDate.Valid {
+		dueDate = &dbTask.DueDate.Time
+	}
+	var createdAt *time.Time
+	if dbTask.CreatedAt.Valid {
+		createdAt = &dbTask.CreatedAt.Time
+	}
+	taskResp := schemas.TaskResponse{
+		ID:                dbTask.ID.String(),
+		TeamID:            dbTask.TeamID.String(),
+		Title:             dbTask.Title,
+		Description:       dbTask.Description.String,
+		Status:            string(dbTask.Status.TaskStatus),
+		FulfillmentStatus: string(dbTask.FulfillmentStatus.TaskFulfillmentStatus),
+		ReviewStatus:      string(dbTask.ReviewStatus),
+		CreatedBy:         dbTask.CreatedBy.String(),
+		DueDate:           dueDate,
+		CreatedAt:         createdAt,
+	}
+
 	return &schemas.FullTaskDetailsResponse{
+		Task:         taskResp,
 		Participants: parts,
 		Reminders:    rems,
 		Attachments:  atts,
@@ -885,6 +911,14 @@ func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userI
 }
 
 func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
+	tID := util.ParseUUID(taskID)
+	uID := util.ParseUUID(userID)
+
+	isAssignee, err := s.queries.IsTaskAssignee(ctx, db.IsTaskAssigneeParams{TaskID: tID, UserID: uID})
+	if err != nil || !isAssignee {
+		return fmt.Errorf("only assignees can submit a task for review")
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -892,10 +926,7 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
-	uID := util.ParseUUID(userID)
 
-	// NEW: Use the combined state updater
 	err = qtx.SubmitTaskState(ctx, tID)
 	if err != nil {
 		return fmt.Errorf("failed to update state: %w", err)

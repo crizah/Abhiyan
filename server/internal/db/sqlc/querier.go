@@ -98,6 +98,7 @@ type Querier interface {
 	InsertScoreEvent(ctx context.Context, arg InsertScoreEventParams) (EmployeeScore, error)
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
+	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error

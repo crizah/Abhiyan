@@ -218,3 +218,9 @@ DELETE FROM attachments WHERE task_id = $1 AND task_update_id IS NULL;
 -- name: DeleteAttachmentsByIDs :many
 DELETE FROM attachments WHERE id = ANY($1::uuid[])
 RETURNING file_url;
+
+-- name: IsTaskAssignee :one
+SELECT EXISTS (
+    SELECT 1 FROM task_participants
+    WHERE task_id = $1 AND user_id = $2 AND role = 'ASSIGNEE'
+);

@@ -361,12 +361,13 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to update status."); }
   };
 
-  const postComment = async (updateId, text) => {
+  const postComment = async (updateId, text, attachments = []) => {
     try {
       const mentionedIds = teamMembers.filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
       await apiClient.post(`/admin/tasks/${selectedTask.id}/updates/${updateId}/comments`, {
         content: text,
-        mentioned_user_ids: mentionedIds
+        mentioned_user_ids: mentionedIds,
+        attachments,
       });
       setCommentOffsets(prev => ({ ...prev, [updateId]: 0 }));
       fetchComments(selectedTask.id, updateId, 0);
@@ -633,6 +634,8 @@ export default function TeamTasksPage() {
                   cachedMentionOptions={cachedMentionOptions}
                   canPost={selectedTask.status === 'OPEN'}
                   updatesContainerRef={updatesContainerRef}
+                  handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  deleteUnsavedS3File={deleteUnsavedS3File}
                 />
 
                 {selectedTask.status === 'OPEN' && (

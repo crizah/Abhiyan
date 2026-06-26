@@ -206,11 +206,11 @@ export default function EmployeeTasksPage() {
     } catch { message.error("Update publication dropped."); }
   };
 
-  const postComment = async (updateId, text) => {
+  const postComment = async (updateId, text, attachments = []) => {
     try {
       const mentionedIds = teamMembers.filter(m => text.includes(`@${m.full_name.replace(/\s+/g, '')}`)).map(m => m.id);
       await apiClient.post(`/tasks/${selectedTask.id}/updates/${updateId}/comments`, {
-        content: text, mentioned_user_ids: mentionedIds,
+        content: text, mentioned_user_ids: mentionedIds, attachments,
       });
       setCommentOffsets(prev => ({ ...prev, [updateId]: 0 }));
       fetchComments(selectedTask.id, updateId, 0);
@@ -330,6 +330,8 @@ export default function EmployeeTasksPage() {
                   cachedMentionOptions={cachedMentionOptions}
                   canPost={selectedTask.status === 'OPEN'}
                   updatesContainerRef={updatesContainerRef}
+                  handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  deleteUnsavedS3File={deleteUnsavedS3File}
                 />
 
                 {selectedTask.status === 'OPEN' && (

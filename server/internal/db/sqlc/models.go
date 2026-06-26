@@ -533,6 +533,7 @@ type Attachment struct {
 	ID            uuid.UUID     `json:"id"`
 	TaskID        uuid.NullUUID `json:"task_id"`
 	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	TaskCommentID uuid.NullUUID `json:"task_comment_id"`
 	FileName      string        `json:"file_name"`
 	FileUrl       string        `json:"file_url"`
 	FileType      string        `json:"file_type"`

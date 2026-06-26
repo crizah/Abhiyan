@@ -152,6 +152,8 @@ export function CommentsSection({
   taskId,
   cachedMentionOptions,
   canPost,
+  handleS3UploadWithPurge,
+  deleteUnsavedS3File,
 }) {
   const isExpanded = expandedComments[update.id];
   const comments = commentsMap[update.id] || [];
@@ -192,6 +194,11 @@ export function CommentsSection({
                 <div style={{ fontSize: 13, lineHeight: 1.5, marginTop: 1 }}>
                   {renderMentions(c.content)}
                 </div>
+                {c.attachments?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                    {c.attachments.map((file, idx) => <AttachmentRow key={idx} file={file} idx={idx} />)}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -211,7 +218,13 @@ export function CommentsSection({
           )}
 
           {canPost && (
-            <CommentInput updateId={update.id} onSubmit={postComment} mentionOptions={cachedMentionOptions} />
+            <CommentInput
+              updateId={update.id}
+              onSubmit={postComment}
+              mentionOptions={cachedMentionOptions}
+              handleS3UploadWithPurge={handleS3UploadWithPurge}
+              deleteUnsavedS3File={deleteUnsavedS3File}
+            />
           )}
         </div>
       )}
@@ -219,30 +232,63 @@ export function CommentsSection({
   );
 }
 
-function CommentInput({ updateId, onSubmit, mentionOptions }) {
+function CommentInput({ updateId, onSubmit, mentionOptions, handleS3UploadWithPurge, deleteUnsavedS3File }) {
   const [text, setText] = useState('');
+  const [fileList, setFileList] = useState([]);
 
   const handleSubmit = () => {
-    if (!text.trim()) return;
-    onSubmit(updateId, text);
+    if (!text.trim() && fileList.length === 0) return;
+    const attachments = fileList.filter(f => f.status === 'done' && f.s3Data).map(f => f.s3Data);
+    onSubmit(updateId, text, attachments);
     setText('');
+    setFileList([]);
   };
 
   return (
-    <Flex gap={6} style={{ marginTop: 8 }}>
-      <Mentions
-        style={{ flex: 1 }}
-        size="small"
-        placeholder="Write a comment… use @ to mention"
-        value={text}
-        onChange={setText}
-        onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-        options={mentionOptions}
-      />
-      <Button type="primary" size="small" icon={<SendOutlined />} onClick={handleSubmit} disabled={!text.trim()}>
-        Reply
-      </Button>
-    </Flex>
+    <div style={{ marginTop: 8 }}>
+      {fileList.length > 0 && (
+        <div style={{ marginBottom: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {fileList.map(f => (
+            <Tag
+              key={f.uid}
+              closable
+              onClose={() => { deleteUnsavedS3File?.(f); setFileList(prev => prev.filter(i => i.uid !== f.uid)); }}
+              style={{ borderRadius: 20, fontSize: 11 }}
+            >
+              {f.name}
+            </Tag>
+          ))}
+        </div>
+      )}
+      <Flex gap={6} align="center">
+        {handleS3UploadWithPurge && (
+          <Upload
+            customRequest={(opt) => handleS3UploadWithPurge(opt, setFileList)}
+            fileList={fileList}
+            onChange={({ fileList: fl }) => setFileList(fl)}
+            showUploadList={false}
+            multiple
+          >
+            <Button icon={<PaperClipOutlined />} shape="circle" size="small" title="Attach file" />
+          </Upload>
+        )}
+        {handleS3UploadWithPurge && (
+          <AudioRecorder onUploadSuccess={(fileObj) => setFileList(prev => [...prev, fileObj])} />
+        )}
+        <Mentions
+          style={{ flex: 1 }}
+          size="small"
+          placeholder="Write a comment… use @ to mention"
+          value={text}
+          onChange={setText}
+          onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+          options={mentionOptions}
+        />
+        <Button type="primary" size="small" icon={<SendOutlined />} onClick={handleSubmit} disabled={!text.trim() && fileList.length === 0}>
+          Reply
+        </Button>
+      </Flex>
+    </div>
   );
 }
 
@@ -264,6 +310,8 @@ export function UpdateFeed({
   cachedMentionOptions,
   canPost,
   updatesContainerRef,
+  handleS3UploadWithPurge,
+  deleteUnsavedS3File,
 }) {
   return (
     <div ref={updatesContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
@@ -323,6 +371,8 @@ export function UpdateFeed({
                   taskId={taskId}
                   cachedMentionOptions={cachedMentionOptions}
                   canPost={canPost}
+                  handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  deleteUnsavedS3File={deleteUnsavedS3File}
                 />
               </div>
             </div>

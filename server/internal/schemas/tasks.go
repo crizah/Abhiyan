@@ -107,8 +107,9 @@ type ActionTaskRequest struct {
 	Attachments []AttachmentPayload     `json:"attachments"`
 }
 type AddCommentRequest struct { // <-- NEW
-	Content          string   `json:"content" binding:"required"`
-	MentionedUserIDs []string `json:"mentioned_user_ids"`
+	Content          string              `json:"content"`
+	MentionedUserIDs []string            `json:"mentioned_user_ids"`
+	Attachments      []AttachmentPayload `json:"attachments"`
 }
 
 type TaskUpdateCommentResponse struct { // <-- NEW
@@ -128,11 +129,11 @@ type TranscriptionResponse struct {
 }
 
 type AttachmentPayload struct {
-	ID                    string `json:"id,omitempty"`
-	FileName              string `json:"file_name"`
-	FileURL               string `json:"file_url"`
-	FileType              string `json:"file_type"`
-	FileSize              int64  `json:"file_size"`
-	TranscriptionStatus   string `json:"transcription_status,omitempty"`
-	TranscriptionText     string `json:"transcription_text,omitempty"`
+	ID                  string `json:"id,omitempty"`
+	FileName            string `json:"file_name"`
+	FileURL             string `json:"file_url"`
+	FileType            string `json:"file_type"`
+	FileSize            int64  `json:"file_size"`
+	TranscriptionStatus string `json:"transcription_status,omitempty"`
+	TranscriptionText   string `json:"transcription_text,omitempty"`
 }

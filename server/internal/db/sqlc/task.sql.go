@@ -569,6 +569,57 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error) {
 	return i, err
 }
 
+const getTaskCommentAttachments = `-- name: GetTaskCommentAttachments :many
+SELECT a.id, a.task_comment_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
+       t.status AS transcription_status, t.transcript_text
+FROM attachments a
+LEFT JOIN transcriptions t ON t.attachment_id = a.id
+WHERE a.task_comment_id = ANY($1::uuid[])
+`
+
+type GetTaskCommentAttachmentsRow struct {
+	ID                  uuid.UUID               `json:"id"`
+	TaskCommentID       uuid.NullUUID           `json:"task_comment_id"`
+	FileName            string                  `json:"file_name"`
+	FileUrl             string                  `json:"file_url"`
+	FileType            string                  `json:"file_type"`
+	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
+	TranscriptText      sql.NullString          `json:"transcript_text"`
+}
+
+func (q *Queries) GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskCommentAttachmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskCommentAttachments, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskCommentAttachmentsRow
+	for rows.Next() {
+		var i GetTaskCommentAttachmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskCommentID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileType,
+			&i.FileSizeBytes,
+			&i.TranscriptionStatus,
+			&i.TranscriptText,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskDetailsForNotifications = `-- name: GetTaskDetailsForNotifications :one
 SELECT title FROM tasks WHERE id = $1
 `
@@ -968,15 +1019,16 @@ func (q *Queries) GetUpdateComments(ctx context.Context, arg GetUpdateCommentsPa
 
 const insertAttachment = `-- name: InsertAttachment :one
 INSERT INTO attachments (
-    task_id, task_update_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
+    task_id, task_update_id, task_comment_id, file_name, file_url, file_type, file_size_bytes, uploaded_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING id
 `
 
 type InsertAttachmentParams struct {
 	TaskID        uuid.NullUUID `json:"task_id"`
 	TaskUpdateID  uuid.NullUUID `json:"task_update_id"`
+	TaskCommentID uuid.NullUUID `json:"task_comment_id"`
 	FileName      string        `json:"file_name"`
 	FileUrl       string        `json:"file_url"`
 	FileType      string        `json:"file_type"`
@@ -988,6 +1040,7 @@ func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentPara
 	row := q.db.QueryRowContext(ctx, insertAttachment,
 		arg.TaskID,
 		arg.TaskUpdateID,
+		arg.TaskCommentID,
 		arg.FileName,
 		arg.FileUrl,
 		arg.FileType,

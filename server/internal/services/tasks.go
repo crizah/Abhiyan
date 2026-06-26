@@ -33,14 +33,16 @@ func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service, sc *ScoreService)
 	}
 }
 
-func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, params db.InsertAttachmentParams) {
+func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, params db.InsertAttachmentParams) error {
 	attID, err := qtx.InsertAttachment(ctx, params)
 	if err != nil {
-		return
+		return err
 	}
 	if strings.HasPrefix(params.FileType, "audio/") {
 		qtx.InsertTranscription(ctx, attID)
 	}
+
+	return nil
 }
 
 func (s *TaskService) diffAttachments(
@@ -79,6 +81,7 @@ func (s *TaskService) diffAttachments(
 		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
 			TaskID:        taskIDNullable,
 			TaskUpdateID:  uuid.NullUUID{},
+			TaskCommentID: uuid.NullUUID{},
 			FileName:      att.FileName,
 			FileUrl:       att.FileURL,
 			FileType:      att.FileType,
@@ -206,6 +209,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
 			TaskID:        uuid.NullUUID{UUID: task.ID, Valid: true},
 			TaskUpdateID:  uuid.NullUUID{},
+			TaskCommentID: uuid.NullUUID{},
 			FileName:      att.FileName,
 			FileUrl:       att.FileURL,
 			FileType:      att.FileType,
@@ -675,16 +679,45 @@ func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, li
 	if err != nil {
 		return nil, err
 	}
+	// get all comment ids (loopholoes to avoid n+1 queries)
+	var commentIDs []uuid.UUID
+	for _, c := range dbComments {
+		commentIDs = append(commentIDs, c.ID)
+	}
+	attachments, err := s.queries.GetTaskCommentAttachments(ctx, commentIDs)
+	if err != nil {
+		return nil, err
+	}
+	aM := make(map[string][]schemas.AttachmentPayload) // [comment_id] -> [attch_ids]
+	for _, att := range attachments {
+		// get comment id
+		if att.TaskCommentID.Valid {
+			payload := schemas.AttachmentPayload{
+				ID:       att.ID.String(),
+				FileName: att.FileName,
+				FileURL:  att.FileUrl,
+				FileType: att.FileType,
+				FileSize: att.FileSizeBytes.Int64,
+			}
+			if att.TranscriptionStatus.Valid {
+				payload.TranscriptionStatus = string(att.TranscriptionStatus.TranscriptionStatus)
+				payload.TranscriptionText = att.TranscriptText.String
+			}
+			aM[att.TaskCommentID.UUID.String()] = append(aM[att.TaskCommentID.UUID.String()], payload)
+		}
+	}
 
 	var comments []schemas.TaskUpdateCommentResponse
 	for _, c := range dbComments {
+
 		comments = append(comments, schemas.TaskUpdateCommentResponse{
-			ID:        c.ID.String(),
-			UserID:    c.UserID.UUID.String(),
-			FirstName: c.FirstName.String,
-			LastName:  c.LastName.String,
-			Content:   c.Content,
-			CreatedAt: c.CreatedAt.Time.Format(time.RFC3339),
+			ID:          c.ID.String(),
+			UserID:      c.UserID.UUID.String(),
+			FirstName:   c.FirstName.String,
+			LastName:    c.LastName.String,
+			Content:     c.Content,
+			CreatedAt:   c.CreatedAt.Time.Format(time.RFC3339),
+			Attachments: aM[c.ID.String()],
 		})
 	}
 
@@ -693,6 +726,7 @@ func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, li
 	}
 	return comments, nil
 }
+
 func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -719,12 +753,14 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 		insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
 			TaskID:        uuid.NullUUID{},
 			TaskUpdateID:  uuid.NullUUID{UUID: updateRec.ID, Valid: true},
+			TaskCommentID: uuid.NullUUID{},
 			FileName:      att.FileName,
 			FileUrl:       att.FileURL,
 			FileType:      att.FileType,
 			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
 			UploadedBy:    uID,
 		})
+
 	}
 
 	// 2. Data for Notifications
@@ -784,7 +820,7 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 	tID := util.ParseUUID(taskID)
 
 	// 1. Insert Comment
-	_, err = qtx.AddUpdateComment(ctx, db.AddUpdateCommentParams{
+	c, err := qtx.AddUpdateComment(ctx, db.AddUpdateCommentParams{
 		TaskUpdateID: uID,
 		UserID:       uuid.NullUUID{UUID: cID, Valid: true},
 		Content:      req.Content,
@@ -793,57 +829,69 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 		return err
 	}
 
-	// 2. Notifications Logic
-
-	// De-duplicate mentioned user IDs
-	uniqueMentionedIds := make([]string, 0)
-	mentionMap := make(map[string]bool)
-	for _, id := range req.MentionedUserIDs {
-		if !mentionMap[id] {
-			mentionMap[id] = true
-			uniqueMentionedIds = append(uniqueMentionedIds, id)
+	// insert attachments
+	for _, att := range req.Attachments {
+		err = insertAttachmentWithTranscription(ctx, qtx, db.InsertAttachmentParams{
+			TaskID:        uuid.NullUUID{},
+			TaskUpdateID:  uuid.NullUUID{},
+			TaskCommentID: uuid.NullUUID{UUID: c, Valid: true},
+			FileName:      att.FileName,
+			FileUrl:       att.FileURL,
+			FileType:      att.FileType,
+			FileSizeBytes: sql.NullInt64{Int64: att.FileSize, Valid: true},
+			UploadedBy:    cID,
+		})
+		if err != nil {
+			return err
 		}
 	}
 
-	// Reusable notification creation/messaging logic
-	createMentionNotification := func(ctx context.Context, qtx *db.Queries, mentionedUserID, commentAuthorName, taskTitle string) {
-		mID := util.ParseUUID(mentionedUserID)
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  mID,
-			Title:   "Mentioned in comment!",
-			Message: fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle),
-		})
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
-	createAuthorNotification := func(ctx context.Context, qtx *db.Queries, authorID uuid.UUID) {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  authorID,
-			Title:   "New comment on your task update",
-			Message: "Someone replied to your task update.",
-		})
-	}
+	// Notifications run outside the transaction so a failure never rolls back the comment.
+	go func() {
+		nctx := context.Background()
+		q := s.queries
 
-	// Fetch required names/titles
-	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
-	commentAuthor, _ := qtx.GetUserNameByID(ctx, cID)
-	commentAuthorName := strings.TrimSpace(commentAuthor.FirstName.String + " " + commentAuthor.LastName.String)
-	if commentAuthorName == "" {
-		commentAuthorName = "Someone"
-	}
+		uniqueMentionedIds := make([]string, 0)
+		mentionMap := make(map[string]bool)
+		for _, id := range req.MentionedUserIDs {
+			if !mentionMap[id] {
+				mentionMap[id] = true
+				uniqueMentionedIds = append(uniqueMentionedIds, id)
+			}
+		}
 
-	// 3. Loop through mentioned users, trigger notifications
-	for _, mIDStr := range uniqueMentionedIds {
-		createMentionNotification(ctx, qtx, mIDStr, commentAuthorName, taskTitle)
-	}
+		taskTitle, _ := q.GetTaskDetailsForNotifications(nctx, tID)
+		commentAuthor, _ := q.GetUserNameByID(nctx, cID)
+		commentAuthorName := strings.TrimSpace(commentAuthor.FirstName.String + " " + commentAuthor.LastName.String)
+		if commentAuthorName == "" {
+			commentAuthorName = "Someone"
+		}
 
-	// 4. Notify the original author of the update (if not commenting on own post and not mentioned)
-	updateAuthor, err := qtx.GetTaskUpdateAuthor(ctx, uID)
-	updateAuthorIdStr := updateAuthor.UUID.String()
-	if err == nil && updateAuthor.UUID != cID && !mentionMap[updateAuthorIdStr] { // Don't notify if author posted comment OR already mentioned
-		createAuthorNotification(ctx, qtx, updateAuthor.UUID)
-	}
+		for _, mIDStr := range uniqueMentionedIds {
+			mID := util.ParseUUID(mIDStr)
+			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
+				UserID:  mID,
+				Title:   "Mentioned in comment!",
+				Message: fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle),
+			})
+		}
 
-	return tx.Commit()
+		updateAuthor, err := q.GetTaskUpdateAuthor(nctx, uID)
+		updateAuthorIdStr := updateAuthor.UUID.String()
+		if err == nil && updateAuthor.UUID != cID && !mentionMap[updateAuthorIdStr] {
+			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
+				UserID:  updateAuthor.UUID,
+				Title:   "New comment on your task update",
+				Message: "Someone replied to your task update.",
+			})
+		}
+	}()
+
+	return nil
 }
 
 // 2. Fetch tasks where the employee is an Assignee or Subscriber

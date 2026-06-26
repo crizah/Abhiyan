@@ -133,9 +133,7 @@ export default function EmployeeDashboard() {
                   entries={leaderboardData}
                   loading={leaderboardLoading}
                   currentUserId={user?.user_id}
-                  teamOptions={teams
-                    .filter(t => t.role !== 'TEAM_ADMIN')
-                    .map(t => ({ value: t.id, label: t.name }))}
+                  teamOptions={teams.map(t => ({ value: t.id, label: t.name }))}
                   onTeamFilterChange={setLeaderboardTeamFilter}
                   teamFilter={leaderboardTeamFilter}
                   showVisibilityToggle={false}

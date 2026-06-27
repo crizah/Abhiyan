@@ -3,13 +3,14 @@ package schemas
 // --- Requests ---
 
 type RegisterOrgRequest struct {
-	OrgName        string `json:"org_name" binding:"required"`
-	OrgDomain      string `json:"org_domain"`
-	AdminFirstName string `json:"admin_first_name" binding:"required"`
-	AdminLastName  string `json:"admin_last_name"`
-	AdminEmail     string `json:"admin_email" binding:"required,email"`
-	AdminPhone     string `json:"admin_phone" binding:"required"`
-	AdminPassword  string `json:"admin_password" binding:"required,min=8"`
+	OrgName         string      `json:"org_name" binding:"required"`
+	OrgDomain       string      `json:"org_domain"`
+	AdminFirstName  string      `json:"admin_first_name" binding:"required"`
+	AdminLastName   string      `json:"admin_last_name"`
+	AdminEmail      string      `json:"admin_email" binding:"required,email"`
+	AdminPhone      string      `json:"admin_phone" binding:"required"`
+	AdminSourceFace FacePayload `json:"admin_source_face" binding:"required"`
+	AdminPassword   string      `json:"admin_password" binding:"required,min=8"`
 }
 
 type LoginRequest struct {
@@ -25,11 +26,17 @@ type InviteUserRequest struct {
 }
 
 type AcceptInviteRequest struct {
-	Token       string `json:"token" binding:"required"` // The JWT from the URL
-	Phone       string `json:"phone" binding:"required"`
-	FirstName   string `json:"first_name" binding:"required"`
-	LastName    string `json:"last_name"`
-	NewPassword string `json:"new_password" binding:"required,min=8"`
+	Token       string      `json:"token" binding:"required"` // The JWT from the URL
+	Phone       string      `json:"phone" binding:"required"`
+	FirstName   string      `json:"first_name" binding:"required"`
+	LastName    string      `json:"last_name"`
+	SourceFace  FacePayload `json:"source_face" binding:"required"`
+	NewPassword string      `json:"new_password" binding:"required,min=8"`
+}
+
+type FacePayload struct {
+	FileURL   string `json:"file_url"`
+	ObjectKey string `json:"object_key"`
 }
 
 // --- Responses ---

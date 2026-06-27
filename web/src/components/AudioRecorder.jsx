@@ -94,7 +94,7 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
     const voiceFile = new File([audioBlob], `voice-note-${Date.now()}.${extension}`, { type: audioBlob.type });
     
     try {
-      const s3Data = await uploadFileToS3(voiceFile);
+      const s3Data = await uploadFileToS3(voiceFile, 'uploads');
       onUploadSuccess({
         uid: s3Data.file_url,
         name: s3Data.file_name,

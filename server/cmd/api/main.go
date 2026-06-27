@@ -123,7 +123,7 @@ func main() {
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			general.GET("/attachments/:attachment_id/transcription", taskHandler.GetTranscription)
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
-			general.GET("/upload/presigned-url", uploadHandler.GetPresignedURL)
+			general.GET("/upload/presigned-url", uploadHandler.GetPresignedUploadsURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
 			general.GET("/leaderboard", scoreHandler.GetEmployeeLeaderboard)
 		}

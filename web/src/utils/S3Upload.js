@@ -5,10 +5,10 @@ import apiClient from '../config/axios';
 /**
  * Uploads a file directly to S3 without sending signature-breaking content-type headers.
  */
-export const uploadFileToS3 = async (file, onProgress = () => {}) => {
+export const uploadFileToS3 = async (file, folderType, onProgress = () => {}) => {
   try {
     const { data } = await apiClient.get('/upload/presigned-url', {
-      params: { file_name: file.name }
+      params: { file_name: file.name , type: folderType}
     });
 
     // Sent as plain binary stream to bypass AWS 403 Signature Mismatch
@@ -20,6 +20,7 @@ export const uploadFileToS3 = async (file, onProgress = () => {}) => {
     return {
       file_name: file.name,
       file_url: data.file_url,
+      object_key: data.object_key,
       file_type: file.type || 'application/octet-stream',
       file_size: file.size
     };

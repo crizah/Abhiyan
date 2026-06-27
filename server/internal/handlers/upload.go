@@ -15,15 +15,17 @@ func NewUploadHandler(s3Service *services.S3Service) *UploadHandler {
 	return &UploadHandler{s3Service: s3Service}
 }
 
-func (h *UploadHandler) GetPresignedURL(c *gin.Context) {
+func (h *UploadHandler) GetPresignedUploadsURL(c *gin.Context) {
+	// for attachments
 	fileName := c.Query("file_name")
+	folderType := c.Query("type")
 
 	if fileName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file_name is required"})
 		return
 	}
 
-	uploadURL, finalURL, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName)
+	uploadURL, finalURL, objectKey, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName, folderType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate upload URL"})
 		return
@@ -32,6 +34,7 @@ func (h *UploadHandler) GetPresignedURL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"upload_url": uploadURL,
 		"file_url":   finalURL,
+		"object_key": objectKey,
 	})
 }
 

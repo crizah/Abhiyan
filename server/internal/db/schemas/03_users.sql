@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     last_name TEXT,
     email_id TEXT UNIQUE NOT NULL,
+    face_s3_uri TEXT,
     phone_number TEXT ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

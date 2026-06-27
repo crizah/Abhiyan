@@ -69,6 +69,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+		FaceS3Uri:   sql.NullString{String: req.AdminSourceFace.ObjectKey, Valid: true},
 
 		Status: db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
 	})
@@ -251,7 +252,8 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
 		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
 		// PhoneNumber: req.Phone,
-		EmailID: claims.Email, // Extracted safely from the signed JWT, not user input!
+		EmailID:   claims.Email,
+		FaceS3Uri: sql.NullString{String: req.SourceFace.ObjectKey, Valid: true},
 		// status already active here
 	})
 	// if err != nil {

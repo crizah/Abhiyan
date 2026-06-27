@@ -77,6 +77,9 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schem
 		LastName:    baseProfile.LastName.String,
 		EmailID:     baseProfile.EmailID,
 		PhoneNumber: baseProfile.PhoneNumber.String,
+		SourceFace: schemas.FacePayload{
+			FileURL: baseProfile.FaceS3Uri.String,
+		},
 		Status:      string(baseProfile.Status.UserStatus),
 		OrgName:     baseProfile.OrgName,
 		SystemRoles: systemRoles,
@@ -92,6 +95,7 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req 
 		FirstName:   sql.NullString{String: req.FirstName, Valid: req.FirstName != ""},
 		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
 		PhoneNumber: sql.NullString{String: req.PhoneNumber, Valid: req.PhoneNumber != ""},
+		FaceS3Uri:   sql.NullString{String: req.SourceFace.ObjectKey, Valid: req.SourceFace.ObjectKey != ""},
 	}
 
 	_, err := s.queries.UpdateUserProfile(ctx, params)

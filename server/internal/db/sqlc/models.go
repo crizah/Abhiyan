@@ -658,6 +658,7 @@ type User struct {
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
 	PhoneNumber sql.NullString `json:"phone_number"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }
 

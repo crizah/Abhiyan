@@ -49,6 +49,7 @@ func main() {
 			"send_reminder_email":    "reminders",
 			"send_reminder_whatsapp": "reminders",
 			"poll_due_reminders":     "polling",
+			"validate_face":          "default",
 		},
 	})
 	if err != nil {
@@ -67,6 +68,7 @@ func main() {
 	}
 	scoreService := services.NewScoreService(dbConn)
 	taskService := services.NewTaskService(dbConn, onionApp, s3Service, scoreService)
+	faceValidationService := services.NewFaceValidationService(dbConn)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -74,7 +76,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 	taskHandler := handlers.NewTaskHandler(taskService)
-	uploadHandler := handlers.NewUploadHandler(s3Service)
+	uploadHandler := handlers.NewUploadHandler(s3Service, faceValidationService, onionApp)
 	scoreHandler := handlers.NewScoreHandler(scoreService, adminService)
 
 	// 3. Setup Gin Router
@@ -125,6 +127,8 @@ func main() {
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedUploadsURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
+			general.POST("/upload/validate-face", uploadHandler.ValidateFace)
+			general.GET("/upload/validate-face/:job_id", uploadHandler.GetValidationStatus)
 			general.GET("/leaderboard", scoreHandler.GetEmployeeLeaderboard)
 		}
 
@@ -149,6 +153,7 @@ func main() {
 			superAdminGroup.GET("/users/assigned", adminHandler.GetAssignedUsers) // needs to be paginated
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 			superAdminGroup.GET("/users/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
+			superAdminGroup.PUT("/attendance", adminHandler.ToggleAttendance)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---
@@ -195,6 +200,7 @@ func main() {
 
 			users.GET("/me/profile", userHandler.GetMyProfile)
 			users.PUT("/me/profile", userHandler.UpdateMyProfile)
+			users.PUT("/me/face", userHandler.RegisterFace)
 		}
 	}
 

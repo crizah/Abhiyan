@@ -69,7 +69,6 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
 		EmailID:     req.AdminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
-		FaceS3Uri:   sql.NullString{String: req.AdminSourceFace.ObjectKey, Valid: true},
 
 		Status: db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
 	})
@@ -100,9 +99,13 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 }
 
 func (s *AuthService) GetOrganizationName(ctx context.Context, orgID string) (string, error) {
-	// util.ParseUUID is assuming you have a helper to convert the string to pgtype.UUID or uuid.UUID
 	parsedUUID := util.ParseUUID(orgID)
 	return s.Queries.GetOrganizationName(ctx, parsedUUID)
+}
+
+func (s *AuthService) GetOrgInfo(ctx context.Context, orgID string) (db.GetOrgInfoRow, error) {
+	parsedUUID := util.ParseUUID(orgID)
+	return s.Queries.GetOrgInfo(ctx, parsedUUID)
 }
 
 func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {
@@ -252,8 +255,7 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
 		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
 		// PhoneNumber: req.Phone,
-		EmailID:   claims.Email,
-		FaceS3Uri: sql.NullString{String: req.SourceFace.ObjectKey, Valid: true},
+		EmailID: claims.Email, // Extracted safely from the signed JWT, not user input!
 		// status already active here
 	})
 	// if err != nil {

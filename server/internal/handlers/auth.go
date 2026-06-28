@@ -53,19 +53,28 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	// 3. Fetch the freshest Organization Name from the database
-	orgName, err := h.authService.GetOrganizationName(c.Request.Context(), claims.OrgID)
-	if err != nil {
-		orgName = "Unknown Organization" // Safe fallback
+	// 3. Fetch org info (name + attendance toggle state) from DB
+	orgInfo, err := h.authService.GetOrgInfo(c.Request.Context(), claims.OrgID)
+	orgName := "Unknown Organization"
+	attendanceEnabled := false
+	if err == nil {
+		orgName = orgInfo.Name
+		attendanceEnabled = orgInfo.AttendanceEnabled
 	}
 
-	// 4. Send the combined data back to React
+	// 4. Check whether this user has a face registered
+	user, err := h.authService.Queries.GetUserByEmail(c.Request.Context(), claims.Email)
+	faceRegistered := err == nil && user.FaceS3Uri.Valid && user.FaceS3Uri.String != ""
+
+	// 5. Send the combined data back to React
 	c.JSON(http.StatusOK, gin.H{
-		"id":       claims.UserID,
-		"org_id":   claims.OrgID,
-		"org_name": orgName,
-		"role":     claims.Role,
-		"email":    claims.Email,
+		"id":                 claims.UserID,
+		"org_id":             claims.OrgID,
+		"org_name":           orgName,
+		"role":               claims.Role,
+		"email":              claims.Email,
+		"attendance_enabled": attendanceEnabled,
+		"face_registered":    faceRegistered,
 	})
 }
 

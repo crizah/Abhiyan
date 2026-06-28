@@ -83,16 +83,25 @@ func main() {
 	// register missed deadline poller
 	onionApp.Register("poll_missed_deadlines", tasks.NewPollMissedDeadlinesTask(queries))
 
+	// register face validation
+	rekognitionService, err := services.NewRekognitionService(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize Rekognition service: %v", err)
+	}
+	faceValidationService := services.NewFaceValidationService(dbConn)
+	onionApp.Register("validate_face", tasks.NewValidateFaceTask(faceValidationService, s3Service, rekognitionService))
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
-			"send_invite_email":            "critical",
-			"send_reminder_email":          "reminders",
-			"send_reminder_whatsapp":       "reminders",
-			"poll_due_reminders":           "polling",
-			"poll_pending_transcriptions":  "polling",
+			"send_invite_email":           "critical",
+			"send_reminder_email":         "reminders",
+			"send_reminder_whatsapp":      "reminders",
+			"poll_due_reminders":          "polling",
+			"poll_pending_transcriptions": "polling",
 			"transcribe_audio":            "default",
 			"poll_missed_deadlines":       "polling",
+			"validate_face":               "default",
 		},
 	})
 

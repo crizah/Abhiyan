@@ -39,7 +39,7 @@ INSERT INTO users (
 ) VALUES (
     $1, $2, 'INVITED'
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type CreateInvitedUserParams struct {
@@ -57,8 +57,8 @@ func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserPa
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
-		&i.PhoneNumber,
 		&i.FaceS3Uri,
+		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -70,7 +70,7 @@ INSERT into users (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type CreateUserParams struct {
@@ -101,8 +101,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
-		&i.PhoneNumber,
 		&i.FaceS3Uri,
+		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -352,7 +352,7 @@ func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOr
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri, created_at FROM users 
+SELECT id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at FROM users 
 WHERE email_id = $1 LIMIT 1
 `
 
@@ -366,8 +366,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailID string) (User, err
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
-		&i.PhoneNumber,
 		&i.FaceS3Uri,
+		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -629,6 +629,20 @@ func (q *Queries) InsertUserSystemRole(ctx context.Context, arg InsertUserSystem
 	return err
 }
 
+const updateUserFace = `-- name: UpdateUserFace :exec
+UPDATE users SET face_s3_uri = $2 WHERE id = $1
+`
+
+type UpdateUserFaceParams struct {
+	ID        uuid.UUID      `json:"id"`
+	FaceS3Uri sql.NullString `json:"face_s3_uri"`
+}
+
+func (q *Queries) UpdateUserFace(ctx context.Context, arg UpdateUserFaceParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserFace, arg.ID, arg.FaceS3Uri)
+	return err
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 
@@ -639,7 +653,7 @@ SET
     status = 'ACTIVE'
 WHERE 
     email_id = $5 AND status = 'INVITED'
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type UpdateUserOnboardingParams struct {
@@ -666,8 +680,8 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
-		&i.PhoneNumber,
 		&i.FaceS3Uri,
+		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
 	return i, err

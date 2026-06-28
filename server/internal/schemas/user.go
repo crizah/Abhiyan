@@ -25,3 +25,7 @@ type UpdateProfileRequest struct {
 	PhoneNumber string      `json:"phone_number"`
 	SourceFace  FacePayload `json:"source_face"`
 }
+
+type RegisterFaceRequest struct {
+	SourceFace FacePayload `json:"source_face" binding:"required"`
+}

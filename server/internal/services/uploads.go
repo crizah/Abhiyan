@@ -93,10 +93,13 @@ func (s *S3Service) DownloadFile(ctx context.Context, fileURL string) ([]byte, e
 	if key == "" {
 		return nil, fmt.Errorf("could not extract key from URL: %s", fileURL)
 	}
+	return s.DownloadByKey(ctx, key)
+}
 
+func (s *S3Service) DownloadByKey(ctx context.Context, objectKey string) ([]byte, error) {
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(key),
+		Key:    aws.String(objectKey),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to download from S3: %w", err)

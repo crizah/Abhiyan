@@ -337,3 +337,22 @@ func (h *AdminHandler) GetAdminManagedTeams(c *gin.Context) {
 
 	c.JSON(http.StatusOK, teams)
 }
+
+func (h *AdminHandler) ToggleAttendance(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enabled field is required"})
+		return
+	}
+
+	if err := h.adminService.SetAttendanceEnabled(c.Request.Context(), orgID, req.Enabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update attendance settings"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"attendance_enabled": req.Enabled})
+}

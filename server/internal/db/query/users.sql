@@ -150,6 +150,9 @@ FROM base
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: UpdateUserFace :exec
+UPDATE users SET face_s3_uri = $2 WHERE id = $1;
+
 -- name: DeleteUserSystemRoles :exec
 DELETE FROM user_system_roles WHERE user_id = $1;
 

@@ -46,3 +46,20 @@ func (h *UserHandler) UpdateMyProfile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
 }
+
+func (h *UserHandler) RegisterFace(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+
+	var req schemas.RegisterFaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.userService.RegisterFace(c.Request.Context(), userID, req.SourceFace.ObjectKey); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save face registration"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Face registered successfully"})
+}

@@ -3,20 +3,26 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/crizah/Abhiyan/server/internal/services" // update import
+	"github.com/crizah/Abhiyan/server/internal/services"
+	"github.com/crizah/Onion/app"
 	"github.com/gin-gonic/gin"
 )
 
 type UploadHandler struct {
-	s3Service *services.S3Service
+	s3Service      *services.S3Service
+	faceValidation *services.FaceValidationService
+	onionApp       *app.App
 }
 
-func NewUploadHandler(s3Service *services.S3Service) *UploadHandler {
-	return &UploadHandler{s3Service: s3Service}
+func NewUploadHandler(s3Service *services.S3Service, faceValidation *services.FaceValidationService, onionApp *app.App) *UploadHandler {
+	return &UploadHandler{
+		s3Service:      s3Service,
+		faceValidation: faceValidation,
+		onionApp:       onionApp,
+	}
 }
 
 func (h *UploadHandler) GetPresignedUploadsURL(c *gin.Context) {
-	// for attachments
 	fileName := c.Query("file_name")
 	folderType := c.Query("type")
 
@@ -49,4 +55,39 @@ func (h *UploadHandler) DeleteS3Object(c *gin.Context) {
 
 	h.s3Service.DeleteObjects(c.Request.Context(), []string{req.FileURL})
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}
+
+func (h *UploadHandler) ValidateFace(c *gin.Context) {
+	var req struct {
+		ObjectKey string `json:"object_key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "object_key is required"})
+		return
+	}
+
+	jobID, err := h.faceValidation.InsertJob(c.Request.Context(), req.ObjectKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create validation job"})
+		return
+	}
+
+	_ = h.onionApp.Enqueue(c.Request.Context(), "validate_face", map[string]any{
+		"job_id":     jobID,
+		"object_key": req.ObjectKey,
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{"job_id": jobID})
+}
+
+func (h *UploadHandler) GetValidationStatus(c *gin.Context) {
+	jobID := c.Param("job_id")
+
+	status, reason, err := h.faceValidation.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": status, "reason": reason})
 }

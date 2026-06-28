@@ -101,3 +101,11 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req 
 	_, err := s.queries.UpdateUserProfile(ctx, params)
 	return err
 }
+
+func (s *UserService) RegisterFace(ctx context.Context, userID string, objectKey string) error {
+	uid := util.ParseUUID(userID)
+	return s.queries.UpdateUserFace(ctx, db.UpdateUserFaceParams{
+		ID:        uid,
+		FaceS3Uri: sql.NullString{String: objectKey, Valid: true},
+	})
+}

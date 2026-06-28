@@ -12,7 +12,8 @@ import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
 
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
-import '@coreui/coreui/dist/css/coreui.min.css'; 
+import '@coreui/coreui/dist/css/coreui.min.css';
+import AttendanceFaceRegistration from '../components/AttendanceFaceRegistration';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -318,7 +319,8 @@ export default function AppLayout() {
       <Layout style={{ marginLeft: '64px', transition: 'all 0.3s ease-in-out', flexGrow: 1, minHeight: '100vh' }}>
         <GlobalHeader user={user} token={token} navigate={navigate} />
         <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>
-          <Outlet /> 
+          <AttendanceFaceRegistration />
+          <Outlet />
         </Content>
       </Layout>
     </div>

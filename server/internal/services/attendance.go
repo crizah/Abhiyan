@@ -53,3 +53,11 @@ func (s *AttendanceService) GetUserFaceURI(ctx context.Context, userID string) (
 	}
 	return uri.String, nil
 }
+
+func (s *AttendanceService) IsAttendanceEnabled(ctx context.Context, orgID string) (bool, error) {
+	row, err := s.queries.GetOrgInfo(ctx, util.ParseUUID(orgID))
+	if err != nil {
+		return false, err
+	}
+	return row.AttendanceEnabled, nil
+}

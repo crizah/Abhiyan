@@ -34,6 +34,13 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
+
+	enabled, err := h.attendanceService.IsAttendanceEnabled(c.Request.Context(), orgID)
+	if err != nil || !enabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Attendance tracking is not enabled for your organization"})
+		return
+	}
 
 	sourceKey, err := h.attendanceService.GetUserFaceURI(c.Request.Context(), userID)
 	if err != nil || sourceKey == "" {

@@ -89,7 +89,7 @@ func main() {
 		log.Fatalf("Failed to initialize Rekognition service: %v", err)
 	}
 	faceValidationService := services.NewFaceValidationService(dbConn)
-	onionApp.Register("validate_face", tasks.NewValidateFaceTask(faceValidationService, s3Service, rekognitionService))
+	onionApp.Register("validate_face", tasks.NewValidateFaceTask(faceValidationService, rekognitionService))
 
 	// map to queue
 	onionApp.UpdateConfig(app.Config{

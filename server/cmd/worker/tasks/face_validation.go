@@ -10,7 +10,6 @@ import (
 
 func NewValidateFaceTask(
 	faceValidation *services.FaceValidationService,
-	s3Service *services.S3Service,
 	rekognitionService *services.RekognitionService,
 ) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
@@ -19,13 +18,7 @@ func NewValidateFaceTask(
 
 		log.Printf("[FaceValidator] Processing job %s (key: %s)\n", jobID, objectKey)
 
-		imageData, err := s3Service.DownloadByKey(ctx, objectKey)
-		if err != nil {
-			_ = faceValidation.SetResult(ctx, jobID, "invalid", "download_error")
-			return nil, fmt.Errorf("failed to download face image: %w", err)
-		}
-
-		valid, reason, err := rekognitionService.ValidateFace(ctx, imageData)
+		valid, reason, err := rekognitionService.ValidateFace(ctx, objectKey)
 		if err != nil {
 			_ = faceValidation.SetResult(ctx, jobID, "invalid", "detection_error")
 			return nil, fmt.Errorf("rekognition error: %w", err)

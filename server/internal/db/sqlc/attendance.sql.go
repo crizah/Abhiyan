@@ -12,29 +12,139 @@ import (
 	"github.com/google/uuid"
 )
 
-const getAbsentUsers = `-- name: GetAbsentUsers :many
-SELECT u.id, u.email_id FROM users u
-LEFT JOIN attendance_record a 
-ON u.id = a.user_id AND a.attendance_date= CURRENT_DATE
-WHERE u.status = 'ACTIVE' 
-AND a.id = NULL
+const batchInsertAbsentAttendance = `-- name: BatchInsertAbsentAttendance :exec
+INSERT INTO attendance_record (user_id, present, status)
+SELECT u.id, false, 'absent'
+FROM users u
+JOIN organizations o ON u.org_id = o.id
+WHERE u.status = 'ACTIVE'
+  AND o.attendance_enabled = true
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ON CONFLICT (user_id, attendance_date) DO NOTHING
 `
 
-type GetAbsentUsersRow struct {
-	ID      uuid.UUID `json:"id"`
-	EmailID string    `json:"email_id"`
+func (q *Queries) BatchInsertAbsentAttendance(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, batchInsertAbsentAttendance)
+	return err
 }
 
-func (q *Queries) GetAbsentUsers(ctx context.Context) ([]GetAbsentUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAbsentUsers)
+const getOrgAttendanceByDate = `-- name: GetOrgAttendanceByDate :many
+SELECT DISTINCT ON (u.id)
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    COALESCE(t.name, 'Unassigned') AS team_name,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'absent'
+    END AS attendance_status
+FROM users u
+LEFT JOIN attendance_record a ON u.id = a.user_id AND a.attendance_date = $1
+LEFT JOIN team_members tm ON u.id = tm.user_id
+LEFT JOIN teams t ON tm.team_id = t.id
+WHERE u.org_id = $2 AND u.status = 'ACTIVE'
+  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.id, u.first_name
+`
+
+type GetOrgAttendanceByDateParams struct {
+	AttendanceDate sql.NullTime `json:"attendance_date"`
+	OrgID          uuid.UUID    `json:"org_id"`
+}
+
+type GetOrgAttendanceByDateRow struct {
+	ID               uuid.UUID `json:"id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	EmailID          string    `json:"email_id"`
+	TeamName         string    `json:"team_name"`
+	AttendanceStatus string    `json:"attendance_status"`
+}
+
+func (q *Queries) GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendanceByDateParams) ([]GetOrgAttendanceByDateRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgAttendanceByDate, arg.AttendanceDate, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetAbsentUsersRow
+	var items []GetOrgAttendanceByDateRow
 	for rows.Next() {
-		var i GetAbsentUsersRow
-		if err := rows.Scan(&i.ID, &i.EmailID); err != nil {
+		var i GetOrgAttendanceByDateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.TeamName,
+			&i.AttendanceStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgAttendanceByDateAndTeam = `-- name: GetOrgAttendanceByDateAndTeam :many
+SELECT
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    t.name AS team_name,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'absent'
+    END AS attendance_status
+FROM users u
+LEFT JOIN attendance_record a ON u.id = a.user_id AND a.attendance_date = $1
+JOIN team_members tm ON u.id = tm.user_id AND tm.team_id = $3
+JOIN teams t ON tm.team_id = t.id
+WHERE u.org_id = $2 AND u.status = 'ACTIVE'
+ORDER BY u.first_name
+`
+
+type GetOrgAttendanceByDateAndTeamParams struct {
+	AttendanceDate sql.NullTime `json:"attendance_date"`
+	OrgID          uuid.UUID    `json:"org_id"`
+	TeamID         uuid.UUID    `json:"team_id"`
+}
+
+type GetOrgAttendanceByDateAndTeamRow struct {
+	ID               uuid.UUID `json:"id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	EmailID          string    `json:"email_id"`
+	TeamName         string    `json:"team_name"`
+	AttendanceStatus string    `json:"attendance_status"`
+}
+
+func (q *Queries) GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgAttendanceByDateAndTeam, arg.AttendanceDate, arg.OrgID, arg.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrgAttendanceByDateAndTeamRow
+	for rows.Next() {
+		var i GetOrgAttendanceByDateAndTeamRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.TeamName,
+			&i.AttendanceStatus,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -65,6 +175,62 @@ func (q *Queries) GetTodayAttendance(ctx context.Context, userID uuid.UUID) (Get
 	row := q.db.QueryRowContext(ctx, getTodayAttendance, userID)
 	var i GetTodayAttendanceRow
 	err := row.Scan(&i.ID, &i.Status, &i.Present)
+	return i, err
+}
+
+const getUserAttendanceHistory = `-- name: GetUserAttendanceHistory :many
+SELECT attendance_date, present
+FROM attendance_record
+WHERE user_id = $1
+ORDER BY attendance_date DESC
+LIMIT 60
+`
+
+type GetUserAttendanceHistoryRow struct {
+	AttendanceDate sql.NullTime `json:"attendance_date"`
+	Present        sql.NullBool `json:"present"`
+}
+
+func (q *Queries) GetUserAttendanceHistory(ctx context.Context, userID uuid.UUID) ([]GetUserAttendanceHistoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserAttendanceHistory, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserAttendanceHistoryRow
+	for rows.Next() {
+		var i GetUserAttendanceHistoryRow
+		if err := rows.Scan(&i.AttendanceDate, &i.Present); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserAttendanceSummary = `-- name: GetUserAttendanceSummary :one
+SELECT
+    COUNT(*) FILTER (WHERE present = true)::int AS present_count,
+    COUNT(*) FILTER (WHERE present = false)::int AS absent_count
+FROM attendance_record
+WHERE user_id = $1
+`
+
+type GetUserAttendanceSummaryRow struct {
+	PresentCount int32 `json:"present_count"`
+	AbsentCount  int32 `json:"absent_count"`
+}
+
+func (q *Queries) GetUserAttendanceSummary(ctx context.Context, userID uuid.UUID) (GetUserAttendanceSummaryRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserAttendanceSummary, userID)
+	var i GetUserAttendanceSummaryRow
+	err := row.Scan(&i.PresentCount, &i.AbsentCount)
 	return i, err
 }
 

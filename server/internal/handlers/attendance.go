@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -73,4 +74,56 @@ func (h *AttendanceHandler) GetTodayAttendance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": status})
+}
+
+// Admin endpoints
+
+func (h *AttendanceHandler) GetOrgAttendance(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	teamID := c.Query("team")
+
+	rows, err := h.attendanceService.GetOrgAttendance(c.Request.Context(), orgID, date, teamID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch attendance"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rows)
+}
+
+func (h *AttendanceHandler) DownloadOrgReport(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	teamID := c.Query("team")
+
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_%s.csv", date))
+
+	if err := h.attendanceService.WriteOrgReport(c.Request.Context(), orgID, date, teamID, c.Writer); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
+	}
+}
+
+func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
+	userID := c.Param("user_id")
+
+	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user attendance"})
+		return
+	}
+
+	c.JSON(http.StatusOK, summary)
+}
+
+func (h *AttendanceHandler) DownloadUserReport(c *gin.Context) {
+	userID := c.Param("user_id")
+
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_user_%s.csv", userID[:8]))
+
+	if err := h.attendanceService.WriteUserReport(c.Request.Context(), userID, c.Writer); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
+	}
 }

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag, List, Button, Tooltip } from 'antd';
 
-import { 
+import {
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, 
-  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined,
+  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined,
+  ScanOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -288,6 +289,9 @@ export default function AppLayout() {
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/onboarding'); }} active={location.pathname === '/onboarding'}><UserAddOutlined className="nav-icon" /> User Onboarding</CNavItem>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/teams'); }} active={location.pathname === '/teams'}>
                 <ApartmentOutlined className="nav-icon" /> Teams
+              </CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/attendance'); }} active={location.pathname === '/attendance'}>
+                <ScanOutlined className="nav-icon" /> Attendance
               </CNavItem>
             </>
           )}

@@ -159,6 +159,10 @@ func main() {
 			superAdminGroup.PUT("/users/:user_id/system-profile", adminHandler.UpdateUserSystemProfile)
 			superAdminGroup.GET("/users/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
 			superAdminGroup.PUT("/attendance", adminHandler.ToggleAttendance)
+			superAdminGroup.GET("/attendance", attendanceHandler.GetOrgAttendance)
+			superAdminGroup.GET("/attendance/report", attendanceHandler.DownloadOrgReport)
+			superAdminGroup.GET("/attendance/users/:user_id/summary", attendanceHandler.GetUserAttendanceSummary)
+			superAdminGroup.GET("/attendance/users/:user_id/report", attendanceHandler.DownloadUserReport)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

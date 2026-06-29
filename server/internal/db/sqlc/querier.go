@@ -18,6 +18,7 @@ type Querier interface {
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
+	BatchInsertAbsentAttendance(ctx context.Context) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
@@ -36,7 +37,6 @@ type Querier interface {
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
 	FailTranscription(ctx context.Context, arg FailTranscriptionParams) error
-	GetAbsentUsers(ctx context.Context) ([]GetAbsentUsersRow, error)
 	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
 	// 1. Identify teams where this user is an admin
 	// 2. Fetch all members attached to those specific teams for aggregate counting
@@ -54,6 +54,8 @@ type Querier interface {
 	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
 	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
 	GetMissedDeadlineCandidates(ctx context.Context) ([]GetMissedDeadlineCandidatesRow, error)
+	GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendanceByDateParams) ([]GetOrgAttendanceByDateRow, error)
+	GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error)
 	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
@@ -85,6 +87,8 @@ type Querier interface {
 	GetTranscriptionsByAttachmentIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTranscriptionsByAttachmentIDsRow, error)
 	GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOrgUsersParams) ([]GetUnassignedOrgUsersRow, error)
 	GetUpdateComments(ctx context.Context, arg GetUpdateCommentsParams) ([]GetUpdateCommentsRow, error)
+	GetUserAttendanceHistory(ctx context.Context, userID uuid.UUID) ([]GetUserAttendanceHistoryRow, error)
+	GetUserAttendanceSummary(ctx context.Context, userID uuid.UUID) (GetUserAttendanceSummaryRow, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error)

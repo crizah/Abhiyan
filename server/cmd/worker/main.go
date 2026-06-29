@@ -95,6 +95,9 @@ func main() {
 	attendanceService := services.NewAttendanceService(dbConn)
 	onionApp.Register("compare_faces", tasks.NewCompareFacesTask(attendanceService, rekognitionService))
 
+	// register attendance cron
+	onionApp.Register("batch_insert_attendance", tasks.NewBatchInsertAttendanceTask(queries))
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
@@ -107,6 +110,7 @@ func main() {
 			"poll_missed_deadlines":       "polling",
 			"validate_face":               "default",
 			"compare_faces":               "default",
+			"batch_insert_attendance":     "polling",
 		},
 	})
 
@@ -124,6 +128,11 @@ func main() {
 	err = onionApp.Schedule("system_missed_deadline_tick", "poll_missed_deadlines", "@every 5m", nil)
 	if err != nil {
 		log.Fatalf("failed to schedule missed deadline tick: %v", err)
+	}
+
+	err = onionApp.Schedule("system_attendance_tick", "batch_insert_attendance", "1 0 * * *", nil)
+	if err != nil {
+		log.Fatalf("failed to schedule attendance tick: %v", err)
 	}
 
 	// 4. Start Worker

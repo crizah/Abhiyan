@@ -547,6 +547,7 @@ type AttendanceRecord struct {
 	UserID         uuid.UUID      `json:"user_id"`
 	TargetFileUri  sql.NullString `json:"target_file_uri"`
 	Present        sql.NullBool   `json:"present"`
+	Status         string         `json:"status"`
 	AttendanceDate sql.NullTime   `json:"attendance_date"`
 	CreatedAt      sql.NullTime   `json:"created_at"`
 	UpdatedAt      sql.NullTime   `json:"updated_at"`

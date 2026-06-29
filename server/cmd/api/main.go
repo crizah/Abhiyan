@@ -50,6 +50,7 @@ func main() {
 			"send_reminder_whatsapp": "reminders",
 			"poll_due_reminders":     "polling",
 			"validate_face":          "default",
+			"compare_faces":          "default",
 		},
 	})
 	if err != nil {
@@ -69,6 +70,7 @@ func main() {
 	scoreService := services.NewScoreService(dbConn)
 	taskService := services.NewTaskService(dbConn, onionApp, s3Service, scoreService)
 	faceValidationService := services.NewFaceValidationService(dbConn)
+	attendanceService := services.NewAttendanceService(dbConn)
 
 	// --- 2. Initialize Handlers ---
 	authHandler := handlers.NewAuthHandler(authService)
@@ -77,6 +79,7 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	uploadHandler := handlers.NewUploadHandler(s3Service, faceValidationService, onionApp)
+	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, onionApp)
 	scoreHandler := handlers.NewScoreHandler(scoreService, adminService)
 
 	// 3. Setup Gin Router
@@ -128,7 +131,9 @@ func main() {
 			general.GET("/upload/presigned-url", uploadHandler.GetPresignedUploadsURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
 			general.POST("/upload/validate-face", uploadHandler.ValidateFace)
-			general.GET("/upload/validate-face/:job_id", uploadHandler.GetValidationStatus)
+			general.GET("/upload/validate-face/:job_id", uploadHandler.GetValidationStatus) // polling
+			general.POST("/attendance/mark", attendanceHandler.MarkAttendance)
+			general.GET("/attendance/today", attendanceHandler.GetTodayAttendance) // polling
 			general.GET("/leaderboard", scoreHandler.GetEmployeeLeaderboard)
 		}
 

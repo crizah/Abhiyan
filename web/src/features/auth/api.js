@@ -38,6 +38,16 @@ export const attendanceAPI = {
         const response = await apiClient.put('/users/me/face', { source_face: facePayload });
         return response.data;
     },
+
+    markAttendance: async (targetObjectKey) => {
+        const response = await apiClient.post('/attendance/mark', { target_object_key: targetObjectKey });
+        return response.data; // { id }
+    },
+
+    getToday: async () => {
+        const response = await apiClient.get('/attendance/today');
+        return response.data; // { status: 'none' | 'pending' | 'matched' | 'unmatched' }
+    },
 };
 
 export const uploadAPI = {

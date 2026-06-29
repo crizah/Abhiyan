@@ -91,6 +91,10 @@ func main() {
 	faceValidationService := services.NewFaceValidationService(dbConn)
 	onionApp.Register("validate_face", tasks.NewValidateFaceTask(faceValidationService, rekognitionService))
 
+	// register attendance face compare
+	attendanceService := services.NewAttendanceService(dbConn)
+	onionApp.Register("compare_faces", tasks.NewCompareFacesTask(attendanceService, rekognitionService))
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
@@ -102,6 +106,7 @@ func main() {
 			"transcribe_audio":            "default",
 			"poll_missed_deadlines":       "polling",
 			"validate_face":               "default",
+			"compare_faces":               "default",
 		},
 	})
 

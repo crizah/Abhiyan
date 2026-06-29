@@ -385,6 +385,17 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	return i, err
 }
 
+const getUserFaceURI = `-- name: GetUserFaceURI :one
+SELECT face_s3_uri FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getUserFaceURI, id)
+	var face_s3_uri sql.NullString
+	err := row.Scan(&face_s3_uri)
+	return face_s3_uri, err
+}
+
 const getUserNameByID = `-- name: GetUserNameByID :one
 SELECT first_name, last_name FROM users WHERE id = $1
 `

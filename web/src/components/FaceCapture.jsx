@@ -16,10 +16,13 @@ const VALIDATION_REASONS = {
 };
 
 /**
- * Webcam capture + Rekognition quality validation flow.
- * Calls onCapture({ file_url, object_key }) only once the face passes validation.
+ * Webcam capture component.
+ * Props:
+ *   onCapture({ file_url, object_key }) — called after upload (and validation if enabled)
+ *   folderType — S3 prefix: 'sources' (default) or 'targets'
+ *   skipValidation — skip Rekognition quality check (default false)
  */
-export default function FaceCapture({ onCapture }) {
+export default function FaceCapture({ onCapture, folderType = 'sources', skipValidation = false }) {
   const [status, setStatus] = useState('idle'); // idle | captured | uploading | validating
   const [capturedDataUrl, setCapturedDataUrl] = useState(null);
   const [capturedBlob, setCapturedBlob] = useState(null);
@@ -110,13 +113,19 @@ export default function FaceCapture({ onCapture }) {
     let s3Data;
     try {
       const file = new File([capturedBlob], `face-${Date.now()}.jpg`, { type: 'image/jpeg' });
-      s3Data = await uploadFileToS3(file, 'sources');
+      s3Data = await uploadFileToS3(file, folderType);
     } catch {
       setStatus('captured');
       return;
     }
 
-    // Enqueue validation job
+    // Skip validation (e.g. for attendance captures) — call onCapture directly
+    if (skipValidation) {
+      onCapture({ file_url: s3Data.file_url, object_key: s3Data.object_key });
+      return;
+    }
+
+    // Enqueue quality validation job
     let jobId;
     try {
       const res = await uploadAPI.validateFace(s3Data.object_key);

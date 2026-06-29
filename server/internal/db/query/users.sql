@@ -173,3 +173,6 @@ SELECT u.id, u.email_id, u.org_id, u.status, usr.role
 FROM users u
 JOIN user_system_roles usr ON u.id = usr.user_id
 WHERE u.email_id = $1 AND u.org_id = $2;
+
+-- name: GetUserFaceURI :one                                                                                                      
+SELECT face_s3_uri FROM users WHERE id = $1;      

@@ -14,6 +14,7 @@ import { ROLE_COLORS } from '../utils/colorMaps';
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
 import '@coreui/coreui/dist/css/coreui.min.css';
 import AttendanceFaceRegistration from '../components/AttendanceFaceRegistration';
+import AttendanceCapture from '../components/AttendanceCapture';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -320,6 +321,7 @@ export default function AppLayout() {
         <GlobalHeader user={user} token={token} navigate={navigate} />
         <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>
           <AttendanceFaceRegistration />
+          <AttendanceCapture />
           <Outlet />
         </Content>
       </Layout>

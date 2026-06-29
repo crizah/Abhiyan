@@ -542,6 +542,17 @@ type Attachment struct {
 	CreatedAt     sql.NullTime  `json:"created_at"`
 }
 
+type AttendanceRecord struct {
+	ID             uuid.UUID      `json:"id"`
+	UserID         uuid.UUID      `json:"user_id"`
+	TargetFileUri  sql.NullString `json:"target_file_uri"`
+	Present        sql.NullBool   `json:"present"`
+	Status         string         `json:"status"`
+	AttendanceDate sql.NullTime   `json:"attendance_date"`
+	CreatedAt      sql.NullTime   `json:"created_at"`
+	UpdatedAt      sql.NullTime   `json:"updated_at"`
+}
+
 type EmployeeScore struct {
 	ID              uuid.UUID      `json:"id"`
 	TaskID          uuid.UUID      `json:"task_id"`
@@ -556,6 +567,14 @@ type EmployeeScore struct {
 	CreatedAt       sql.NullTime   `json:"created_at"`
 }
 
+type FaceValidationJob struct {
+	ID        uuid.UUID      `json:"id"`
+	ObjectKey string         `json:"object_key"`
+	Status    string         `json:"status"`
+	Reason    sql.NullString `json:"reason"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+}
+
 type Notification struct {
 	ID        uuid.UUID    `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
@@ -566,10 +585,11 @@ type Notification struct {
 }
 
 type Organization struct {
-	ID        uuid.UUID      `json:"id"`
-	Name      string         `json:"name"`
-	Domain    sql.NullString `json:"domain"`
-	CreatedAt sql.NullTime   `json:"created_at"`
+	ID                uuid.UUID      `json:"id"`
+	Name              string         `json:"name"`
+	Domain            sql.NullString `json:"domain"`
+	AttendanceEnabled bool           `json:"attendance_enabled"`
+	CreatedAt         sql.NullTime   `json:"created_at"`
 }
 
 type Reminder struct {
@@ -657,6 +677,7 @@ type User struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 	PhoneNumber sql.NullString `json:"phone_number"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
 }

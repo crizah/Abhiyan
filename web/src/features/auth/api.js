@@ -27,3 +27,42 @@ export const authAPI = {
         return response.data;
     }
 };
+
+export const attendanceAPI = {
+    toggleAttendance: async (enabled) => {
+        const response = await apiClient.put('/admin/attendance', { enabled });
+        return response.data;
+    },
+
+    registerFace: async (facePayload) => {
+        const response = await apiClient.put('/users/me/face', { source_face: facePayload });
+        return response.data;
+    },
+
+    markAttendance: async (targetObjectKey) => {
+        const response = await apiClient.post('/attendance/mark', { target_object_key: targetObjectKey });
+        return response.data; // { id }
+    },
+
+    getToday: async () => {
+        const response = await apiClient.get('/attendance/today');
+        return response.data; // { status: 'none' | 'pending' | 'matched' | 'unmatched' }
+    },
+};
+
+export const uploadAPI = {
+    validateFace: async (objectKey) => {
+        const response = await apiClient.post('/upload/validate-face', { object_key: objectKey });
+        return response.data; // { job_id }
+    },
+
+    getValidationStatus: async (jobId) => {
+        const response = await apiClient.get(`/upload/validate-face/${jobId}`);
+        return response.data; // { status, reason }
+    },
+
+    deleteS3Object: async (fileUrl) => {
+        const response = await apiClient.delete('/upload/s3-object', { data: { file_url: fileUrl } });
+        return response.data;
+    },
+};

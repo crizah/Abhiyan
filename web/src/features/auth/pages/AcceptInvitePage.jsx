@@ -9,11 +9,11 @@ const { Title, Text } = Typography;
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
-  
+
   const [loading, setLoading] = useState(false);
   const [tokenExpired, setTokenExpired] = useState(false);
   const [resending, setResending] = useState(false);
-  
+
   const navigate = useNavigate();
   const { token: themeToken } = theme.useToken();
 
@@ -36,14 +36,14 @@ export default function AcceptInvitePage() {
       });
 
       message.success("Account fully onboarded. You may now log in.");
-      
-      // Since your backend doesn't auto-issue an access token here, 
+
+      // Since your backend doesn't auto-issue an access token here,
       // we redirect them to the standard login page.
       navigate('/login');
     } catch (error) {
       const errMsg = error.response?.data?.error || "Failed to accept invite.";
       message.error(errMsg);
-      
+
       // If the backend specifically kicks back an expiration/invalid error, flip the state
       if (errMsg.includes("expired") || errMsg.includes("invalid")) {
         setTokenExpired(true);
@@ -74,16 +74,16 @@ export default function AcceptInvitePage() {
             {!token ? "Invalid Invite Link" : "Invite Link Expired"}
           </Title>
           <Text type="secondary">
-            {!token 
-              ? "This link is missing a secure token. Please ask your administrator to re-send the invite." 
+            {!token
+              ? "This link is missing a secure token. Please ask your administrator to re-send the invite."
               : "For your security, invite links expire after 48 hours. Click below to email yourself a fresh link."}
           </Text>
 
           {tokenExpired && (
-            <Button 
-              type="primary" 
-              style={{ marginTop: 24 }} 
-              block 
+            <Button
+              type="primary"
+              style={{ marginTop: 24 }}
+              block
               loading={resending}
               onClick={handleResendInvite}
             >
@@ -97,11 +97,11 @@ export default function AcceptInvitePage() {
 
   return (
     <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout, padding: '24px' }}>
-      <Card 
-        style={{ 
-          width: '100%', maxWidth: 450, 
+      <Card
+        style={{
+          width: '100%', maxWidth: 450,
           boxShadow: themeToken.boxShadowSecondary,
-          borderRadius: themeToken.borderRadiusLG 
+          borderRadius: themeToken.borderRadiusLG
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -111,35 +111,35 @@ export default function AcceptInvitePage() {
 
         <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
           <Flex gap="middle">
-            <Form.Item 
-              name="first_name" 
-              label="First Name" 
+            <Form.Item
+              name="first_name"
+              label="First Name"
               style={{ flex: 1 }}
               rules={[{ required: true, message: 'First name is required' }]}
             >
               <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
             </Form.Item>
 
-            <Form.Item 
-              name="last_name" 
-              label="Last Name" 
+            <Form.Item
+              name="last_name"
+              label="Last Name"
               style={{ flex: 1 }}
             >
               <Input size="large" />
             </Form.Item>
           </Flex>
 
-          <Form.Item 
-            name="phone" 
-            label="Phone Number" 
+          <Form.Item
+            name="phone"
+            label="Phone Number"
             rules={[{ required: true, message: 'Phone number is required' }]}
           >
             <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
           </Form.Item>
 
-          <Form.Item 
-            name="password" 
-            label="Create Password" 
+          <Form.Item
+            name="password"
+            label="Create Password"
             rules={[
               { required: true, message: 'Please create a password.' },
               { min: 8, message: 'Password must be at least 8 characters.' }
@@ -148,9 +148,9 @@ export default function AcceptInvitePage() {
             <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
           </Form.Item>
 
-          <Form.Item 
-            name="confirm_password" 
-            label="Confirm Password" 
+          <Form.Item
+            name="confirm_password"
+            label="Confirm Password"
             dependencies={['password']}
             rules={[
               { required: true, message: 'Please confirm your password.' },

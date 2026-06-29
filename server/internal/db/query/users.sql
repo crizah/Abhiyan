@@ -1,8 +1,8 @@
 -- name: CreateUser :one
 INSERT into users (
-    org_id, status, first_name, last_name, email_id, phone_number
+    org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -53,9 +53,10 @@ SET
     first_name = $1, 
     last_name = $2, 
     phone_number = $3, 
+    face_s3_uri = $4,
     status = 'ACTIVE'
 WHERE 
-    email_id = $4 AND status = 'INVITED'
+    email_id = $5 AND status = 'INVITED'
 RETURNING *;
 
 -- name: GetTotalUsersByOrg :one
@@ -64,7 +65,7 @@ WHERE org_id = $1;
 
 -- name: GetFullUserProfile :one
 SELECT 
-    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,
+    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status, u.face_s3_uri,
     o.name as org_name
 FROM users u
 JOIN organizations o ON u.org_id = o.id
@@ -88,9 +89,9 @@ WHERE tm.user_id = $1;
 
 -- name: UpdateUserProfile :one
 UPDATE users 
-SET first_name = $2, last_name = $3, phone_number = $4
+SET first_name = $2, last_name = $3, phone_number = $4, face_s3_uri = $5
 WHERE id = $1
-RETURNING id, first_name, last_name, phone_number;
+RETURNING id, first_name, last_name, phone_number, face_s3_uri;
 
 -- name: GetUsersByOrg :many
 SELECT 
@@ -149,6 +150,9 @@ FROM base
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: UpdateUserFace :exec
+UPDATE users SET face_s3_uri = $2 WHERE id = $1;
+
 -- name: DeleteUserSystemRoles :exec
 DELETE FROM user_system_roles WHERE user_id = $1;
 
@@ -169,3 +173,6 @@ SELECT u.id, u.email_id, u.org_id, u.status, usr.role
 FROM users u
 JOIN user_system_roles usr ON u.id = usr.user_id
 WHERE u.email_id = $1 AND u.org_id = $2;
+
+-- name: GetUserFaceURI :one                                                                                                      
+SELECT face_s3_uri FROM users WHERE id = $1;      

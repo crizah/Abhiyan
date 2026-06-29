@@ -13,7 +13,7 @@ export const CreateTaskForm = ({ onTaskCreated }) => {
   const handleCustomUpload = async (options) => {
     const { file, onSuccess, onError, onProgress } = options;
     try {
-      const s3Metadata = await uploadFileToS3(file, onProgress);
+      const s3Metadata = await uploadFileToS3(file, 'uploads', onProgress);
       
       // Merge successfully uploaded S3 data into the state representation
       file.s3Data = s3Metadata; 

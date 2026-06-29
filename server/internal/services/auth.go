@@ -99,9 +99,13 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 }
 
 func (s *AuthService) GetOrganizationName(ctx context.Context, orgID string) (string, error) {
-	// util.ParseUUID is assuming you have a helper to convert the string to pgtype.UUID or uuid.UUID
 	parsedUUID := util.ParseUUID(orgID)
 	return s.Queries.GetOrganizationName(ctx, parsedUUID)
+}
+
+func (s *AuthService) GetOrgInfo(ctx context.Context, orgID string) (db.GetOrgInfoRow, error) {
+	parsedUUID := util.ParseUUID(orgID)
+	return s.Queries.GetOrgInfo(ctx, parsedUUID)
 }
 
 func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {

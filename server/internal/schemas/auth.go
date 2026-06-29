@@ -32,6 +32,12 @@ type AcceptInviteRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
+// FacePayload is shared across user profile and attendance face registration.
+type FacePayload struct {
+	FileURL   string `json:"file_url"`
+	ObjectKey string `json:"object_key"`
+}
+
 // --- Responses ---
 
 type TokenResponse struct {

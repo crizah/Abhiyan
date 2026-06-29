@@ -14,12 +14,18 @@ type UserProfileResponse struct {
 	PhoneNumber string        `json:"phone_number"`
 	Status      string        `json:"status"`
 	OrgName     string        `json:"org_name"`
+	SourceFace  FacePayload   `json:"source_face"`
 	SystemRoles []string      `json:"system_roles"`
 	Teams       []TeamProfile `json:"teams"`
 }
 
 type UpdateProfileRequest struct {
-	FirstName   string `json:"first_name" binding:"required"` // Assuming first name is required
-	LastName    string `json:"last_name"`
-	PhoneNumber string `json:"phone_number"`
+	FirstName   string      `json:"first_name" binding:"required"` // Assuming first name is required
+	LastName    string      `json:"last_name"`
+	PhoneNumber string      `json:"phone_number"`
+	SourceFace  FacePayload `json:"source_face"`
+}
+
+type RegisterFaceRequest struct {
+	SourceFace FacePayload `json:"source_face" binding:"required"`
 }

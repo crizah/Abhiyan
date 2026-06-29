@@ -641,3 +641,11 @@ func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string) 
 	}
 	return teams, nil
 }
+
+func (s *AdminService) SetAttendanceEnabled(ctx context.Context, orgID string, enabled bool) error {
+	return s.queries.SetOrgAttendanceEnabled(ctx, db.SetOrgAttendanceEnabledParams{
+		ID:                util.ParseUUID(orgID),
+		AttendanceEnabled: enabled,
+	})
+
+}

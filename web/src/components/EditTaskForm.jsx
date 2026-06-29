@@ -45,7 +45,7 @@ export const EditTaskForm = ({ taskId, onTaskUpdated }) => {
   const handleCustomUpload = async (options) => {
     const { file, onSuccess, onError, onProgress } = options;
     try {
-      const s3Metadata = await uploadFileToS3(file, onProgress);
+      const s3Metadata = await uploadFileToS3(file, 'uploads', onProgress);
       file.s3Data = s3Metadata;
       onSuccess("OK");
     } catch (err) {

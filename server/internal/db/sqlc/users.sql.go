@@ -39,7 +39,7 @@ INSERT INTO users (
 ) VALUES (
     $1, $2, 'INVITED'
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type CreateInvitedUserParams struct {
@@ -57,6 +57,7 @@ func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserPa
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
+		&i.FaceS3Uri,
 		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
@@ -65,11 +66,11 @@ func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserPa
 
 const createUser = `-- name: CreateUser :one
 INSERT into users (
-    org_id, status, first_name, last_name, email_id, phone_number
+    org_id, status, first_name, last_name, email_id, phone_number, face_s3_uri
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type CreateUserParams struct {
@@ -79,6 +80,7 @@ type CreateUserParams struct {
 	LastName    sql.NullString `json:"last_name"`
 	EmailID     string         `json:"email_id"`
 	PhoneNumber sql.NullString `json:"phone_number"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -89,6 +91,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.LastName,
 		arg.EmailID,
 		arg.PhoneNumber,
+		arg.FaceS3Uri,
 	)
 	var i User
 	err := row.Scan(
@@ -98,6 +101,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
+		&i.FaceS3Uri,
 		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
@@ -207,7 +211,7 @@ func (q *Queries) GetEmailByUser(ctx context.Context, id uuid.UUID) (string, err
 
 const getFullUserProfile = `-- name: GetFullUserProfile :one
 SELECT 
-    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status,
+    u.id, u.first_name, u.last_name, u.email_id, u.phone_number, u.status, u.face_s3_uri,
     o.name as org_name
 FROM users u
 JOIN organizations o ON u.org_id = o.id
@@ -221,6 +225,7 @@ type GetFullUserProfileRow struct {
 	EmailID     string         `json:"email_id"`
 	PhoneNumber sql.NullString `json:"phone_number"`
 	Status      NullUserStatus `json:"status"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 	OrgName     string         `json:"org_name"`
 }
 
@@ -234,6 +239,7 @@ func (q *Queries) GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFull
 		&i.EmailID,
 		&i.PhoneNumber,
 		&i.Status,
+		&i.FaceS3Uri,
 		&i.OrgName,
 	)
 	return i, err
@@ -346,7 +352,7 @@ func (q *Queries) GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOr
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, org_id, status, first_name, last_name, email_id, phone_number, created_at FROM users 
+SELECT id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at FROM users 
 WHERE email_id = $1 LIMIT 1
 `
 
@@ -360,6 +366,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailID string) (User, err
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
+		&i.FaceS3Uri,
 		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
@@ -376,6 +383,17 @@ func (q *Queries) GetUserCredentials(ctx context.Context, userID uuid.UUID) (Use
 	var i UserCredential
 	err := row.Scan(&i.UserID, &i.PasswordHash, &i.UpdatedAt)
 	return i, err
+}
+
+const getUserFaceURI = `-- name: GetUserFaceURI :one
+SELECT face_s3_uri FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getUserFaceURI, id)
+	var face_s3_uri sql.NullString
+	err := row.Scan(&face_s3_uri)
+	return face_s3_uri, err
 }
 
 const getUserNameByID = `-- name: GetUserNameByID :one
@@ -622,22 +640,38 @@ func (q *Queries) InsertUserSystemRole(ctx context.Context, arg InsertUserSystem
 	return err
 }
 
+const updateUserFace = `-- name: UpdateUserFace :exec
+UPDATE users SET face_s3_uri = $2 WHERE id = $1
+`
+
+type UpdateUserFaceParams struct {
+	ID        uuid.UUID      `json:"id"`
+	FaceS3Uri sql.NullString `json:"face_s3_uri"`
+}
+
+func (q *Queries) UpdateUserFace(ctx context.Context, arg UpdateUserFaceParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserFace, arg.ID, arg.FaceS3Uri)
+	return err
+}
+
 const updateUserOnboarding = `-- name: UpdateUserOnboarding :one
 UPDATE users 
 SET 
     first_name = $1, 
     last_name = $2, 
     phone_number = $3, 
+    face_s3_uri = $4,
     status = 'ACTIVE'
 WHERE 
-    email_id = $4 AND status = 'INVITED'
-RETURNING id, org_id, status, first_name, last_name, email_id, phone_number, created_at
+    email_id = $5 AND status = 'INVITED'
+RETURNING id, org_id, status, first_name, last_name, email_id, face_s3_uri, phone_number, created_at
 `
 
 type UpdateUserOnboardingParams struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	PhoneNumber sql.NullString `json:"phone_number"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 	EmailID     string         `json:"email_id"`
 }
 
@@ -646,6 +680,7 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 		arg.FirstName,
 		arg.LastName,
 		arg.PhoneNumber,
+		arg.FaceS3Uri,
 		arg.EmailID,
 	)
 	var i User
@@ -656,6 +691,7 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 		&i.FirstName,
 		&i.LastName,
 		&i.EmailID,
+		&i.FaceS3Uri,
 		&i.PhoneNumber,
 		&i.CreatedAt,
 	)
@@ -664,9 +700,9 @@ func (q *Queries) UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboar
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users 
-SET first_name = $2, last_name = $3, phone_number = $4
+SET first_name = $2, last_name = $3, phone_number = $4, face_s3_uri = $5
 WHERE id = $1
-RETURNING id, first_name, last_name, phone_number
+RETURNING id, first_name, last_name, phone_number, face_s3_uri
 `
 
 type UpdateUserProfileParams struct {
@@ -674,6 +710,7 @@ type UpdateUserProfileParams struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	PhoneNumber sql.NullString `json:"phone_number"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 }
 
 type UpdateUserProfileRow struct {
@@ -681,6 +718,7 @@ type UpdateUserProfileRow struct {
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`
 	PhoneNumber sql.NullString `json:"phone_number"`
+	FaceS3Uri   sql.NullString `json:"face_s3_uri"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
@@ -689,6 +727,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.FirstName,
 		arg.LastName,
 		arg.PhoneNumber,
+		arg.FaceS3Uri,
 	)
 	var i UpdateUserProfileRow
 	err := row.Scan(
@@ -696,6 +735,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.FirstName,
 		&i.LastName,
 		&i.PhoneNumber,
+		&i.FaceS3Uri,
 	)
 	return i, err
 }

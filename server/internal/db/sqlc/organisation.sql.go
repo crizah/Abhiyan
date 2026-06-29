@@ -18,7 +18,7 @@ INSERT INTO organizations (
 ) VALUES (
     $1, $2
 )
-RETURNING id, name, domain, created_at
+RETURNING id, name, domain, attendance_enabled, created_at
 `
 
 type CreateOrganizationsParams struct {
@@ -33,13 +33,31 @@ func (q *Queries) CreateOrganizations(ctx context.Context, arg CreateOrganizatio
 		&i.ID,
 		&i.Name,
 		&i.Domain,
+		&i.AttendanceEnabled,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
+const getOrgInfo = `-- name: GetOrgInfo :one
+SELECT name, attendance_enabled FROM organizations
+WHERE id = $1 LIMIT 1
+`
+
+type GetOrgInfoRow struct {
+	Name              string `json:"name"`
+	AttendanceEnabled bool   `json:"attendance_enabled"`
+}
+
+func (q *Queries) GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error) {
+	row := q.db.QueryRowContext(ctx, getOrgInfo, id)
+	var i GetOrgInfoRow
+	err := row.Scan(&i.Name, &i.AttendanceEnabled)
+	return i, err
+}
+
 const getOrganizationName = `-- name: GetOrganizationName :one
-SELECT name FROM organizations 
+SELECT name FROM organizations
 WHERE id = $1 LIMIT 1
 `
 
@@ -48,4 +66,18 @@ func (q *Queries) GetOrganizationName(ctx context.Context, id uuid.UUID) (string
 	var name string
 	err := row.Scan(&name)
 	return name, err
+}
+
+const setOrgAttendanceEnabled = `-- name: SetOrgAttendanceEnabled :exec
+UPDATE organizations SET attendance_enabled = $2 WHERE id = $1
+`
+
+type SetOrgAttendanceEnabledParams struct {
+	ID                uuid.UUID `json:"id"`
+	AttendanceEnabled bool      `json:"attendance_enabled"`
+}
+
+func (q *Queries) SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgAttendanceEnabled, arg.ID, arg.AttendanceEnabled)
+	return err
 }

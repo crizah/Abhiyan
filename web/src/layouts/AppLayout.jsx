@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Avatar, Dropdown, Flex, message, theme, Typography, Badge, Tag, List, Button, Tooltip } from 'antd';
 
-import { 
+import {
   DashboardOutlined, TeamOutlined, BellOutlined, LogoutOutlined,
-  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined, 
-  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined
+  UserSwitchOutlined, UserOutlined, SafetyOutlined, SettingOutlined,
+  UserAddOutlined, CheckOutlined, ApartmentOutlined, CheckSquareOutlined,
+  ScanOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +13,9 @@ import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
 
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
-import '@coreui/coreui/dist/css/coreui.min.css'; 
+import '@coreui/coreui/dist/css/coreui.min.css';
+import AttendanceFaceRegistration from '../components/AttendanceFaceRegistration';
+import AttendanceCapture from '../components/AttendanceCapture';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -287,6 +290,9 @@ export default function AppLayout() {
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/teams'); }} active={location.pathname === '/teams'}>
                 <ApartmentOutlined className="nav-icon" /> Teams
               </CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/attendance'); }} active={location.pathname === '/attendance'}>
+                <ScanOutlined className="nav-icon" /> Attendance
+              </CNavItem>
             </>
           )}
 
@@ -318,7 +324,9 @@ export default function AppLayout() {
       <Layout style={{ marginLeft: '64px', transition: 'all 0.3s ease-in-out', flexGrow: 1, minHeight: '100vh' }}>
         <GlobalHeader user={user} token={token} navigate={navigate} />
         <Content style={{ margin: '24px', background: token.colorBgContainer, padding: 24, borderRadius: '8px' }}>
-          <Outlet /> 
+          <AttendanceFaceRegistration />
+          <AttendanceCapture />
+          <Outlet />
         </Content>
       </Layout>
     </div>

@@ -18,6 +18,7 @@ type Querier interface {
 	// NEW: Assigns a system role to a user
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
+	BatchInsertAbsentAttendance(ctx context.Context) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
@@ -53,6 +54,9 @@ type Querier interface {
 	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
 	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
 	GetMissedDeadlineCandidates(ctx context.Context) ([]GetMissedDeadlineCandidatesRow, error)
+	GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendanceByDateParams) ([]GetOrgAttendanceByDateRow, error)
+	GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error)
+	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
@@ -76,14 +80,18 @@ type Querier interface {
 	GetTeamLeaderboard(ctx context.Context, teamID uuid.UUID) ([]GetTeamLeaderboardRow, error)
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error)
+	GetTodayAttendance(ctx context.Context, userID uuid.UUID) (GetTodayAttendanceRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetTranscriptionByAttachmentID(ctx context.Context, attachmentID uuid.UUID) (GetTranscriptionByAttachmentIDRow, error)
 	GetTranscriptionsByAttachmentIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTranscriptionsByAttachmentIDsRow, error)
 	GetUnassignedOrgUsers(ctx context.Context, arg GetUnassignedOrgUsersParams) ([]GetUnassignedOrgUsersRow, error)
 	GetUpdateComments(ctx context.Context, arg GetUpdateCommentsParams) ([]GetUpdateCommentsRow, error)
+	GetUserAttendanceHistory(ctx context.Context, userID uuid.UUID) ([]GetUserAttendanceHistoryRow, error)
+	GetUserAttendanceSummary(ctx context.Context, userID uuid.UUID) (GetUserAttendanceSummaryRow, error)
 	GetUserByEmail(ctx context.Context, emailID string) (User, error)
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
+	GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error)
 	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
 	GetUserScoreBreakdown(ctx context.Context, arg GetUserScoreBreakdownParams) (GetUserScoreBreakdownRow, error)
@@ -108,6 +116,8 @@ type Querier interface {
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
 	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
+	SetAttendanceResult(ctx context.Context, arg SetAttendanceResultParams) error
+	SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	SupersedeScoreEvents(ctx context.Context, arg SupersedeScoreEventsParams) error
@@ -115,9 +125,11 @@ type Querier interface {
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error
 	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error
+	UpdateUserFace(ctx context.Context, arg UpdateUserFaceParams) error
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
+	UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error)
 	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }

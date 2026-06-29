@@ -40,10 +40,20 @@ func NewS3Service(ctx context.Context) (*S3Service, error) {
 }
 
 // GeneratePresignedURL returns the URL to upload to, and the final public URL
-func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename string) (string, string, error) {
+func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename string, fileType string) (string, string, string, error) {
 	// 1. Create a unique key so files with the same name don't overwrite each other
 	uniqueID := uuid.New().String()
-	objectKey := fmt.Sprintf("uploads/%s-%s", uniqueID, originalFilename)
+	var objectKey string
+	if fileType == "targets" {
+
+		// if attendance record, target bucket
+		objectKey = fmt.Sprintf("targets/%s-%s", uniqueID, originalFilename)
+
+	} else if fileType == "sources" {
+		objectKey = fmt.Sprintf("sources/%s-%s", uniqueID, originalFilename)
+	} else {
+		objectKey = fmt.Sprintf("uploads/%s-%s", uniqueID, originalFilename)
+	}
 
 	// 2. Ask AWS for the temporary upload URL (valid for 15 minutes)
 	request, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
@@ -54,16 +64,17 @@ func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename s
 	})
 
 	if err != nil {
-		return "", "", fmt.Errorf("failed to generate presigned url: %w", err)
+		return "", "", "", fmt.Errorf("failed to generate presigned url: %w", err)
 	}
 
 	// 3. Construct the final URL where the file will permanently live
 	finalFileURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, objectKey)
 
-	return request.URL, finalFileURL, nil
+	return request.URL, finalFileURL, objectKey, nil
 }
 
 func (s *S3Service) DeleteObjects(ctx context.Context, fileURLs []string) {
+	// TODO: chnage this to use objetKey since we are returning that now
 	for _, fileURL := range fileURLs {
 		key := s.extractKeyFromURL(fileURL)
 		if key == "" {
@@ -77,14 +88,18 @@ func (s *S3Service) DeleteObjects(ctx context.Context, fileURLs []string) {
 }
 
 func (s *S3Service) DownloadFile(ctx context.Context, fileURL string) ([]byte, error) {
+	// TODO: chnage this to use objetKey since we are returning that now
 	key := s.extractKeyFromURL(fileURL)
 	if key == "" {
 		return nil, fmt.Errorf("could not extract key from URL: %s", fileURL)
 	}
+	return s.DownloadByKey(ctx, key)
+}
 
+func (s *S3Service) DownloadByKey(ctx context.Context, objectKey string) ([]byte, error) {
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(key),
+		Key:    aws.String(objectKey),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to download from S3: %w", err)

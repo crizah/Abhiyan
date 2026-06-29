@@ -181,6 +181,11 @@ export default function LoginPage() {
                 <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
                   Sign In
                 </Button>
+                <Flex justify="center" style={{ marginTop: token.marginSM }}>
+                  <Link to="/forgot-password" style={{ color: token.colorTextSecondary }}>
+                    Forgot password?
+                  </Link>
+                </Flex>
               </Form>
 
               <Flex justify="center">

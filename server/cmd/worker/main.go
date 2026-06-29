@@ -70,6 +70,7 @@ func main() {
 
 	// register task
 	onionApp.Register("send_invite_email", tasks.NewSendInviteEmailTask(emailService))
+	onionApp.Register("send_password_reset_email", tasks.NewSendPasswordResetEmailTask(emailService))
 
 	// register reminder
 	onionApp.Register("send_reminder_email", tasks.NewSendReminderEmailTask(emailService))
@@ -102,6 +103,7 @@ func main() {
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
 			"send_invite_email":           "critical",
+			"send_password_reset_email":   "critical",
 			"send_reminder_email":         "reminders",
 			"send_reminder_whatsapp":      "reminders",
 			"poll_due_reminders":          "polling",

@@ -640,6 +640,22 @@ func (q *Queries) InsertUserSystemRole(ctx context.Context, arg InsertUserSystem
 	return err
 }
 
+const updateUserCredentials = `-- name: UpdateUserCredentials :exec
+UPDATE user_credentials
+SET password_hash = $2, updated_at = NOW()
+WHERE user_id = $1
+`
+
+type UpdateUserCredentialsParams struct {
+	UserID       uuid.UUID `json:"user_id"`
+	PasswordHash string    `json:"password_hash"`
+}
+
+func (q *Queries) UpdateUserCredentials(ctx context.Context, arg UpdateUserCredentialsParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserCredentials, arg.UserID, arg.PasswordHash)
+	return err
+}
+
 const updateUserFace = `-- name: UpdateUserFace :exec
 UPDATE users SET face_s3_uri = $2 WHERE id = $1
 `

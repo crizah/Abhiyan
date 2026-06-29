@@ -242,6 +242,33 @@ func (h *AuthHandler) AcceptInvite(c *gin.Context) {
 	c.JSON(http.StatusOK, schemas.MessageResponse{Message: "Account fully onboarded. You may now log in."})
 }
 
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req schemas.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Always return 200 to avoid email enumeration
+	_ = h.authService.ForgotPassword(c.Request.Context(), req.Email)
+	c.JSON(http.StatusOK, schemas.MessageResponse{Message: "If that email is registered, a reset link has been sent."})
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req schemas.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.authService.ResetPassword(c.Request.Context(), req.Token, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, schemas.MessageResponse{Message: "Password reset successfully. You may now log in."})
+}
+
 func (h *AuthHandler) ResendPublicInvite(c *gin.Context) {
 	var req schemas.ResendInviteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

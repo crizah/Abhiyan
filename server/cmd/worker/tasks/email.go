@@ -37,6 +37,28 @@ func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Co
 	}
 }
 
+func NewSendPasswordResetEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
+	return func(ctx context.Context, args map[string]any) (any, error) {
+		email, ok := args["email"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'email' argument")
+		}
+		link, ok := args["link"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'link' argument")
+		}
+
+		fmt.Printf("Attempting to send password reset email to %s...\n", email)
+		err := emailService.SendPasswordResetEmail(ctx, email, link)
+		if err != nil {
+			fmt.Printf("Failed to send password reset email to %s: %v\n", email, err)
+			return nil, err
+		}
+		fmt.Printf("Successfully sent password reset email to %s\n", email)
+		return "Email sent successfully", nil
+	}
+}
+
 func NewSendReminderEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 

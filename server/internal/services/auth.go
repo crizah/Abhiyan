@@ -277,6 +277,45 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 	return tx.Commit()
 }
 
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	user, err := s.Queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		// Return nil to avoid leaking whether the email exists
+		return nil
+	}
+
+	token, err := util.GeneratePasswordResetToken(user.EmailID, s.JwtSecret, 15*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	link := fmt.Sprintf("%s/reset-password?token=%s", frontendURL, token)
+	return s.onionApp.Enqueue(ctx, "send_password_reset_email", map[string]any{"email": user.EmailID, "link": link})
+}
+
+func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	claims, err := util.ParsePasswordResetToken(token, s.JwtSecret)
+	if err != nil {
+		return errors.New("invalid or expired reset link")
+	}
+
+	user, err := s.Queries.GetUserByEmail(ctx, claims.Email)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	hashedPassword, err := util.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	return s.Queries.UpdateUserCredentials(ctx, db.UpdateUserCredentialsParams{
+		UserID:       user.ID,
+		PasswordHash: hashedPassword,
+	})
+}
+
 func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken string) error {
 	// 1. Safely extract claims from the expired-but-validly-signed token
 	claims, err := util.ParseInviteToken(expiredToken, s.JwtSecret)

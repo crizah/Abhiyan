@@ -45,12 +45,13 @@ func main() {
 			{Name: "polling", Priority: 7},
 		},
 		TaskRoutes: map[string]string{
-			"send_invite_email":      "critical",
-			"send_reminder_email":    "reminders",
-			"send_reminder_whatsapp": "reminders",
-			"poll_due_reminders":     "polling",
-			"validate_face":          "default",
-			"compare_faces":          "default",
+			"send_invite_email":          "critical",
+			"send_password_reset_email":  "critical",
+			"send_reminder_email":        "reminders",
+			"send_reminder_whatsapp":     "reminders",
+			"poll_due_reminders":         "polling",
+			"validate_face":              "default",
+			"compare_faces":              "default",
 		},
 	})
 	if err != nil {
@@ -98,6 +99,8 @@ func main() {
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/accept-invite", authHandler.AcceptInvite)
 			auth.POST("/resend-invite", authHandler.ResendPublicInvite)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 
 			// Protected Auth Context
 			auth.GET("/me", middleware.RequireAuth(s_byte), authHandler.Me)

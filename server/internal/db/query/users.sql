@@ -174,5 +174,10 @@ FROM users u
 JOIN user_system_roles usr ON u.id = usr.user_id
 WHERE u.email_id = $1 AND u.org_id = $2;
 
--- name: GetUserFaceURI :one                                                                                                      
-SELECT face_s3_uri FROM users WHERE id = $1;      
+-- name: GetUserFaceURI :one
+SELECT face_s3_uri FROM users WHERE id = $1;
+
+-- name: UpdateUserCredentials :exec
+UPDATE user_credentials
+SET password_hash = $2, updated_at = NOW()
+WHERE user_id = $1;

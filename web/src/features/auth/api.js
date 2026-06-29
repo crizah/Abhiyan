@@ -25,7 +25,17 @@ export const authAPI = {
     acceptInvite: async (data) => {
         const response = await apiClient.post('/auth/accept-invite', data);
         return response.data;
-    }
+    },
+
+    forgotPassword: async (email) => {
+        const response = await apiClient.post('/auth/forgot-password', { email });
+        return response.data;
+    },
+
+    resetPassword: async (token, newPassword) => {
+        const response = await apiClient.post('/auth/reset-password', { token, new_password: newPassword });
+        return response.data;
+    },
 };
 
 export const attendanceAPI = {

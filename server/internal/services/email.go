@@ -89,3 +89,29 @@ func (es *EmailService) SendInviteEmail(ctx context.Context, recipientEmail, inv
 	_, err := es.sesClient.SendEmail(ctx, input)
 	return err
 }
+
+func (es *EmailService) SendPasswordResetEmail(ctx context.Context, recipientEmail, resetLink string) error {
+	subject := "Reset your password"
+	htmlBody := fmt.Sprintf(`
+		<h2>Password Reset Request</h2>
+		<p>We received a request to reset your password. Click the link below to set a new one:</p>
+		<a href="%s" style="display:inline-block;padding:10px 20px;background-color:#1677ff;color:#ffffff;text-decoration:none;border-radius:5px;">Reset Password</a>
+		<p>This link expires in 15 minutes. If you did not request a reset, you can safely ignore this email.</p>
+	`, resetLink)
+
+	input := &ses.SendEmailInput{
+		Source: aws.String(es.sender),
+		Destination: &types.Destination{
+			ToAddresses: []string{recipientEmail},
+		},
+		Message: &types.Message{
+			Subject: &types.Content{Data: aws.String(subject)},
+			Body: &types.Body{
+				Html: &types.Content{Data: aws.String(htmlBody)},
+			},
+		},
+	}
+
+	_, err := es.sesClient.SendEmail(ctx, input)
+	return err
+}

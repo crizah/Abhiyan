@@ -105,3 +105,33 @@ func ParseInviteToken(tokenStr string, secret []byte) (*InviteClaims, error) {
 
 	return nil, errors.New("invalid invite token")
 }
+
+type PasswordResetClaims struct {
+	Email string `json:"email"`
+	jwt.RegisteredClaims
+}
+
+func GeneratePasswordResetToken(email string, secret []byte, duration time.Duration) (string, error) {
+	claims := PasswordResetClaims{
+		Email: email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(secret)
+}
+
+func ParsePasswordResetToken(tokenStr string, secret []byte) (*PasswordResetClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &PasswordResetClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return secret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(*PasswordResetClaims); ok && token.Valid {
+		return claims, nil
+	}
+	return nil, errors.New("invalid password reset token")
+}

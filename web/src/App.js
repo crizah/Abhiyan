@@ -16,6 +16,8 @@ import TeamsPage from './features/users/TeamsPage';
 import TeamTasksPage from './features/tasks/pages/TeamTasksPage'; 
 import EmployeeTasksPage from './features/tasks/pages/EmployeeTasksPage';
 import AcceptInvitePage from './features/auth/pages/AcceptInvitePage';
+import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage';
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
 import AdminTeamsPage from './features/users/AdminTeamsPage';
 import AttendancePage from './features/users/AttendancePage';
 
@@ -54,6 +56,8 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register-org" element={<RegisterOrgPage />} />
               <Route path="/accept-invite" element={<AcceptInvitePage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               
               
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

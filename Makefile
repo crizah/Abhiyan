@@ -49,4 +49,7 @@ dev-up:
 dev-down:
 	docker-compose down
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down
+analyse-sql:
+	cd server && go run ../indexlens.go --schemas ./internal/db/schemas --queries ./internal/db/query
+
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql

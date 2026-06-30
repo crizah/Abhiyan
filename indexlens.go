@@ -57,9 +57,15 @@ type Finding struct {
 	SQL       string   `json:"suggested_sql,omitempty"`
 }
 
+type DeadQuery struct {
+	Name string `json:"name"`
+	File string `json:"file"`
+}
+
 type Report struct {
-	Findings []Finding `json:"findings"`
-	Summary  Summary   `json:"summary"`
+	Findings    []Finding    `json:"findings"`
+	DeadQueries []DeadQuery  `json:"dead_queries,omitempty"`
+	Summary     Summary      `json:"summary"`
 }
 
 type Summary struct {
@@ -68,6 +74,7 @@ type Summary struct {
 	MissingIndexes  int `json:"missing_indexes"`
 	Warnings        int `json:"warnings"`
 	Redundant       int `json:"redundant"`
+	DeadQueries     int `json:"dead_queries"`
 }
 
 // ── Regex patterns ───────────────────────────────────────────────────────────
@@ -594,6 +601,57 @@ func analyze(tables map[string]*Table, queries []Query) []Finding {
 	return findings
 }
 
+// ── Dead query detection ──────────────────────────────────────────────────────
+
+func findDeadQueries(queries []Query, goSrcDir string) ([]DeadQuery, error) {
+	// Collect all .go files under goSrcDir, excluding sqlc-generated files
+	// (they define the query methods — we want callers, not definitions)
+	var goFiles []string
+	err := filepath.Walk(goSrcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			// Skip sqlc generated output directories
+			base := filepath.Base(path)
+			if base == "sqlc" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, ".sql.go") {
+			goFiles = append(goFiles, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Concat all Go source into one blob for fast searching
+	var sb strings.Builder
+	for _, f := range goFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		sb.Write(data)
+		sb.WriteByte('\n')
+	}
+	src := sb.String()
+
+	var dead []DeadQuery
+	for _, q := range queries {
+		// sqlc generates methods called as q.QueryName(...) or s.queries.QueryName(...)
+		// Searching for the bare function name is sufficient — it must appear
+		// somewhere in Go source if it's being called.
+		if !strings.Contains(src, q.Name) {
+			dead = append(dead, DeadQuery{Name: q.Name, File: q.File})
+		}
+	}
+	return dead, nil
+}
+
 // ── Reporting ─────────────────────────────────────────────────────────────────
 
 const (
@@ -606,7 +664,7 @@ const (
 	colorDim    = "\033[2m"
 )
 
-func printReport(findings []Finding, tables map[string]*Table, queries []Query, noColor bool) {
+func printReport(findings []Finding, deadQueries []DeadQuery, tables map[string]*Table, queries []Query, noColor bool) {
 	color := func(c, s string) string {
 		if noColor {
 			return s
@@ -642,6 +700,9 @@ func printReport(findings []Finding, tables map[string]*Table, queries []Query, 
 	fmt.Printf("  Missing indexes : %s\n", color(colorRed, fmt.Sprintf("%d", missing)))
 	fmt.Printf("  Warnings        : %s\n", color(colorYellow, fmt.Sprintf("%d", warnings)))
 	fmt.Printf("  Redundant       : %s\n", color(colorCyan, fmt.Sprintf("%d", redundant)))
+	if deadQueries != nil {
+		fmt.Printf("  Dead queries    : %s\n", color(colorRed, fmt.Sprintf("%d", len(deadQueries))))
+	}
 	fmt.Println()
 
 	if len(findings) == 0 {
@@ -670,6 +731,22 @@ func printReport(findings []Finding, tables map[string]*Table, queries []Query, 
 			}
 			if f.SQL != "" {
 				fmt.Printf("             %s\n", color(colorGreen, f.SQL))
+			}
+		}
+		fmt.Println()
+	}
+
+	if len(deadQueries) > 0 {
+		fmt.Println(color(colorBold, "  DEAD QUERIES"))
+		fmt.Println(color(colorDim, "  "+strings.Repeat("─", 50)))
+		byFile := map[string][]string{}
+		for _, dq := range deadQueries {
+			byFile[dq.File] = append(byFile[dq.File], dq.Name)
+		}
+		for file, names := range byFile {
+			fmt.Printf("  %s\n", color(colorDim, file))
+			for _, name := range names {
+				fmt.Printf("  %s %s\n", color(colorRed, "  [DEAD]  "), name)
 			}
 		}
 		fmt.Println()
@@ -760,6 +837,7 @@ func isKeyword(s string) bool {
 func main() {
 	schemasDir := flag.String("schemas", "./server/internal/db/schemas", "path to schema SQL files")
 	queriesDir := flag.String("queries", "./server/internal/db/query", "path to query SQL files")
+	goSrcDir   := flag.String("go-src", "", "path to Go source directory for dead query detection (optional)")
 	outputFile := flag.String("output", "", "write JSON report to this file (optional)")
 	noColor    := flag.Bool("no-color", false, "disable terminal colors")
 	flag.Parse()
@@ -783,7 +861,17 @@ func main() {
 	}
 
 	findings := analyze(tables, queries)
-	printReport(findings, tables, queries, *noColor)
+
+	var deadQueries []DeadQuery
+	if *goSrcDir != "" {
+		var err error
+		deadQueries, err = findDeadQueries(queries, *goSrcDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error scanning go source: %v\n", err)
+		}
+	}
+
+	printReport(findings, deadQueries, tables, queries, *noColor)
 
 	if *outputFile != "" {
 		missing, warnings, redundant := 0, 0, 0
@@ -798,13 +886,15 @@ func main() {
 			}
 		}
 		report := Report{
-			Findings: findings,
+			Findings:    findings,
+			DeadQueries: deadQueries,
 			Summary: Summary{
 				TablesAnalyzed:  len(tables),
 				QueriesAnalyzed: len(queries),
 				MissingIndexes:  missing,
 				Warnings:        warnings,
 				Redundant:       redundant,
+				DeadQueries:     len(deadQueries),
 			},
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")

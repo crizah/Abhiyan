@@ -41,7 +41,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 					}
 
 					err := onionApp.Enqueue(ctx, "send_reminder_whatsapp", map[string]any{
-						"rPN":      n,
+						"rPN":      n.String,
 						"taskName": rem.TaskTitle,
 					})
 					if err != nil {

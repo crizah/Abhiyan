@@ -19,6 +19,7 @@ type Querier interface {
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
 	BatchInsertAbsentAttendance(ctx context.Context) error
+	CancelTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error

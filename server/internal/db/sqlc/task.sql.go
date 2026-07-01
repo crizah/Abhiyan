@@ -83,6 +83,15 @@ func (q *Queries) ApproveTaskState(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const cancelTaskReminders = `-- name: CancelTaskReminders :exec
+UPDATE reminders SET status = 'CANCELLED' WHERE task_id = $1 AND status = 'PENDING'
+`
+
+func (q *Queries) CancelTaskReminders(ctx context.Context, taskID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, cancelTaskReminders, taskID)
+	return err
+}
+
 const completeReminder = `-- name: CompleteReminder :exec
 UPDATE reminders 
 SET status = 'SENT' 

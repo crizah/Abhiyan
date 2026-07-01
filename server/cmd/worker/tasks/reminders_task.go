@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -10,12 +11,20 @@ import (
 	"github.com/crizah/Onion/app"
 )
 
-func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(context.Context, map[string]any) (any, error) {
+func NewPollDueRemindersTask(dbConn *sql.DB, queries *db.Queries, onionApp *app.App) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 
 		log.Println("[Poller] Scanning for new reminders")
 
-		reminders, err := queries.GetDueReminders(ctx)
+		tx, err := dbConn.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin tx: %w", err)
+		}
+		defer tx.Rollback()
+
+		qtx := queries.WithTx(tx)
+
+		reminders, err := qtx.GetDueReminders(ctx)
 		if err != nil {
 			log.Printf("[Poller] ERROR: Failed to fetch reminders: %v\n", err)
 			return nil, fmt.Errorf("failed to fetch due reminders: %w", err)
@@ -32,7 +41,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 
 			if rem.Channel == db.ReminderChannelWHATSAPP {
 				// send to whatsapp
-				assigneePhones, _ := queries.GetTaskAssigneePhones(ctx, rem.TaskID)
+				assigneePhones, _ := qtx.GetTaskAssigneePhones(ctx, rem.TaskID)
 
 				for _, n := range assigneePhones {
 					// skip if the database value was NULL or empty
@@ -54,7 +63,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 
 			} else {
 
-				assigneeEmails, _ := queries.GetTaskAssigneeEmails(ctx, rem.TaskID)
+				assigneeEmails, _ := qtx.GetTaskAssigneeEmails(ctx, rem.TaskID)
 
 				// 1. Dispatch emails
 
@@ -73,7 +82,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 			}
 
 			// 2. State Management: ALWAYS complete the current row
-			_ = queries.CompleteReminder(ctx, rem.ID)
+			_ = qtx.CompleteReminder(ctx, rem.ID)
 
 			// 3. Spawning Logic: If recurring, insert a BRAND NEW row for the next date
 			isRecurring := rem.RecurrenceValue.Valid && rem.RecurrenceUnit.Valid
@@ -86,7 +95,7 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 				)
 
 				// Re-use your existing CreateReminder query to spawn the next iteration
-				_, err := queries.CreateReminder(ctx, db.CreateReminderParams{
+				_, err := qtx.CreateReminder(ctx, db.CreateReminderParams{
 					TaskID:          rem.TaskID,
 					ScheduledAt:     nextTime,
 					Channel:         rem.Channel,
@@ -101,6 +110,10 @@ func NewPollDueRemindersTask(queries *db.Queries, onionApp *app.App) func(contex
 					log.Printf("[Poller] Spawned next recurring reminder for: %v\n", nextTime)
 				}
 			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("failed to commit reminder batch: %w", err)
 		}
 
 		log.Printf("[Poller] Successfully processed %d reminders.\n", len(reminders))

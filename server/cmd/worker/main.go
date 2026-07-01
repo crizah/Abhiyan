@@ -74,7 +74,7 @@ func main() {
 
 	// register reminder
 	onionApp.Register("send_reminder_email", tasks.NewSendReminderEmailTask(emailService))
-	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(queries, onionApp))
+	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(dbConn, queries, onionApp))
 	onionApp.Register("send_reminder_whatsapp", tasks.NewSendReminderWhatsappTask(whatsappService))
 
 	// register transcription

@@ -88,6 +88,9 @@ DELETE FROM task_participants WHERE task_id = $1;
 -- name: DeleteTaskReminders :exec
 DELETE FROM reminders WHERE task_id = $1;
 
+-- name: CancelTaskReminders :exec
+UPDATE reminders SET status = 'CANCELLED' WHERE task_id = $1 AND status = 'PENDING';
+
 -- name: GetAdminAllTasks :many
 WITH base AS (
     SELECT DISTINCT

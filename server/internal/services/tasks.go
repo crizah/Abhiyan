@@ -970,6 +970,9 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 		return fmt.Errorf("failed to update state: %w", err)
 	}
 
+	// Assignee's work is done; stop reminders from firing while it's awaiting admin review.
+	_ = qtx.CancelTaskReminders(ctx, tID)
+
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	userRec, _ := qtx.GetUserNameByID(ctx, uID)
 	userName := strings.TrimSpace(userRec.FirstName.String + " " + userRec.LastName.String)

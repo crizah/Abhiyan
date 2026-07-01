@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 )
 
 type WhisperService struct {
@@ -24,6 +26,8 @@ func NewWhisperService() *WhisperService {
 type whisperResponse struct {
 	Text string `json:"text"`
 }
+
+const whisperMaxRetries = 5
 
 func (w *WhisperService) Transcribe(ctx context.Context, audioData []byte, filename string) (string, error) {
 	var body bytes.Buffer
@@ -41,26 +45,50 @@ func (w *WhisperService) Transcribe(ctx context.Context, audioData []byte, filen
 	writer.WriteField("response_format", "json")
 	writer.Close()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/audio/transcriptions", &body)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+w.apiKey)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	contentType := writer.FormDataContentType()
+	bodyBytes := body.Bytes()
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("whisper API request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	var respBody []byte
+	var statusCode int
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+	for attempt := 0; attempt <= whisperMaxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/audio/transcriptions", bytes.NewReader(bodyBytes))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+w.apiKey)
+		req.Header.Set("Content-Type", contentType)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("whisper API request failed: %w", err)
+		}
+
+		statusCode = resp.StatusCode
+		respBody, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if statusCode != http.StatusTooManyRequests {
+			break
+		}
+
+		if attempt == whisperMaxRetries {
+			return "", fmt.Errorf("whisper API error (status %d): %s", statusCode, string(respBody))
+		}
+
+		wait := retryAfterDelay(resp.Header.Get("Retry-After"), attempt)
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("whisper API error (status %d): %s", resp.StatusCode, string(respBody))
+	if statusCode != http.StatusOK {
+		return "", fmt.Errorf("whisper API error (status %d): %s", statusCode, string(respBody))
 	}
 
 	var result whisperResponse
@@ -69,4 +97,13 @@ func (w *WhisperService) Transcribe(ctx context.Context, audioData []byte, filen
 	}
 
 	return result.Text, nil
+}
+
+// retryAfterDelay honors the API's Retry-After header (in seconds) when present,
+// otherwise falls back to exponential backoff: 1s, 2s, 4s, 8s, 16s.
+func retryAfterDelay(retryAfterHeader string, attempt int) time.Duration {
+	if secs, err := strconv.Atoi(retryAfterHeader); err == nil && secs > 0 {
+		return time.Duration(secs) * time.Second
+	}
+	return time.Duration(1<<attempt) * time.Second
 }

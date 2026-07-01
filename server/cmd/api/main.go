@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 // loadSSMParams fetches all app secrets from SSM and sets them as env vars.
@@ -93,6 +95,9 @@ func main() {
 	// initialise task queue
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
+
+	// Reuse the same Redis instance the task broker runs on for rate-limit counters.
+	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
 	onionApp, err := app.New(app.Config{
 		BrokerAddr:    broker_url,
 		BackendURL:    db_url,
@@ -146,6 +151,14 @@ func main() {
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
 
+	// Unauthenticated auth endpoints: no user identity yet, so key by IP.
+	// Tight limit - these are brute-force/credential-stuffing/email-bombing targets.
+	authLimiter := middleware.RateLimit(rdb, "auth", 5, 5*time.Minute, middleware.KeyByIP)
+
+	// Authenticated endpoints with real downstream cost (external API calls,
+	// message sends, S3 writes). Keyed by user so it can't be starved by shared IPs.
+	costLimiter := middleware.RateLimit(rdb, "cost", 20, time.Minute, middleware.KeyByUser)
+
 	// --- 3. Define Routes ---
 	v1 := r.Group("/api/v1")
 	{
@@ -153,13 +166,13 @@ func main() {
 		auth := v1.Group("/auth")
 		{
 			// Public
-			auth.POST("/register-org", authHandler.RegisterOrg)
-			auth.POST("/login", authHandler.Login)
+			auth.POST("/register-org", authLimiter, authHandler.RegisterOrg)
+			auth.POST("/login", authLimiter, authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
-			auth.POST("/accept-invite", authHandler.AcceptInvite)
-			auth.POST("/resend-invite", authHandler.ResendPublicInvite)
-			auth.POST("/forgot-password", authHandler.ForgotPassword)
-			auth.POST("/reset-password", authHandler.ResetPassword)
+			auth.POST("/accept-invite", authLimiter, authHandler.AcceptInvite)
+			auth.POST("/resend-invite", authLimiter, authHandler.ResendPublicInvite)
+			auth.POST("/forgot-password", authLimiter, authHandler.ForgotPassword)
+			auth.POST("/reset-password", authLimiter, authHandler.ResetPassword)
 
 			// auth
 			auth.GET("/me", middleware.RequireAuth(s_byte), authHandler.Me)
@@ -190,9 +203,9 @@ func main() {
 			general.GET("/tasks/:task_id/details", taskHandler.GetFullTaskDetails)
 			general.GET("/attachments/:attachment_id/transcription", taskHandler.GetTranscription)
 			general.GET("/teams/:team_id/members", adminHandler.GetTeamMembers)
-			general.GET("/upload/presigned-url", uploadHandler.GetPresignedUploadsURL)
+			general.GET("/upload/presigned-url", costLimiter, uploadHandler.GetPresignedUploadsURL)
 			general.DELETE("/upload/s3-object", uploadHandler.DeleteS3Object)
-			general.POST("/upload/validate-face", uploadHandler.ValidateFace)
+			general.POST("/upload/validate-face", costLimiter, uploadHandler.ValidateFace)
 			general.GET("/upload/validate-face/:job_id", uploadHandler.GetValidationStatus) // polling
 			general.POST("/attendance/mark", attendanceHandler.MarkAttendance)
 			general.GET("/attendance/today", attendanceHandler.GetTodayAttendance) // polling
@@ -236,7 +249,7 @@ func main() {
 			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
 			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees) // needs to be paginated
 			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
-			teamAdminGroup.POST("/teams/:team_id/tasks", taskHandler.CreateTask)
+			teamAdminGroup.POST("/teams/:team_id/tasks", costLimiter, taskHandler.CreateTask)
 			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks) // needs to be paginated
 			teamAdminGroup.PUT("/tasks/:task_id/status", taskHandler.UpdateTaskStatus)
 			teamAdminGroup.GET("/my-teams", adminHandler.GetAdminManagedTeams) // needs to be paginated
@@ -254,7 +267,7 @@ func main() {
 			teamAdminGroup.POST("/tasks/:task_id/updates/:update_id/comments", taskHandler.PostUpdateComment)
 
 			teamAdminGroup.PUT("/tasks/:task_id/approve", taskHandler.ApproveTask)
-			teamAdminGroup.PUT("/tasks/:task_id/action/:action", taskHandler.ActionTask) // reject or reopen
+			teamAdminGroup.PUT("/tasks/:task_id/action/:action", costLimiter, taskHandler.ActionTask) // reject or reopen
 
 			teamAdminGroup.GET("/employees/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
 			teamAdminGroup.GET("/leaderboard", scoreHandler.GetAdminLeaderboard)

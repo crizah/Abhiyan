@@ -1,0 +1,29 @@
+{
+  "files.watcherExclude": {
+    "**/venv/**": true,
+    "**/.repowise/**": true,
+    "**/bin/**": true,
+    "**/include/**": true,
+    "**/lib/**": true,
+    "**/lib64/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/venv": true,
+    "**/.repowise": true,
+    "**/bin": true,
+    "**/include": true,
+    "**/lib": true,
+    "**/lib64": true,
+    "**/node_modules": true
+  },
+  "files.exclude": {
+    "**/venv": true,
+    "**/.repowise": true,
+    "**/bin": true,
+    "**/include": true,
+    "**/lib": true,
+    "**/lib64": true,
+    "**/pyvenv.cfg": true
+  }
+}

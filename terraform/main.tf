@@ -70,6 +70,11 @@ module "compute" {
 module "routing" {
   source = "./modules/routing"
 
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
   domain         = var.domain
   api_gateway_id = module.compute.api_gateway_id
 }

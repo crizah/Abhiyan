@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.us_east_1]
+    }
+  }
+}
+
 # ── Route 53 Hosted Zone ─────────────────────────────────────────────────────
 
 data "aws_route53_zone" "main" {

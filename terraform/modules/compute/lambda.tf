@@ -4,6 +4,28 @@ resource "aws_s3_bucket" "lambda_deployments" {
   tags = { Name = "${var.project}-lambda-deployments" }
 }
 
+# Placeholder zip so Terraform can create the Lambda on first apply.
+# CI overwrites api/latest.zip with the real binary after every deploy.
+data "archive_file" "lambda_placeholder" {
+  type        = "zip"
+  output_path = "${path.module}/placeholder-bootstrap.zip"
+
+  source {
+    content  = "placeholder"
+    filename = "bootstrap"
+  }
+}
+
+resource "aws_s3_object" "lambda_placeholder" {
+  bucket = aws_s3_bucket.lambda_deployments.bucket
+  key    = "api/latest.zip"
+  source = data.archive_file.lambda_placeholder.output_path
+
+  lifecycle {
+    ignore_changes = [source, source_hash, etag]
+  }
+}
+
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/lambda/${var.project}-api"
   retention_in_days = 14
@@ -15,11 +37,9 @@ resource "aws_lambda_function" "api" {
   function_name = "${var.project}-api"
   role          = aws_iam_role.lambda.arn
 
-  # Bootstrap binary built by CI (GOOS=linux GOARCH=arm64)
   s3_bucket = aws_s3_bucket.lambda_deployments.bucket
   s3_key    = "api/latest.zip"
 
-  # arm64 (Graviton) is cheaper and faster than x86 for Go
   runtime       = "provided.al2023"
   architectures = ["arm64"]
   handler       = "bootstrap"
@@ -33,38 +53,21 @@ resource "aws_lambda_function" "api" {
     }
   }
 
-  # Pull secrets from SSM at cold-start via the Parameters and Secrets Lambda extension
-  # These become env vars inside the function — os.Getenv() works as normal
-  dynamic "environment" {
-    for_each = []
-    content {}
-  }
-
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_sg_id]
   }
 
-  depends_on = [aws_cloudwatch_log_group.api]
-
-  tags = { Name = "${var.project}-api" }
-}
-
-# Lambda reads SSM params at startup via the AWS Parameters and Secrets extension layer
-# The layer ARN is region-specific. This is the ap-south-1 arm64 ARN.
-resource "aws_lambda_layer_version_permission" "ssm_extension" {
-  # No resource needed — we reference the AWS-managed layer directly in the function
-  # Layer: arn:aws:lambda:ap-south-1:017000801446:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:12
-  # Add this ARN to layers in aws_lambda_function above when wiring SSM env vars via extension
-  layer_name     = "placeholder"
-  version_number = 1
-  action         = "lambda:GetLayerVersion"
-  principal      = "*"
-  statement_id   = "placeholder"
+  depends_on = [
+    aws_cloudwatch_log_group.api,
+    aws_s3_object.lambda_placeholder,
+  ]
 
   lifecycle {
-    ignore_changes = all
+    ignore_changes = [s3_key, s3_object_version]
   }
+
+  tags = { Name = "${var.project}-api" }
 }
 
 # ── API Gateway HTTP API ─────────────────────────────────────────────────────

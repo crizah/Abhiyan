@@ -1,0 +1,11 @@
+CREATE INDEX CONCURRENTLY idx_teams_name ON teams (name);
+CREATE INDEX CONCURRENTLY idx_tasks_created_by ON tasks (created_by);
+CREATE INDEX CONCURRENTLY idx_tasks_review_status ON tasks (review_status);
+CREATE INDEX CONCURRENTLY idx_tasks_due_date ON tasks (due_date);
+CREATE INDEX CONCURRENTLY idx_reminders_task_id ON reminders (task_id);
+CREATE INDEX CONCURRENTLY idx_notifications_user_id ON notifications (user_id);
+CREATE INDEX CONCURRENTLY idx_task_update_comments_task_update_id ON task_update_comments (task_update_id);
+CREATE INDEX CONCURRENTLY idx_task_update_comments_user_id ON task_update_comments (user_id);
+CREATE INDEX CONCURRENTLY idx_users_status ON users (status);
+CREATE INDEX CONCURRENTLY idx_task_updates_task_id ON task_updates (task_id);
+CREATE INDEX CONCURRENTLY idx_task_updates_user_id ON task_updates (user_id);

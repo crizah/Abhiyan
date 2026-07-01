@@ -337,7 +337,7 @@ func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken strin
 	}
 
 	// 3. Generate a brand new token
-	newToken, err := util.GenerateInviteToken(user.EmailID, user.OrgID.String(), string(user.Role), s.JwtSecret), 48*time.Hour)
+	newToken, err := util.GenerateInviteToken(user.EmailID, user.OrgID.String(), string(user.Role), s.JwtSecret, 48*time.Hour)
 	if err != nil {
 		return err
 	}

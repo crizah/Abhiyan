@@ -151,17 +151,39 @@ export default function TeamTasksPage() {
     fileList.filter(f => f.s3Data?.file_url && !f.s3Data?.id).forEach(deleteUnsavedS3File);
   };
 
+  // Backend stores one reminder row per channel; the form lets a user pick multiple
+  // channels for a single scheduled alert, so fan that out into one payload entry per channel.
+  const expandRemindersByChannel = (reminders) => (reminders || []).flatMap(r =>
+    (r.channel || []).map(channel => ({
+      channel, scheduled_at: r.scheduled_at.toISOString(),
+      recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value, 10) : undefined,
+      recurrence_unit: r.recurrence_unit || undefined
+    }))
+  );
+
+  // Inverse of expandRemindersByChannel: recombine rows that share the same schedule
+  // so an edit form shows one row with both channels checked, not two duplicate rows.
+  const groupRemindersByChannel = (reminders) => {
+    const groups = [];
+    (reminders || []).forEach(r => {
+      const key = `${r.scheduled_at}|${r.recurrence_value || ''}|${r.recurrence_unit || ''}`;
+      const existing = groups.find(g => g.key === key);
+      if (existing) existing.channel.push(r.channel);
+      else groups.push({
+        key, channel: [r.channel], scheduled_at: dayjs(r.scheduled_at),
+        recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
+      });
+    });
+    return groups.map(({ key, ...rest }) => rest);
+  };
+
   const handleCreateTask = async (values) => {
     try {
       const payload = {
         team_id: activeTeamId, title: values.title, description: values.description,
         due_date: values.due_date ? values.due_date.toISOString() : null,
         assignee_ids: values.assignees, subscriber_ids: values.subscribers || [],
-        reminders: (values.reminders || []).map(r => ({
-          channel: r.channel, scheduled_at: r.scheduled_at.toISOString(),
-          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value) : undefined,
-          recurrence_unit: r.recurrence_unit || undefined
-        })),
+        reminders: expandRemindersByChannel(values.reminders),
         attachments: getS3Attachments(createFileList)
       };
       await apiClient.post(`/admin/teams/${activeTeamId}/tasks`, payload);
@@ -191,10 +213,7 @@ export default function TeamTasksPage() {
       due_date: selectedTask.due_date ? dayjs(selectedTask.due_date) : null,
       assignees: (taskDetails?.participants || []).filter(p => p.role === 'ASSIGNEE').map(p => p.id),
       subscribers: (taskDetails?.participants || []).filter(p => p.role === 'SUBSCRIBER').map(p => p.id),
-      reminders: (taskDetails?.reminders || []).map(r => ({
-        channel: r.channel, scheduled_at: dayjs(r.scheduled_at),
-        recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
-      }))
+      reminders: groupRemindersByChannel(taskDetails?.reminders)
     });
     const initialFileList = (taskDetails?.attachments || []).map(att => ({
       uid: att.id || att.file_url, name: att.file_name, status: 'done', url: att.file_url,
@@ -212,11 +231,7 @@ export default function TeamTasksPage() {
         title: values.title, description: values.description,
         due_date: values.due_date ? values.due_date.toISOString() : null,
         assignee_ids: values.assignees, subscriber_ids: values.subscribers || [],
-        reminders: (values.reminders || []).map(r => ({
-          channel: r.channel, scheduled_at: r.scheduled_at.toISOString(),
-          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value) : undefined,
-          recurrence_unit: r.recurrence_unit || undefined
-        })),
+        reminders: expandRemindersByChannel(values.reminders),
         attachments: getS3Attachments(editFileList)
       };
       await apiClient.put(`/admin/tasks/${selectedTask.id}`, payload);
@@ -230,10 +245,7 @@ export default function TeamTasksPage() {
   const openActionModal = () => {
     actionForm.setFieldsValue({
       note: '', due_date: selectedTask.due_date ? dayjs(selectedTask.due_date) : null,
-      reminders: (taskDetails?.reminders || []).map(r => ({
-        channel: r.channel, scheduled_at: dayjs(r.scheduled_at),
-        recurrence_value: r.recurrence_value, recurrence_unit: r.recurrence_unit
-      }))
+      reminders: groupRemindersByChannel(taskDetails?.reminders)
     });
     setActionFileList((taskDetails?.attachments || []).map(att => ({
       uid: att.id || att.file_url, name: att.file_name, status: 'done', url: att.file_url,
@@ -246,11 +258,7 @@ export default function TeamTasksPage() {
     try {
       const payload = {
         note: values.note, due_date: values.due_date ? values.due_date.toISOString() : null,
-        reminders: (values.reminders || []).map(r => ({ 
-          channel: r.channel, scheduled_at: r.scheduled_at.toISOString(),
-          recurrence_value: r.recurrence_value ? parseInt(r.recurrence_value, 10) : undefined,
-          recurrence_unit: r.recurrence_unit || undefined
-        })),
+        reminders: expandRemindersByChannel(values.reminders),
         attachments: getS3Attachments(actionFileList)
       };
       const actionType = selectedTask.status === 'CLOSED' ? 'REOPEN' : 'REJECT';
@@ -441,7 +449,7 @@ export default function TeamTasksPage() {
                <>{fields.map(({ key, name, ...restField }) => (
                    <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
                      <Flex gap="small" align="flex-end">
-                       <Form.Item {...restField} name={[name, 'channel']} label="Channel" rules={[{ required: true }]} style={{ margin: 0, width: 120 }}><Select options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
@@ -482,7 +490,7 @@ export default function TeamTasksPage() {
                <>{fields.map(({ key, name, ...restField }) => (
                    <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
                      <Flex gap="small" align="flex-end">
-                       <Form.Item {...restField} name={[name, 'channel']} label="Channel" rules={[{ required: true }]} style={{ margin: 0, width: 120 }}><Select options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
@@ -518,7 +526,7 @@ export default function TeamTasksPage() {
                <>{fields.map(({ key, name, ...restField }) => (
                    <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
                      <Flex gap="small" align="flex-end">
-                       <Form.Item {...restField} name={[name, 'channel']} label="Channel" rules={[{ required: true }]} style={{ margin: 0, width: 120 }}><Select options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
                        <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>

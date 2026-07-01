@@ -1,0 +1,78 @@
+name: Deploy API (Lambda)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/deploy-api.yml"
+
+env:
+  AWS_REGION: ap-south-1
+  LAMBDA_FUNCTION_NAME: abhiyan-api
+  DEPLOYMENT_BUCKET: abhiyan-lambda-deployments
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Run tests
+        working-directory: server
+        run: go test ./...
+
+      - name: Build Lambda binary
+        working-directory: server
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          go build -tags lambda.norpc -o bootstrap ./cmd/api/main.go
+          zip api.zip bootstrap
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload zip to S3
+        working-directory: server
+        run: |
+          aws s3 cp api.zip s3://${{ env.DEPLOYMENT_BUCKET }}/api/latest.zip
+
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --s3-bucket ${{ env.DEPLOYMENT_BUCKET }} \
+            --s3-key api/latest.zip \
+            --architectures arm64
+
+          aws lambda wait function-updated \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }}
+
+      - name: Smoke test
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://api.${{ secrets.DOMAIN }}/api/v1/auth/login \
+            -X POST -H "Content-Type: application/json" \
+            -d '{"email":"","password":""}')
+          # 400 means the API is up and validating input — that's fine
+          if [ "$STATUS" != "400" ] && [ "$STATUS" != "401" ]; then
+            echo "Unexpected status $STATUS — deployment may have failed"
+            exit 1
+          fi
+          echo "API responding correctly (status $STATUS)"

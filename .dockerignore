@@ -1,0 +1,17 @@
+web/
+docs/
+terraform/
+.github/
+.repowise/
+.claude/
+venv/
+bin/
+lib/
+lib64/
+include/
+pyvenv.cfg
+indexlens.go
+Makefile
+docker-compose.yml
+*.md
+server/.env

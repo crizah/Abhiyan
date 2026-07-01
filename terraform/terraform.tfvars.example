@@ -1,0 +1,41 @@
+# Copy this to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+
+# ── General ──────────────────────────────────────────────────────────────────
+project    = "abhiyan"
+aws_region = "ap-south-1"
+domain     = "yourdomain.com"
+github_repo = "crizah/Abhiyan"
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+# Your Vercel deployment URL
+frontend_url  = "https://your-app.vercel.app"
+cookie_domain = "yourdomain.com"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+# This password is used to create the RDS master user.
+# The full DB_URL is built automatically and stored in SSM.
+db_password = "change-me-strong-password"
+
+# ── S3 ────────────────────────────────────────────────────────────────────────
+s3_bucket_name           = "abhiyan-uploads"
+lambda_deployment_bucket = "abhiyan-lambda-deployments"
+
+# ── AWS SES ───────────────────────────────────────────────────────────────────
+# Must be a verified email/domain in SES
+aws_ses_sender = "noreply@yourdomain.com"
+
+# ── WhatsApp ──────────────────────────────────────────────────────────────────
+phone_id = "your-whatsapp-phone-id"
+
+# ── Secrets set AFTER terraform apply via CLI (not stored in tfvars) ──────────
+#
+# These are created as CHANGE_ME placeholders by Terraform.
+# Set the real values with:
+#
+#   aws ssm put-parameter --name "/abhiyan/prod/JWT_SECRET"            --value "..." --type SecureString --overwrite
+#   aws ssm put-parameter --name "/abhiyan/prod/OPENAI_API_KEY"        --value "..." --type SecureString --overwrite
+#   aws ssm put-parameter --name "/abhiyan/prod/WHATSAPP_ACCESS_TOKEN" --value "..." --type SecureString --overwrite
+#
+# Note: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are NOT needed in production.
+# Lambda and ECS use their IAM roles automatically — no credentials required.

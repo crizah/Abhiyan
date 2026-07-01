@@ -2,3 +2,20 @@ abhiyan.exe
 .env
 abhiyan
 /node_modules
+/.repowise
+/bin
+/include
+/lib
+/lib64
+/.claude
+/venv
+/pyvenv.cfg
+.mcp.json
+
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.backup

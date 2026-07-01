@@ -13,6 +13,10 @@ Estimated cost: **~$43/month**
 ```
 Internet
    │
+   ├── app.yourdomain.com
+   │       └── Vercel (React static site)
+   │               └── calls api.yourdomain.com
+   │
    ├── api.yourdomain.com
    │       └── API Gateway (HTTP API)
    │               └── Lambda Function (Go/Gin via adapter)
@@ -73,6 +77,39 @@ Lambda runs outside the VPC (reaches AWS services directly via public endpoints)
 
 ---
 
+## Frontend — Vercel
+
+The React frontend is a static site hosted on **Vercel**, completely separate from the backend Lambda. Vercel auto-deploys from GitHub and handles SSL, CDN, and domain mapping for free at this scale.
+
+### How it connects to the API
+
+The frontend uses `REACT_APP_BACKEND_URL` to know where to send requests. This is baked into the static build at deploy time — it is not fetched at runtime.
+
+| Environment | `REACT_APP_BACKEND_URL` |
+|---|---|
+| Local dev | `http://localhost:8082/api/v1` |
+| Vercel production | `https://api.yourdomain.com/api/v1` |
+
+Set the production value in the Vercel dashboard under **Project → Settings → Environment Variables**, scoped to Production only. Vercel injects it at build time automatically.
+
+### Custom domain on Vercel
+
+1. Add your domain (e.g. `app.yourdomain.com`) in the Vercel project settings
+2. Vercel gives you a CNAME record to add in Route 53
+3. Add a `CNAME` record: `app.yourdomain.com → cname.vercel-dns.com`
+4. Vercel provisions the SSL certificate automatically
+
+### CI/CD
+
+Vercel deploys automatically on every push to `main` (production) and every push to any other branch (preview URL). No workflow file needed — Vercel handles it via its GitHub integration.
+
+```
+push to develop  →  Vercel preview deploy  (https://abhiyan-git-develop-xyz.vercel.app)
+push to main     →  Vercel production deploy  (https://app.yourdomain.com)
+```
+
+---
+
 ## Secrets — SSM Parameter Store
 
 All application config lives in SSM. Nothing is baked into images or committed to git.
@@ -82,12 +119,18 @@ All application config lives in SSM. Nothing is baked into images or committed t
 | `/abhiyan/prod/DB_URL` | Full Postgres connection string | SecureString |
 | `/abhiyan/prod/JWT_SECRET` | JWT signing secret | SecureString |
 | `/abhiyan/prod/OPENAI_API_KEY` | Whisper transcription | SecureString |
+| `/abhiyan/prod/WHATSAPP_ACCESS_TOKEN` | WhatsApp Business API token | SecureString |
 | `/abhiyan/prod/BROKER_URL` | Redis connection string | SecureString |
 | `/abhiyan/prod/DASHBOARD_URL` | Onion dashboard bind address | String |
 | `/abhiyan/prod/FRONTEND_URL` | Frontend origin for invite/reset links | String |
 | `/abhiyan/prod/AWS_S3_BUCKET_NAME` | S3 bucket name | String |
+| `/abhiyan/prod/AWS_SES_SENDER` | Verified SES sender email | String |
+| `/abhiyan/prod/PHONE_ID` | WhatsApp Business phone ID | String |
+| `/abhiyan/prod/COOKIE_DOMAIN` | Cookie domain | String |
 
 Both Lambda and ECS pull these at startup via their IAM task/execution roles. Your Go code continues to use `os.Getenv()` — nothing changes in the application.
+
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are **not stored anywhere** in production — Lambda and ECS authenticate via their IAM roles automatically.
 
 ---
 
@@ -226,15 +269,18 @@ Both workflows use an IAM role via OIDC (no long-lived AWS access keys stored in
 
 ```
 1.  terraform apply modules/networking     — VPC, subnets, security groups
-2.  terraform apply modules/data           — RDS, ElastiCache (takes ~10 min)
-3.  Run Atlas migrations against RDS       — atlas migrate apply --env prod
-4.  Push SSM parameters                    — manually or via terraform apply
+2.  terraform apply modules/data           — RDS, ElastiCache + SSM params (takes ~10 min)
+3.  Set real secrets in SSM               — JWT_SECRET, OPENAI_API_KEY, WHATSAPP_ACCESS_TOKEN
+      aws ssm put-parameter --name "/abhiyan/prod/JWT_SECRET" --value "..." --type SecureString --overwrite
+4.  Run Atlas migrations against RDS       — atlas migrate apply --env prod
 5.  terraform apply modules/compute        — ECR, ECS cluster, Lambda, API Gateway
 6.  Build + push worker image to ECR       — triggers first ECS deployment
 7.  Build + upload API zip                 — triggers first Lambda deployment
 8.  terraform apply modules/routing        — ACM cert, Route 53 records
-9.  Verify DNS propagation                 — dig api.yourdomain.com
-10. Smoke test                             — curl https://api.yourdomain.com/api/v1/auth/login
+9.  Connect Vercel to GitHub repo          — import project, set REACT_APP_BACKEND_URL env var
+10. Add custom domain in Vercel            — app.yourdomain.com → add CNAME in Route 53
+11. Verify DNS propagation                 — dig api.yourdomain.com && dig app.yourdomain.com
+12. Smoke test                             — curl https://api.yourdomain.com/api/v1/auth/login
 ```
 
 ---
@@ -243,12 +289,14 @@ Both workflows use an IAM role via OIDC (no long-lived AWS access keys stored in
 
 | | Local | Production |
 |---|---|---|
-| API | `go run ./cmd/api` on `:8082` | Lambda + API Gateway |
+| Frontend | `npm start` on `:3000` | Vercel (`app.yourdomain.com`) |
+| API | `go run ./cmd/api` on `:8082` | Lambda + API Gateway (`api.yourdomain.com`) |
 | Worker | `go run ./cmd/worker` | ECS Fargate |
 | Database | Docker Compose postgres | RDS PostgreSQL |
 | Redis | Docker Compose redis | ElastiCache |
 | Secrets | `.env` file | SSM Parameter Store |
-| S3 | LocalStack or real S3 | AWS S3 |
+| S3 | Real S3 bucket (`abhiyan-bucket-dev`) | Real S3 bucket (`abhiyan-uploads`) |
+| API URL (FE) | `http://localhost:8082/api/v1` | `https://api.yourdomain.com/api/v1` |
 
 ---
 

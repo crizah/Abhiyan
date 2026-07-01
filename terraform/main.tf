@@ -45,6 +45,9 @@ module "data" {
   db_password        = var.db_password
   frontend_url       = var.frontend_url
   s3_bucket_name     = var.s3_bucket_name
+  aws_ses_sender     = var.aws_ses_sender
+  phone_id           = var.phone_id
+  cookie_domain      = var.cookie_domain
 }
 
 module "compute" {

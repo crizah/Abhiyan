@@ -38,3 +38,18 @@ variable "frontend_url" {
   type        = string
   description = "Frontend origin URL e.g. https://app.yourdomain.com"
 }
+
+variable "aws_ses_sender" {
+  type        = string
+  description = "Verified SES sender email"
+}
+
+variable "phone_id" {
+  type        = string
+  description = "WhatsApp Business phone ID"
+}
+
+variable "cookie_domain" {
+  type        = string
+  description = "Cookie domain e.g. yourdomain.com"
+}

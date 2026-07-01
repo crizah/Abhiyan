@@ -106,16 +106,39 @@ resource "aws_ssm_parameter" "s3_bucket_name" {
   tags = { Project = var.project }
 }
 
-# These three are intentionally set to placeholder values.
-# After terraform apply, set the real values via AWS console or CLI.
+resource "aws_ssm_parameter" "ses_sender" {
+  name  = "/${var.project}/prod/AWS_SES_SENDER"
+  type  = "String"
+  value = var.aws_ses_sender
+
+  tags = { Project = var.project }
+}
+
+resource "aws_ssm_parameter" "phone_id" {
+  name  = "/${var.project}/prod/PHONE_ID"
+  type  = "String"
+  value = var.phone_id
+
+  tags = { Project = var.project }
+}
+
+resource "aws_ssm_parameter" "cookie_domain" {
+  name  = "/${var.project}/prod/COOKIE_DOMAIN"
+  type  = "String"
+  value = var.cookie_domain
+
+  tags = { Project = var.project }
+}
+
+# ── Sensitive placeholders — set real values after apply ─────────────────────
+# aws ssm put-parameter --name "/abhiyan/prod/JWT_SECRET" --value "..." --type SecureString --overwrite
+
 resource "aws_ssm_parameter" "jwt_secret" {
   name  = "/${var.project}/prod/JWT_SECRET"
   type  = "SecureString"
   value = "CHANGE_ME"
 
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 
   tags = { Project = var.project }
 }
@@ -125,9 +148,17 @@ resource "aws_ssm_parameter" "openai_api_key" {
   type  = "SecureString"
   value = "CHANGE_ME"
 
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
+
+  tags = { Project = var.project }
+}
+
+resource "aws_ssm_parameter" "whatsapp_access_token" {
+  name  = "/${var.project}/prod/WHATSAPP_ACCESS_TOKEN"
+  type  = "SecureString"
+  value = "CHANGE_ME"
+
+  lifecycle { ignore_changes = [value] }
 
   tags = { Project = var.project }
 }

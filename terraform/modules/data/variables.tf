@@ -36,3 +36,18 @@ variable "frontend_url" {
 variable "s3_bucket_name" {
   type = string
 }
+
+variable "aws_ses_sender" {
+  type        = string
+  description = "Verified SES sender email address"
+}
+
+variable "phone_id" {
+  type        = string
+  description = "WhatsApp Business phone ID"
+}
+
+variable "cookie_domain" {
+  type        = string
+  description = "Domain for cookies e.g. yourdomain.com"
+}

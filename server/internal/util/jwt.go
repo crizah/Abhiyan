@@ -8,11 +8,24 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Token purposes. Every token we issue carries one of these in its "purpose"
+// claim, and every parser rejects tokens whose purpose doesn't match - all
+// our tokens share one signing secret, so without this a token minted for
+// one flow (e.g. a login session) could be replayed against another
+// (e.g. password reset) as long as it happens to carry the fields that flow
+// reads.
+const (
+	TokenPurposeAccess        = "access"
+	TokenPurposeInvite        = "invite"
+	TokenPurposePasswordReset = "password_reset"
+)
+
 // InviteClaims defines the payload for an email invite link
 type InviteClaims struct {
-	Email string `json:"email"`
-	OrgID string `json:"org_id"`
-	Role  string `json:"role"`
+	Email   string `json:"email"`
+	OrgID   string `json:"org_id"`
+	Role    string `json:"role"`
+	Purpose string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
@@ -20,12 +33,13 @@ type InviteClaims struct {
 func GenerateAccessToken(userID, orgID, role string, email string, secret []byte, duration time.Duration) (string, error) {
 	// We use MapClaims here to match the middleware you already wrote perfectly
 	claims := jwt.MapClaims{
-		"sub":    userID,
-		"org_id": orgID,
-		"role":   role,
-		"email":  email,
-		"exp":    time.Now().Add(duration).Unix(),
-		"iat":    time.Now().Unix(),
+		"sub":     userID,
+		"org_id":  orgID,
+		"role":    role,
+		"email":   email,
+		"purpose": TokenPurposeAccess,
+		"exp":     time.Now().Add(duration).Unix(),
+		"iat":     time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -56,6 +70,10 @@ func VerifyAccessToken(tokenString string, secret []byte) (*TokenPayload, error)
 	// 2. Extract and cast the claims
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 
+		if purpose, _ := claims["purpose"].(string); purpose != TokenPurposeAccess {
+			return nil, errors.New("wrong token purpose")
+		}
+
 		// Safely cast the interface{} values back to strings
 		userID, _ := claims["sub"].(string)
 		orgID, _ := claims["org_id"].(string)
@@ -76,9 +94,10 @@ func VerifyAccessToken(tokenString string, secret []byte) (*TokenPayload, error)
 // GenerateInviteToken creates the token sent in the welcome email
 func GenerateInviteToken(email, orgID, role string, secret []byte, duration time.Duration) (string, error) {
 	claims := InviteClaims{
-		Email: email,
-		OrgID: orgID,
-		Role:  role,
+		Email:   email,
+		OrgID:   orgID,
+		Role:    role,
+		Purpose: TokenPurposeInvite,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -100,6 +119,9 @@ func ParseInviteToken(tokenStr string, secret []byte) (*InviteClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(*InviteClaims); ok && token.Valid {
+		if claims.Purpose != TokenPurposeInvite {
+			return nil, errors.New("wrong token purpose")
+		}
 		return claims, nil
 	}
 
@@ -107,13 +129,15 @@ func ParseInviteToken(tokenStr string, secret []byte) (*InviteClaims, error) {
 }
 
 type PasswordResetClaims struct {
-	Email string `json:"email"`
+	Email   string `json:"email"`
+	Purpose string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
 func GeneratePasswordResetToken(email string, secret []byte, duration time.Duration) (string, error) {
 	claims := PasswordResetClaims{
-		Email: email,
+		Email:   email,
+		Purpose: TokenPurposePasswordReset,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -131,6 +155,9 @@ func ParsePasswordResetToken(tokenStr string, secret []byte) (*PasswordResetClai
 		return nil, err
 	}
 	if claims, ok := token.Claims.(*PasswordResetClaims); ok && token.Valid {
+		if claims.Purpose != TokenPurposePasswordReset {
+			return nil, errors.New("wrong token purpose")
+		}
 		return claims, nil
 	}
 	return nil, errors.New("invalid password reset token")

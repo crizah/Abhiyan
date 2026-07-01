@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -57,9 +58,17 @@ func RequireAuth(JwtSecret []byte) gin.HandlerFunc {
 		orgID, orgOk := claims["org_id"].(string)
 		role, roleOk := claims["role"].(string)
 		email, emailOk := claims["email"].(string)
+		purpose, _ := claims["purpose"].(string)
 
 		if !idOk || !orgOk || !roleOk || !emailOk {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "malformed token claims"})
+			return
+		}
+
+		// Reject tokens minted for other flows (password reset, invite) that
+		// happen to carry these same field names - they share a signing secret.
+		if purpose != util.TokenPurposeAccess {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "wrong token purpose"})
 			return
 		}
 

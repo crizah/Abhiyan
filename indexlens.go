@@ -50,11 +50,11 @@ type ColAccess struct {
 }
 
 type Finding struct {
-	Table     string   `json:"table"`
-	Level     string   `json:"level"` // MISSING, WARNING, REDUNDANT
-	Message   string   `json:"message"`
-	Queries   []string `json:"queries,omitempty"`
-	SQL       string   `json:"suggested_sql,omitempty"`
+	Table   string   `json:"table"`
+	Level   string   `json:"level"` // MISSING, WARNING, REDUNDANT
+	Message string   `json:"message"`
+	Queries []string `json:"queries,omitempty"`
+	SQL     string   `json:"suggested_sql,omitempty"`
 }
 
 type DeadQuery struct {
@@ -63,9 +63,9 @@ type DeadQuery struct {
 }
 
 type Report struct {
-	Findings    []Finding    `json:"findings"`
-	DeadQueries []DeadQuery  `json:"dead_queries,omitempty"`
-	Summary     Summary      `json:"summary"`
+	Findings    []Finding   `json:"findings"`
+	DeadQueries []DeadQuery `json:"dead_queries,omitempty"`
+	Summary     Summary     `json:"summary"`
 }
 
 type Summary struct {
@@ -90,15 +90,15 @@ var (
 	reUniqueCol        = regexp.MustCompile(`(?i)(\w+)\s+\w[^,]*\bUNIQUE\b`)
 	reUniqueConstraint = regexp.MustCompile(`(?i)UNIQUE\s*\(([^)]+)\)`)
 
-	reQueryName    = regexp.MustCompile(`--\s*name:\s*(\w+)`)
-	reWhere        = regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:ORDER|GROUP|LIMIT|HAVING|$)`)
-	reWhereCol     = regexp.MustCompile(`(?i)(?:AND\s+|OR\s+)?(?:(\w+)\.)?(\w+)\s*(=|>|<|>=|<=|!=|ILIKE|LIKE|IN\s*\(|IS\s+NULL|IS\s+NOT\s+NULL)`)
-	reJoinOn       = regexp.MustCompile(`(?i)JOIN\s+(\w+)(?:\s+\w+)?\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)`)
-	reOrderBy      = regexp.MustCompile(`(?i)ORDER\s+BY\s+(.+?)(?:LIMIT|OFFSET|$)`)
-	reOrderCol     = regexp.MustCompile(`(?i)(?:(\w+)\.)?(\w+)(?:\s+(?:ASC|DESC))?`)
-	reGroupBy      = regexp.MustCompile(`(?i)GROUP\s+BY\s+(.+?)(?:ORDER|LIMIT|HAVING|$)`)
-	reFromTable    = regexp.MustCompile(`(?i)\bFROM\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
-	reJoinTable    = regexp.MustCompile(`(?i)\bJOIN\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?\s+ON\b`)
+	reQueryName = regexp.MustCompile(`--\s*name:\s*(\w+)`)
+	reWhere     = regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:ORDER|GROUP|LIMIT|HAVING|$)`)
+	reWhereCol  = regexp.MustCompile(`(?i)(?:AND\s+|OR\s+)?(?:(\w+)\.)?(\w+)\s*(=|>|<|>=|<=|!=|ILIKE|LIKE|IN\s*\(|IS\s+NULL|IS\s+NOT\s+NULL)`)
+	reJoinOn    = regexp.MustCompile(`(?i)JOIN\s+(\w+)(?:\s+\w+)?\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)`)
+	reOrderBy   = regexp.MustCompile(`(?i)ORDER\s+BY\s+(.+?)(?:LIMIT|OFFSET|$)`)
+	reOrderCol  = regexp.MustCompile(`(?i)(?:(\w+)\.)?(\w+)(?:\s+(?:ASC|DESC))?`)
+	reGroupBy   = regexp.MustCompile(`(?i)GROUP\s+BY\s+(.+?)(?:ORDER|LIMIT|HAVING|$)`)
+	reFromTable = regexp.MustCompile(`(?i)\bFROM\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
+	reJoinTable = regexp.MustCompile(`(?i)\bJOIN\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?\s+ON\b`)
 )
 
 // ── Schema parsing ───────────────────────────────────────────────────────────
@@ -373,7 +373,7 @@ func analyze(tables map[string]*Table, queries []Query) []Finding {
 	// Build: table -> column -> []query names that access it
 	type colKey struct{ table, col string }
 	whereAccess := map[colKey][]string{}
-	joinAccess  := map[colKey][]string{}
+	joinAccess := map[colKey][]string{}
 	orderAccess := map[colKey][]string{}
 
 	// queryFromTables[queryName] = set of canonical table names the query touches
@@ -837,9 +837,9 @@ func isKeyword(s string) bool {
 func main() {
 	schemasDir := flag.String("schemas", "./server/internal/db/schemas", "path to schema SQL files")
 	queriesDir := flag.String("queries", "./server/internal/db/query", "path to query SQL files")
-	goSrcDir   := flag.String("go-src", "", "path to Go source directory for dead query detection (optional)")
+	goSrcDir := flag.String("go-src", ".", "path to Go source directory for dead query detection (optional)")
 	outputFile := flag.String("output", "", "write JSON report to this file (optional)")
-	noColor    := flag.Bool("no-color", false, "disable terminal colors")
+	noColor := flag.Bool("no-color", false, "disable terminal colors")
 	flag.Parse()
 
 	// Verify we're in a Go project root

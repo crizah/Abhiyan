@@ -12,7 +12,7 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchProfile = async () => {
     try {

@@ -1,17 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Typography, Tabs, Card, Button, Table, Flex, Tag, Drawer, Select, message, Modal, Input, Badge, Popconfirm, Divider } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Typography, Tabs, Card, Button, Table, Flex, Drawer, Select, message, Modal, Input, Badge, Popconfirm, Divider } from 'antd';
 import { TeamOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 
 const { Title, Text } = Typography;
 
 // ─── responsive helpers ───────────────────────────────────────────────────────
-function getDrawerWidth() {
-  const vw = window.innerWidth;
-  if (vw < 768) return '100%';          // full-screen on mobile
-  return Math.min(Math.round(vw * 0.7), 700); // 70 % capped at 700 on desktop
-}
-
 function useWindowWidth() {
   const [width, setWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -64,7 +58,7 @@ export default function TeamsPage() {
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAssignedUsers = async (page, limit) => {
     const res = await apiClient.get('/admin/users/assigned', { params: { page, limit } });

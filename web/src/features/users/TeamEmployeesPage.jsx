@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select,Button, Space, Typography, Tag, Avatar, Dropdown, Flex, message, ConfigProvider, Drawer } from 'antd';
-import { UserOutlined, SearchOutlined, MoreOutlined, EditOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Table, Input, Select,Button, Typography, Tag, Avatar, Dropdown, Flex, message, ConfigProvider, Drawer } from 'antd';
+import { UserOutlined, SearchOutlined, MoreOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
@@ -54,7 +54,7 @@ export default function TeamEmployeesPage() {
       fetchEmployees();
     }, 300);
     return () => clearTimeout(timer);
-  }, [currentPage, pageSize, searchText, teamFilter, roleFilter, statusFilter]);
+  }, [currentPage, pageSize, searchText, teamFilter, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTeamOptions = async () => {
     try {

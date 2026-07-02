@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/rekognition v1.52.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
 	github.com/aws/aws-sdk-go-v2/service/ses v1.35.2
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.69.4
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/crizah/Onion v0.0.0-20260626182533-73fb97fc74cf
 	github.com/gin-gonic/gin v1.12.0

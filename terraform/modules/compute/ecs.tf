@@ -36,13 +36,16 @@ resource "aws_ecs_task_definition" "worker" {
     }]
 
     secrets = [
-      { name = "DB_URL",              valueFrom = "/${var.project}/prod/DB_URL" },
-      { name = "BROKER_URL",          valueFrom = "/${var.project}/prod/BROKER_URL" },
-      { name = "JWT_SECRET",          valueFrom = "/${var.project}/prod/JWT_SECRET" },
-      { name = "OPENAI_API_KEY",      valueFrom = "/${var.project}/prod/OPENAI_API_KEY" },
-      { name = "DASHBOARD_URL",       valueFrom = "/${var.project}/prod/DASHBOARD_URL" },
-      { name = "AWS_S3_BUCKET_NAME",  valueFrom = "/${var.project}/prod/AWS_S3_BUCKET_NAME" },
-      { name = "FRONTEND_URL",        valueFrom = "/${var.project}/prod/FRONTEND_URL" }
+      { name = "DB_URL",                  valueFrom = "/${var.project}/prod/DB_URL" },
+      { name = "BROKER_URL",              valueFrom = "/${var.project}/prod/BROKER_URL" },
+      { name = "JWT_SECRET",              valueFrom = "/${var.project}/prod/JWT_SECRET" },
+      { name = "OPENAI_API_KEY",          valueFrom = "/${var.project}/prod/OPENAI_API_KEY" },
+      { name = "DASHBOARD_URL",           valueFrom = "/${var.project}/prod/DASHBOARD_URL" },
+      { name = "AWS_S3_BUCKET_NAME",      valueFrom = "/${var.project}/prod/AWS_S3_BUCKET_NAME" },
+      { name = "FRONTEND_URL",            valueFrom = "/${var.project}/prod/FRONTEND_URL" },
+      { name = "AWS_SES_SENDER",          valueFrom = "/${var.project}/prod/AWS_SES_SENDER" },
+      { name = "WHATSAPP_ACCESS_TOKEN",   valueFrom = "/${var.project}/prod/WHATSAPP_ACCESS_TOKEN" },
+      { name = "PHONE_ID",                valueFrom = "/${var.project}/prod/PHONE_ID" }
     ]
 
     environment = [

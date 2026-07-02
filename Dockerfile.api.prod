@@ -1,20 +1,17 @@
 # Stage 1: Build
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/server
 
-# Download deps first — this layer is cached unless go.mod/go.sum change
 COPY server/go.mod server/go.sum ./
 RUN go mod download
 
-# Copy only the server source
-COPY server/ .
+COPY server/ /app/server
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w" -o /api ./cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /api ./cmd/api/main.go
 
 # Stage 2: Minimal runtime
-FROM alpine:3.20
+FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
@@ -27,7 +24,3 @@ USER nobody
 EXPOSE 8082
 
 CMD ["/app/api"]
-
-# Note: production deploys the API as a Lambda zip, not this image.
-# This Dockerfile is for local integration testing or if the API is ever
-# moved to ECS.

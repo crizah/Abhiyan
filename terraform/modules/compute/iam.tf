@@ -231,13 +231,18 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       },
       {
         Effect   = "Allow"
-        Action   = ["lambda:UpdateFunctionCode", "lambda:GetFunction"]
+        Action   = ["lambda:UpdateFunctionCode", "lambda:GetFunction", "lambda:GetFunctionConfiguration"]
         Resource = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${var.project}-api"
       },
       {
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = "arn:aws:s3:::${var.lambda_deployment_bucket}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["apigateway:GET"]
+        Resource = "*"
       }
     ]
   })

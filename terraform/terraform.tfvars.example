@@ -18,7 +18,7 @@ cookie_domain = "yourdomain.com"
 db_password = "change-me-strong-password"
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
-s3_bucket_name           = "abhiyan-uploads"
+s3_bucket_name           = "abhiyan-prod"
 lambda_deployment_bucket = "abhiyan-lambda-deployments"
 
 # ── AWS SES ───────────────────────────────────────────────────────────────────

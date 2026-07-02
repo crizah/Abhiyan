@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -26,61 +23,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// loadSSMParams fetches all app secrets from SSM and sets them as env vars.
-// Called only on Lambda — locally, godotenv.Load() handles this instead.
-func loadSSMParams(ctx context.Context) {
-	cfg, err := awsconfig.LoadDefaultConfig(ctx)
-	if err != nil {
-		log.Fatalf("SSM: failed to load AWS config: %v", err)
-	}
-
-	client := ssm.NewFromConfig(cfg)
-
-	prefix := "/abhiyan/prod/"
-	paramToEnv := map[string]string{
-		prefix + "DB_URL":                "DB_URL",
-		prefix + "JWT_SECRET":            "JWT_SECRET",
-		prefix + "BROKER_URL":            "BROKER_URL",
-		prefix + "FRONTEND_URL":          "FRONTEND_URL",
-		prefix + "AWS_S3_BUCKET_NAME":    "AWS_S3_BUCKET_NAME",
-		prefix + "AWS_SES_SENDER":        "AWS_SES_SENDER",
-		prefix + "PHONE_ID":              "PHONE_ID",
-		prefix + "WHATSAPP_ACCESS_TOKEN": "WHATSAPP_ACCESS_TOKEN",
-		prefix + "OPENAI_API_KEY":        "OPENAI_API_KEY",
-	}
-
-	names := make([]string, 0, len(paramToEnv))
-	for name := range paramToEnv {
-		names = append(names, name)
-	}
-
-	result, err := client.GetParameters(ctx, &ssm.GetParametersInput{
-		Names:          names,
-		WithDecryption: aws.Bool(true),
-	})
-	if err != nil {
-		log.Fatalf("SSM: failed to fetch parameters: %v", err)
-	}
-
-	for _, p := range result.Parameters {
-		if envKey, ok := paramToEnv[*p.Name]; ok {
-			os.Setenv(envKey, *p.Value)
-		}
-	}
-
-	if len(result.InvalidParameters) > 0 {
-		log.Printf("SSM: warning — missing parameters: %v", result.InvalidParameters)
-	}
-}
-
 func main() {
-	ctx := context.Background()
-
-	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
-		loadSSMParams(ctx)
-	} else {
-		godotenv.Load()
-	}
+	// In Lambda, env vars are injected by Terraform at deploy time.
+	// Locally, load from .env file.
+	godotenv.Load()
 
 	db_url := os.Getenv("DB_URL")
 

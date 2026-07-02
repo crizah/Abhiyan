@@ -246,7 +246,7 @@ func main() {
 		{
 
 			teamAdminGroup.GET("/team-stats", adminHandler.GetAdminTeamStats)
-			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees) // needs to be paginated
+			teamAdminGroup.GET("/employees", adminHandler.GetTeamEmployees)
 			teamAdminGroup.GET("/teams/options", adminHandler.GetAdminTeamOptions)
 			teamAdminGroup.POST("/teams/:team_id/tasks", costLimiter, taskHandler.CreateTask)
 			teamAdminGroup.GET("/teams/:team_id/tasks", taskHandler.GetTeamTasks) // needs to be paginated

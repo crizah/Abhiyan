@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-lambda-go/lambda"
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -191,8 +191,8 @@ func main() {
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
 			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
-			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)                // doesnt need to be paginated
-			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks) // needs to be paginated. done
+			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)
+			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks)
 			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)
 
 			// Re-use existing comment/update routes for employees

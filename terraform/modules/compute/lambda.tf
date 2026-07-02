@@ -47,12 +47,6 @@ resource "aws_lambda_function" "api" {
   memory_size = 512
   timeout     = 30
 
-  environment {
-    variables = {
-      AWS_DEFAULT_REGION = var.aws_region
-    }
-  }
-
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_sg_id]

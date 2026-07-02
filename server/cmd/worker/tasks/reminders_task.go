@@ -54,9 +54,9 @@ func NewPollDueRemindersTask(dbConn *sql.DB, queries *db.Queries, onionApp *app.
 						"taskName": rem.TaskTitle,
 					})
 					if err != nil {
-						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n, err)
+						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n.String, err)
 					} else {
-						log.Printf("[Poller] Enqueued whatsapp reminder for: %s\n", n)
+						log.Printf("[Poller] Enqueued whatsapp reminder for: %s\n", n.String)
 					}
 
 				}

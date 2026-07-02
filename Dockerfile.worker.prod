@@ -1,22 +1,21 @@
 # Stage 1: Build
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/server
 
-# Download deps first — this layer is cached unless go.mod/go.sum change
+# Download deps first — cached unless go.mod/go.sum change
 COPY server/go.mod server/go.sum ./
 RUN go mod download
 
-# Copy only the server source — web/, terraform/, docs/ etc. are excluded via .dockerignore
-COPY server/ .
+# Copy only server source — web/, terraform/, docs/ excluded via .dockerignore
+COPY server/ /app/server
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w" -o /worker ./cmd/worker/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker/main.go
 
 # Stage 2: Minimal runtime
-FROM alpine:3.20
+FROM alpine:latest
 
-# CA certs needed for HTTPS calls to AWS Rekognition, OpenAI Whisper, etc.
+# CA certs needed for HTTPS calls to AWS Rekognition, OpenAI Whisper, SES
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app

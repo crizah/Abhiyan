@@ -39,7 +39,7 @@ export default function UsersPage() {
       fetchUsers();
     }, 300);
     return () => clearTimeout(timer);
-  }, [currentPage, pageSize, searchText, roleFilter, statusFilter]);
+  }, [currentPage, pageSize, searchText, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTeams = async () => {
     try {

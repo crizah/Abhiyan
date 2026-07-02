@@ -9,9 +9,10 @@ import (
 func CORSMiddleware() gin.HandlerFunc {
 	// Initialize the map when the middleware is attached, ensuring env vars are loaded
 	allowedOrigins := map[string]bool{
-		os.Getenv("CLIENT_IP"):  true,
-		"http://localhost:3000": true,
-		"http://localhost:5173": true, // Vite React default
+		os.Getenv("CLIENT_IP"):    true,
+		os.Getenv("FRONTEND_URL"): true,
+		"http://localhost:3000":   true,
+		"http://localhost:5173":   true,
 	}
 
 	return func(c *gin.Context) {

@@ -12,6 +12,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// cookieConfig returns the domain and secure flag for auth cookies.
+// In Lambda (cross-origin), domain is empty so the browser scopes the cookie
+// to the exact API host. Locally, COOKIE_DOMAIN drives the value.
+func cookieConfig() (domain string, secure bool) {
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		return "", true
+	}
+	d := os.Getenv("COOKIE_DOMAIN")
+	if d == "localhost" {
+		d = ""
+	}
+	return d, os.Getenv("APP_ENV") == "production"
+}
+
 type AuthHandler struct {
 	authService *services.AuthService
 }
@@ -110,26 +124,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 1. Read configuration from environment
-	cookieDomain := os.Getenv("COOKIE_DOMAIN")
-
-	if cookieDomain == "localhost" {
-		cookieDomain = ""
-	}
-
-	isSecure := os.Getenv("APP_ENV") == "production"
+	cookieDomain, isSecure := cookieConfig()
 
 	// 2. Set the dynamic httpOnly cookie
+	// SameSite=None required for cross-origin cookie sending (Vercel → API Gateway)
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("access_token", token, 86400, "/", cookieDomain, isSecure, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged in"})
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	cookieDomain := os.Getenv("COOKIE_DOMAIN")
-	isSecure := os.Getenv("APP_ENV") == "production"
+	cookieDomain, isSecure := cookieConfig()
 
 	// To delete a cookie, set its maxAge to -1
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("access_token", "", -1, "/", cookieDomain, isSecure, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged out"})
 }
@@ -216,12 +225,9 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 	}
 
 	// Overwrite their existing access token cookie
-	cookieDomain := os.Getenv("COOKIE_DOMAIN")
-	if cookieDomain == "localhost" {
-		cookieDomain = ""
-	}
-	isSecure := os.Getenv("APP_ENV") == "production"
+	cookieDomain, isSecure := cookieConfig()
 
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie("access_token", newToken, 86400, "/", cookieDomain, isSecure, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Context switched successfully"})
 }

@@ -195,7 +195,6 @@ func main() {
 			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks)
 			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)
 
-			// Re-use existing comment/update routes for employees
 			general.GET("/tasks/:task_id/updates", taskHandler.GetTaskUpdates)
 			general.POST("/tasks/:task_id/updates", taskHandler.PostTaskUpdate)
 			general.GET("/tasks/:task_id/updates/:update_id/comments", taskHandler.GetUpdateComments)

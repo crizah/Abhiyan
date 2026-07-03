@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Typography, Button, Flex, Popover, Mentions, Upload, Tag } from 'antd';
-import { CommentOutlined, SendOutlined, DownloadOutlined, PaperClipOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
+import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
+import { CommentOutlined, SendOutlined, DownloadOutlined, PaperClipOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
 import { AudioRecorder } from './AudioRecorder';
 import dayjs from 'dayjs';
 
-const { Text, Paragraph } = Typography;
+const { Text, Paragraph, Title } = Typography;
 
 const AVATAR_COLORS = ['#f56a00', '#7265e6', '#ffbf00', '#00a2ae', '#52c41a', '#eb2f96', '#1677ff'];
 
@@ -71,6 +73,19 @@ const handleDownload = async (url, filename) => {
     window.open(url, '_blank');
   }
 };
+
+// Approve/Reject/Reopen each log a system update with a distinct fixed prefix
+// (see server/internal/services/tasks.go AddTaskUpdate calls) — detect those to
+// color-code the feed's connecting line at that point in the timeline.
+const STATUS_LINE_COLORS = { closed: '#52c41a', rejected: '#ff4d4f', reopened: '#722ed1' };
+
+function detectUpdateKind(content) {
+  if (!content) return null;
+  if (content.startsWith('TASK REJECTED')) return 'rejected';
+  if (content.startsWith('TASK REOPENED')) return 'reopened';
+  if (content.startsWith('Task Approved')) return 'closed';
+  return null;
+}
 
 function fileIcon(file) {
   const ext = file.file_name?.split('.').pop()?.toLowerCase();
@@ -154,13 +169,14 @@ export function CommentsSection({
   canPost,
   handleS3UploadWithPurge,
   deleteUnsavedS3File,
+  lineColor = '#bfbfbf',
 }) {
   const isExpanded = expandedComments[update.id];
   const comments = commentsMap[update.id] || [];
   const count = update.comment_count || 0;
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginTop: 16 }}>
       <button
         onClick={() => toggleComments(update.id)}
         style={{
@@ -178,7 +194,7 @@ export function CommentsSection({
       </button>
 
       {isExpanded && (
-        <div style={{ marginTop: 8, paddingLeft: 12, borderLeft: '2px solid #f0f0f0' }}>
+        <div style={{ marginTop: 8, paddingLeft: 12, borderLeft: `2px solid ${lineColor}` }}>
           {loadingComments[update.id] && !comments.length && (
             <Text type="secondary" style={{ fontSize: 12 }}>Loading...</Text>
           )}
@@ -188,10 +204,10 @@ export function CommentsSection({
               <Avatar firstName={c.first_name} lastName={c.last_name} size={24} />
               <div style={{ flex: 1 }}>
                 <Flex gap={6} align="baseline">
-                  <Text strong style={{ fontSize: 12 }}>{c.first_name} {c.last_name}</Text>
-                  <Text type="secondary" style={{ fontSize: 10 }}>{dayjs(c.created_at).format('MMM D, h:mm A')}</Text>
+                  <Text strong style={{ fontSize: 14 }}>{c.first_name} {c.last_name}</Text>
+                  <Text style={{ fontSize: 12, color: '#18181B' }}>{dayjs(c.created_at).format('MMM D, h:mm A')}</Text>
                 </Flex>
-                <div style={{ fontSize: 13, lineHeight: 1.5, marginTop: 1 }}>
+                <div style={{ fontSize: 15, lineHeight: 1.5, marginTop: 1 }}>
                   {renderMentions(c.content)}
                 </div>
                 {c.attachments?.length > 0 && (
@@ -314,7 +330,7 @@ export function UpdateFeed({
   deleteUnsavedS3File,
 }) {
   return (
-    <div ref={updatesContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+    <div ref={updatesContainerRef} className="task-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingRight: 14 }}>
       {hasMoreUpdates && (
         <Flex justify="center" style={{ marginBottom: 16 }}>
           <button
@@ -335,18 +351,43 @@ export function UpdateFeed({
         <Text type="secondary" style={{ fontSize: 13 }}>No updates yet.</Text>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {taskUpdates.map(u => (
-            <div key={u.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid #fafafa' }}>
-              <Avatar firstName={u.first_name} lastName={u.last_name} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+          {taskUpdates.map((u, index) => {
+            const kind = detectUpdateKind(u.content);
+            const lineColor = kind ? STATUS_LINE_COLORS[kind] : '#d9d9d9';
+            const isLast = index === taskUpdates.length - 1;
+            const isExpanded = !!expandedComments[u.id];
+
+            return (
+            <div key={u.id} style={{ position: 'relative', display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid #fafafa' }}>
+              {/* Spine: connects this avatar down to the next one, Reddit-timeline style */}
+              {!isLast && (
+                <div style={{ position: 'absolute', left: 15, top: 32, bottom: -14, width: 2, background: lineColor, zIndex: 0 }} />
+              )}
+              {/* Branch: while comments are open, forks from the avatar over to the comment thread's own line */}
+              {isExpanded && (
+                <div
+                  style={{
+                    position: 'absolute', left: 15, top: 32, width: 29, height: 32,
+                    borderLeft: `2px solid ${lineColor}`,
+                    borderBottom: `2px solid ${lineColor}`,
+                    borderBottomLeftRadius: 10,
+                    zIndex: 0,
+                  }}
+                />
+              )}
+
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <Avatar firstName={u.first_name} lastName={u.last_name} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
                 <Flex justify="space-between" align="baseline" style={{ marginBottom: 4 }}>
-                  <Text strong style={{ fontSize: 13 }}>{u.first_name} {u.last_name}</Text>
-                  <Text type="secondary" style={{ fontSize: 11, flexShrink: 0, marginLeft: 8 }}>
+                  <Text strong style={{ fontSize: 16 }}>{u.first_name} {u.last_name}</Text>
+                  <Text style={{ fontSize: 13, color: '#18181B', flexShrink: 0, marginLeft: 8 }}>
                     {dayjs(u.created_at).format('MMM D, h:mm A')}
                   </Text>
                 </Flex>
 
-                <div style={{ fontSize: 13, lineHeight: 1.6, color: '#1f2937', marginBottom: u.attachments?.length ? 8 : 0 }}>
+                <div style={{ fontSize: 15, lineHeight: 1.6, color: '#1f2937', marginBottom: u.attachments?.length ? 8 : 0 }}>
                   {renderMentions(u.content)}
                 </div>
 
@@ -373,10 +414,12 @@ export function UpdateFeed({
                   canPost={canPost}
                   handleS3UploadWithPurge={handleS3UploadWithPurge}
                   deleteUnsavedS3File={deleteUnsavedS3File}
+                  lineColor={lineColor}
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -436,5 +479,343 @@ export function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate
         </Button>
       </Flex>
     </div>
+  );
+}
+
+// Same 6 columns used by both the employee and admin task tables. Admin adds
+// its own leading "Team" column on top of this when viewing across teams.
+export function buildTaskColumns({ onView }) {
+  return [
+    { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
+    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
+    { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
+    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
+    { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={status === 'APPROVED' ? 'gold' : status === 'REJECTED' ? 'error' : status === 'PENDING' ? 'purple' : 'default'}>{status}</Tag> },
+    { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => onView(record)}>View Task</Button> },
+  ];
+}
+
+const PANEL_MIN_WIDTH = 420;
+const PANEL_DEFAULT_WIDTH = 760;
+
+// The task-details panel (Overview + Activity & Updates), shared between EmployeeTasksPage
+// and TeamTasksPage. `extra` carries each page's own action buttons (submit-for-review vs
+// approve/reject/edit/close/reopen), since those differ by role. Centered floating card over
+// a blurred backdrop, width resizable by dragging the right edge — stays centered because
+// growing the handle side by dx grows total width by 2*dx (the flex-centered wrapper does
+// the rest), rather than anchoring one edge and letting the other drift.
+export function TaskDetailsDrawer({
+  open,
+  onClose,
+  selectedTask,
+  taskDetails,
+  user,
+  extra,
+  showReminders = false,
+  taskUpdates,
+  loadingUpdates,
+  hasMoreUpdates,
+  updateOffset,
+  fetchTaskUpdates,
+  commentsMap,
+  commentOffsets,
+  hasMoreComments,
+  loadingComments,
+  expandedComments,
+  toggleComments,
+  fetchComments,
+  postComment,
+  cachedMentionOptions,
+  updatesContainerRef,
+  handleS3UploadWithPurge,
+  deleteUnsavedS3File,
+  drawerFileList,
+  setDrawerFileList,
+  onPostUpdate,
+}) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [width, setWidth] = useState(PANEL_DEFAULT_WIDTH);
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, width: PANEL_DEFAULT_WIDTH });
+
+  useEffect(() => {
+    if (open) setActiveTab('overview');
+  }, [open, selectedTask?.id]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    if (open) window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  // Lock background scroll while open — belt-and-suspenders alongside the portal/backdrop,
+  // since Page Down / arrow keys can still scroll the document even without a hover target.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [open]);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!draggingRef.current) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const maxWidth = window.innerWidth - 80;
+      setWidth(Math.min(Math.max(dragStartRef.current.width + dx * 2, PANEL_MIN_WIDTH), maxWidth));
+    };
+    const onMouseUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  const startResize = (e) => {
+    draggingRef.current = true;
+    dragStartRef.current = { x: e.clientX, width };
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  // Portal straight to <body> — otherwise z-index only wins within the nearest positioned
+  // ancestor's stacking context, and here that ancestor sits below the app header/dock's
+  // own z-index at the root level, so a high z-index here alone wouldn't be enough.
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="task-modal-backdrop"
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(24, 24, 27, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <motion.div
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+            style={{
+              position: 'relative',
+              width,
+              maxWidth: '100%',
+              height: '85vh',
+              backgroundColor: '#F7F5F2',
+              backgroundImage: 'radial-gradient(#18181B22 1px, transparent 1px)',
+              backgroundSize: '22px 22px',
+              borderRadius: 24,
+              border: '1px solid rgba(24, 24, 27, 0.08)',
+              boxShadow: '0 24px 64px -20px rgba(24, 24, 27, 0.35)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+        {/* Header */}
+        <Flex justify="space-between" align="center" style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
+          <Title level={4} style={{ margin: 0, letterSpacing: '-0.01em' }}>
+            {selectedTask?.title || 'Task Details'}
+          </Title>
+          <Flex align="center" gap={8}>
+            {extra}
+            <Button
+              type="text"
+              shape="circle"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+              style={{ color: 'rgba(24, 24, 27, 0.55)' }}
+            />
+          </Flex>
+        </Flex>
+
+        {/* Overview / Activity toggle — same floating glass-bubble treatment as the app header */}
+        <div style={{ padding: '12px 24px 0' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              gap: 4,
+              padding: 4,
+              borderRadius: 999,
+              background: 'rgba(255, 255, 255, 0.22)',
+              backdropFilter: 'blur(2px)',
+              WebkitBackdropFilter: 'blur(2px)',
+              border: '1px solid rgba(24, 24, 27, 0.12)',
+            }}
+          >
+            {[
+              { key: 'overview', label: 'Overview' },
+              { key: 'activity', label: 'Activity & Updates' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 999,
+                  border: 'none',
+                  background: activeTab === tab.key ? '#B3455C' : 'transparent',
+                  color: activeTab === tab.key ? '#FFFFFF' : 'rgba(24, 24, 27, 0.55)',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {selectedTask && (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Sliding track: both panels always mounted, side by side, translated as one
+                continuous motion — so Overview and Activity visibly cross paths instead of
+                one fading out before the other fades in. */}
+            <motion.div
+              animate={{ x: activeTab === 'overview' ? '0%' : '-50%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+              style={{ display: 'flex', width: '200%', height: '100%' }}
+            >
+              <div className="task-scrollbar" style={{ width: '50%', flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 24px' }}>
+                <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, marginBottom: 16 }}>
+                  <Paragraph style={{ margin: 0 }}>
+                    {selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}
+                  </Paragraph>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Flex justify="space-between" wrap="wrap" gap={8}>
+                    <Text><InfoCircleOutlined /> Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
+                    <Text><CheckCircleOutlined /> Fulfillment: <Tag color={selectedTask.fulfillment_status === 'COMPLETED' ? 'success' : 'processing'}>{selectedTask.fulfillment_status}</Tag></Text>
+                    <Text>Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
+                  </Flex>
+
+                  {taskDetails && (
+                    <div style={{ marginTop: 12 }}>
+                      {(() => {
+                        const isCreator = taskDetails.task?.created_by && taskDetails.task.created_by === user?.id;
+                        const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
+                        const roles = [];
+                        if (isCreator) roles.push({ label: 'Task Creator', color: 'gold' });
+                        if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: 'blue' });
+                        else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: 'default' });
+                        if (roles.length === 0) return null;
+                        return (
+                          <Flex align="center" gap={6} style={{ marginBottom: 8 }} wrap="wrap">
+                            <Text style={{ fontSize: 12 }}>Your role:</Text>
+                            {roles.map(r => <Tag key={r.label} color={r.color} style={{ margin: 0 }}>{r.label}</Tag>)}
+                          </Flex>
+                        );
+                      })()}
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}
+                      </Text>
+                      {showReminders && (
+                        <>
+                          <br />
+                          <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders?.length || 0}</Text>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </Card>
+
+                {taskDetails?.attachments?.length > 0 && (
+                  <>
+                    <Title level={5} style={{ marginBottom: 10 }}>Task Attachments</Title>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {taskDetails.attachments.map((file, idx) => (
+                        <AttachmentRow key={idx} file={file} idx={idx} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={{ width: '50%', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '20px 24px 0', overflow: 'hidden' }}>
+                <UpdateFeed
+                  taskUpdates={taskUpdates}
+                  loadingUpdates={loadingUpdates}
+                  hasMoreUpdates={hasMoreUpdates}
+                  updateOffset={updateOffset}
+                  fetchTaskUpdates={fetchTaskUpdates}
+                  taskId={selectedTask.id}
+                  commentsMap={commentsMap}
+                  commentOffsets={commentOffsets}
+                  hasMoreComments={hasMoreComments}
+                  loadingComments={loadingComments}
+                  expandedComments={expandedComments}
+                  toggleComments={toggleComments}
+                  fetchComments={fetchComments}
+                  postComment={postComment}
+                  cachedMentionOptions={cachedMentionOptions}
+                  canPost={selectedTask.status === 'OPEN'}
+                  updatesContainerRef={updatesContainerRef}
+                  handleS3UploadWithPurge={handleS3UploadWithPurge}
+                  deleteUnsavedS3File={deleteUnsavedS3File}
+                />
+
+                {selectedTask.status === 'OPEN' && (
+                  <UpdateComposer
+                    drawerFileList={drawerFileList}
+                    setDrawerFileList={setDrawerFileList}
+                    onPostUpdate={onPostUpdate}
+                    mentionOptions={cachedMentionOptions}
+                    handleS3UploadWithPurge={handleS3UploadWithPurge}
+                    deleteUnsavedS3File={deleteUnsavedS3File}
+                  />
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Resize handle — dragging changes total width by 2x the delta so the card stays centered */}
+        <div
+          onMouseDown={startResize}
+          title="Drag to resize"
+          style={{
+            position: 'absolute', top: 0, right: -8, width: 16, height: '100%',
+            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
+          }}
+        >
+          <div style={{ width: 6, height: 64, borderRadius: 6, background: '#B3455C' }} />
+        </div>
+
+        <style>{`
+          .task-scrollbar { scrollbar-color: #B3455C transparent; scrollbar-width: thin; }
+          .task-scrollbar::-webkit-scrollbar { width: 8px; }
+          .task-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .task-scrollbar::-webkit-scrollbar-thumb { background: #B3455C; border-radius: 8px; }
+        `}</style>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
   );
 }

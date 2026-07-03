@@ -14,4 +14,4 @@ indexlens.go
 Makefile
 docker-compose.yml
 *.md
-server/.env
+# server/.env # turn this back on later 

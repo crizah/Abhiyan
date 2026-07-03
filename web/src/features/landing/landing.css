@@ -129,6 +129,7 @@
 }
 
 .landing-btn-ghost:hover {
+  color: var(--text);
   border-color: rgba(24, 24, 27, 0.28);
 }
 

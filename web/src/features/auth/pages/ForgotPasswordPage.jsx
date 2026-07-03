@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { App, Button, Card, Flex, Form, Input, Typography, theme } from 'antd';
+import { App, Button, Flex, Form, Input, Typography, theme } from 'antd';
 import { Link } from 'react-router-dom';
 import { authAPI } from '../api';
+import PixelBlast from '../../../components/ui/PixelBlast';
 
 const { Title, Text } = Typography;
 
 export default function ForgotPasswordPage() {
-  const { token: themeToken } = theme.useToken();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -24,45 +25,172 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout, padding: '24px' }}>
-      <Card style={{ width: '100%', maxWidth: 400, boxShadow: themeToken.boxShadowSecondary, borderRadius: themeToken.borderRadiusLG }}>
-        {sent ? (
-          <Flex vertical gap={themeToken.marginMD} align="center" style={{ textAlign: 'center' }}>
-            <Title level={4} style={{ margin: 0 }}>Check your inbox</Title>
-            <Text type="secondary">
-              If that email is registered, a reset link has been sent. It expires in 15 minutes.
-            </Text>
-            <Link to="/login">Back to sign in</Link>
-          </Flex>
-        ) : (
-          <Flex vertical gap={themeToken.marginLG}>
-            <div style={{ textAlign: 'center' }}>
-              <Title level={3} style={{ margin: 0 }}>Forgot password?</Title>
-              <Text type="secondary">Enter your email and we'll send you a reset link.</Text>
+    <>
+      <style>{`
+        .forgot-root {
+          display: flex;
+          min-height: 100vh;
+          background-color: ${token.colorBgLayout};
+        }
+
+        /* LEFT PANEL */
+        .forgot-brand-wrapper {
+          display: flex;
+          flex: 1;
+          padding: 24px;
+          background-color: ${token.colorBgLayout};
+        }
+
+        .forgot-brand-panel {
+          display: flex;
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+          border-radius: 32px;
+          background-color: #18181B; /* Off-black fallback, no blue cast */
+        }
+
+        /* RIGHT PANEL */
+        .forgot-form-panel {
+          display: flex;
+          flex: 1;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 24px;
+          background-color: ${token.colorBgLayout};
+        }
+
+        .forgot-form-container {
+          width: 100%;
+          max-width: 400px;
+        }
+
+        .forgot-logo-mark {
+          display: block;
+          margin: 0 auto 20px;
+        }
+
+        /* Tactile feedback: physical push on press, not just color swap */
+        .forgot-form-container button:active {
+          transform: scale(0.98);
+        }
+        .forgot-form-container button {
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Hide brand panel on mobile */
+        @media (max-width: 768px) {
+          .forgot-brand-wrapper {
+            display: none;
+          }
+          .forgot-form-panel {
+            min-height: 100vh;
+          }
+        }
+      `}</style>
+
+      <div className="forgot-root">
+        {/* LEFT — PixelBlast animation fills this panel */}
+        <div className="forgot-brand-wrapper">
+          <div className="forgot-brand-panel">
+            <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+              <PixelBlast
+                variant="square"
+                pixelSize={4}
+                color="#E1637C"
+                patternScale={2}
+                patternDensity={1}
+                pixelSizeJitter={0}
+                enableRipples
+                rippleSpeed={0.4}
+                rippleThickness={0.12}
+                rippleIntensityScale={1.5}
+                liquid={false}
+                liquidStrength={0.12}
+                liquidRadius={1.2}
+                liquidWobbleSpeed={5}
+                speed={0.5}
+                edgeFade={0.25}
+                transparent
+              />
             </div>
+          </div>
+        </div>
 
-            <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
-              <Form.Item
-                name="email"
-                label="Email address"
-                rules={[
-                  { required: true, message: 'Please enter your email' },
-                  { type: 'email', message: 'Invalid email' },
-                ]}
-              >
-                <Input size="large" placeholder="name@mnc.com" />
-              </Form.Item>
-              <Button type="primary" htmlType="submit" size="large" block loading={loading}>
-                Send reset link
-              </Button>
-            </Form>
+        {/* RIGHT — Form directly on background */}
+        <div className="forgot-form-panel">
+          <div className="forgot-form-container">
+            <Flex vertical gap={token.marginXL}>
+              <Flex vertical gap={token.marginXS} align="center">
+                <svg
+                  className="forgot-logo-mark"
+                  width="44"
+                  height="44"
+                  viewBox="0 0 44 44"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="4" width="26" height="26" rx="8" transform="rotate(-8 17 17)" fill={token.colorText} />
+                  <rect x="16" y="16" width="22" height="22" rx="7" transform="rotate(14 27 27)" fill={token.colorPrimary} />
+                </svg>
 
-            <Flex justify="center">
-              <Link to="/login" style={{ color: themeToken.colorTextSecondary }}>Back to sign in</Link>
+                {sent ? (
+                  <>
+                    <Title level={3} style={{ margin: 0, color: token.colorText, letterSpacing: '-0.02em' }}>
+                      Check your inbox
+                    </Title>
+                    <Text style={{ color: token.colorTextSecondary, textAlign: 'center' }}>
+                      If that email is registered, a reset link has been sent. It expires in 15 minutes.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Title level={3} style={{ margin: 0, color: token.colorText, letterSpacing: '-0.02em' }}>
+                      Forgot password?
+                    </Title>
+                    <Text style={{ color: token.colorTextSecondary, textAlign: 'center' }}>
+                      Enter your email and we'll send you a reset link.
+                    </Text>
+                  </>
+                )}
+              </Flex>
+
+              {sent ? (
+                <Flex justify="center">
+                  <Link to="/login" style={{ color: token.colorPrimary, fontWeight: token.fontWeightStrong }}>
+                    Back to sign in
+                  </Link>
+                </Flex>
+              ) : (
+                <>
+                  <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
+                    <Form.Item
+                      name="email"
+                      label="Email address"
+                      rules={[
+                        { required: true, message: 'Please enter your email' },
+                        { type: 'email', message: 'Invalid email' },
+                      ]}
+                    >
+                      <Input size="large" placeholder="name@mnc.com" />
+                    </Form.Item>
+                    <Button type="primary" htmlType="submit" size="large" block loading={loading}>
+                      Send reset link
+                    </Button>
+                  </Form>
+
+                  <Flex justify="center">
+                    <Link to="/login" style={{ color: token.colorTextSecondary }}>
+                      Back to sign in
+                    </Link>
+                  </Flex>
+                </>
+              )}
             </Flex>
-          </Flex>
-        )}
-      </Card>
-    </Flex>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

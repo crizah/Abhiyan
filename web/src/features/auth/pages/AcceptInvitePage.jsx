@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Typography, Flex, message, theme } from 'antd';
+import { Form, Input, Button, Typography, Flex, message, theme } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
+import PixelBlast from '../../../components/ui/PixelBlast';
 
 const { Title, Text } = Typography;
 
@@ -66,112 +67,223 @@ export default function AcceptInvitePage() {
     }
   };
 
-  if (!token || tokenExpired) {
-    return (
-      <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout }}>
-        <Card style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
-          <Title level={4} style={{ color: themeToken.colorError }}>
-            {!token ? "Invalid Invite Link" : "Invite Link Expired"}
-          </Title>
-          <Text type="secondary">
-            {!token
-              ? "This link is missing a secure token. Please ask your administrator to re-send the invite."
-              : "For your security, invite links expire after 48 hours. Click below to email yourself a fresh link."}
-          </Text>
-
-          {tokenExpired && (
-            <Button
-              type="primary"
-              style={{ marginTop: 24 }}
-              block
-              loading={resending}
-              onClick={handleResendInvite}
-            >
-              Email Me a New Invite Link
-            </Button>
-          )}
-        </Card>
-      </Flex>
-    );
-  }
+  const invalid = !token || tokenExpired;
 
   return (
-    <Flex justify="center" align="center" style={{ minHeight: '100vh', backgroundColor: themeToken.colorBgLayout, padding: '24px' }}>
-      <Card
-        style={{
-          width: '100%', maxWidth: 450,
-          boxShadow: themeToken.boxShadowSecondary,
-          borderRadius: themeToken.borderRadiusLG
-        }}
-      >
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Title level={3} style={{ margin: 0 }}>Join Your Organization</Title>
-          <Text type="secondary">Complete your profile to access your workspace.</Text>
+    <>
+      <style>{`
+        .invite-root {
+          display: flex;
+          min-height: 100vh;
+          background-color: ${themeToken.colorBgLayout};
+        }
+
+        /* LEFT PANEL */
+        .invite-brand-wrapper {
+          display: flex;
+          flex: 1;
+          padding: 24px;
+          background-color: ${themeToken.colorBgLayout};
+        }
+
+        .invite-brand-panel {
+          display: flex;
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+          border-radius: 32px;
+          background-color: #18181B; /* Off-black fallback, no blue cast */
+        }
+
+        /* RIGHT PANEL */
+        .invite-form-panel {
+          display: flex;
+          flex: 1;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 24px;
+          background-color: ${themeToken.colorBgLayout};
+        }
+
+        .invite-form-container {
+          width: 100%;
+          max-width: 450px;
+        }
+
+        .invite-logo-mark {
+          display: block;
+          margin: 0 auto 20px;
+        }
+
+        /* Tactile feedback: physical push on press, not just color swap */
+        .invite-form-container button:active {
+          transform: scale(0.98);
+        }
+        .invite-form-container button {
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Hide brand panel on mobile */
+        @media (max-width: 768px) {
+          .invite-brand-wrapper {
+            display: none;
+          }
+          .invite-form-panel {
+            min-height: 100vh;
+          }
+        }
+      `}</style>
+
+      <div className="invite-root">
+        {/* LEFT — PixelBlast animation fills this panel */}
+        <div className="invite-brand-wrapper">
+          <div className="invite-brand-panel">
+            <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+              <PixelBlast
+                variant="square"
+                pixelSize={4}
+                color="#E1637C"
+                patternScale={2}
+                patternDensity={1}
+                pixelSizeJitter={0}
+                enableRipples
+                rippleSpeed={0.4}
+                rippleThickness={0.12}
+                rippleIntensityScale={1.5}
+                liquid={false}
+                liquidStrength={0.12}
+                liquidRadius={1.2}
+                liquidWobbleSpeed={5}
+                speed={0.5}
+                edgeFade={0.25}
+                transparent
+              />
+            </div>
+          </div>
         </div>
 
-        <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
-          <Flex gap="middle">
-            <Form.Item
-              name="first_name"
-              label="First Name"
-              style={{ flex: 1 }}
-              rules={[{ required: true, message: 'First name is required' }]}
-            >
-              <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
-            </Form.Item>
+        {/* RIGHT — Form directly on background */}
+        <div className="invite-form-panel">
+          <div className="invite-form-container">
+            <Flex vertical gap={themeToken.marginXL}>
+              <Flex vertical gap={themeToken.marginXS} align="center" style={{ textAlign: 'center' }}>
+                <svg
+                  className="invite-logo-mark"
+                  width="44"
+                  height="44"
+                  viewBox="0 0 44 44"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="4" width="26" height="26" rx="8" transform="rotate(-8 17 17)" fill={themeToken.colorText} />
+                  <rect x="16" y="16" width="22" height="22" rx="7" transform="rotate(14 27 27)" fill={themeToken.colorPrimary} />
+                </svg>
 
-            <Form.Item
-              name="last_name"
-              label="Last Name"
-              style={{ flex: 1 }}
-            >
-              <Input size="large" />
-            </Form.Item>
-          </Flex>
+                {invalid ? (
+                  <>
+                    <Title level={3} style={{ margin: 0, color: themeToken.colorError, letterSpacing: '-0.02em' }}>
+                      {!token ? "Invalid invite link" : "Invite link expired"}
+                    </Title>
+                    <Text style={{ color: themeToken.colorTextSecondary }}>
+                      {!token
+                        ? "This link is missing a secure token. Please ask your administrator to re-send the invite."
+                        : "For your security, invite links expire after 48 hours. Click below to email yourself a fresh link."}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Title level={3} style={{ margin: 0, color: themeToken.colorText, letterSpacing: '-0.02em' }}>
+                      Join your organization
+                    </Title>
+                    <Text style={{ color: themeToken.colorTextSecondary }}>
+                      Complete your profile to access your workspace.
+                    </Text>
+                  </>
+                )}
+              </Flex>
 
-          <Form.Item
-            name="phone"
-            label="Phone Number"
-            rules={[{ required: true, message: 'Phone number is required' }]}
-          >
-            <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
-          </Form.Item>
+              {invalid ? (
+                <>
+                  {tokenExpired && (
+                    <Button type="primary" size="large" block loading={resending} onClick={handleResendInvite}>
+                      Email me a new invite link
+                    </Button>
+                  )}
+                  <Flex justify="center">
+                    <Link to="/login" style={{ color: themeToken.colorTextSecondary }}>
+                      Back to sign in
+                    </Link>
+                  </Flex>
+                </>
+              ) : (
+                <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
+                  <Flex gap="middle">
+                    <Form.Item
+                      name="first_name"
+                      label="First Name"
+                      style={{ flex: 1 }}
+                      rules={[{ required: true, message: 'First name is required' }]}
+                    >
+                      <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                    </Form.Item>
 
-          <Form.Item
-            name="password"
-            label="Create Password"
-            rules={[
-              { required: true, message: 'Please create a password.' },
-              { min: 8, message: 'Password must be at least 8 characters.' }
-            ]}
-          >
-            <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
-          </Form.Item>
+                    <Form.Item
+                      name="last_name"
+                      label="Last Name"
+                      style={{ flex: 1 }}
+                    >
+                      <Input size="large" />
+                    </Form.Item>
+                  </Flex>
 
-          <Form.Item
-            name="confirm_password"
-            label="Confirm Password"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: 'Please confirm your password.' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('The two passwords do not match!'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
-          </Form.Item>
+                  <Form.Item
+                    name="phone"
+                    label="Phone Number"
+                    rules={[{ required: true, message: 'Phone number is required' }]}
+                  >
+                    <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                  </Form.Item>
 
-          <Button type="primary" htmlType="submit" size="large" block loading={loading} style={{ marginTop: 8 }}>
-            Complete Setup
-          </Button>
-        </Form>
-      </Card>
-    </Flex>
+                  <Form.Item
+                    name="password"
+                    label="Create Password"
+                    rules={[
+                      { required: true, message: 'Please create a password.' },
+                      { min: 8, message: 'Password must be at least 8 characters.' }
+                    ]}
+                  >
+                    <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="confirm_password"
+                    label="Confirm Password"
+                    dependencies={['password']}
+                    rules={[
+                      { required: true, message: 'Please confirm your password.' },
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          if (!value || getFieldValue('password') === value) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error('The two passwords do not match!'));
+                        },
+                      }),
+                    ]}
+                  >
+                    <Input.Password prefix={<LockOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                  </Form.Item>
+
+                  <Button type="primary" htmlType="submit" size="large" block loading={loading} style={{ marginTop: 8 }}>
+                    Complete Setup
+                  </Button>
+                </Form>
+              )}
+            </Flex>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

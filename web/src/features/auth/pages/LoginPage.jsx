@@ -45,7 +45,6 @@ export default function LoginPage() {
           display: flex;
           flex: 1;
           padding: 24px;
-          background-color: ${token.colorBgLayout};
         }
 
         .login-brand-panel {
@@ -64,12 +63,11 @@ export default function LoginPage() {
           align-items: center;
           justify-content: center;
           padding: 32px 24px;
-          background-color: ${token.colorBgLayout};
         }
 
         .login-form-container {
           width: 100%;
-          max-width: 400px;
+          max-width: 440px;
         }
 
         .login-logo-mark {
@@ -84,7 +82,7 @@ export default function LoginPage() {
         .login-form-container button {
           transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
+        
         /* Hide brand panel on mobile */
         @media (max-width: 768px) {
           .login-brand-wrapper {

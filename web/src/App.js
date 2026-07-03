@@ -6,6 +6,8 @@ import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages & Layouts
+import LandingPage from './features/landing/LandingPage';
+import FeaturesPage from './features/landing/FeaturesPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 import AppLayout from './layouts/AppLayout';
@@ -46,6 +48,17 @@ const DashboardRouter = () => {
   return <EmployeeDashboard />;
 };
 
+// "/" is public: signed-in visitors go straight to their dashboard,
+// everyone else sees the marketing/showcase landing page.
+const RootRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+
+  return <LandingPage />;
+};
+
 export default function App() {
   return (
     <ConfigProvider theme={customTheme}>
@@ -53,15 +66,16 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<RootRoute />} />
+              <Route path="/features" element={<FeaturesPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register-org" element={<RegisterOrgPage />} />
               <Route path="/accept-invite" element={<AcceptInvitePage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
-              
-              
-              <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route index element={<Navigate to="dashboard" replace />} />
+
+
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route path="dashboard" element={<DashboardRouter />} />
                 <Route path="profile" element={<UserProfilePage />} />
                 <Route path="users" element={<UsersPage/>} />

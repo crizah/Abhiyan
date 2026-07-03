@@ -4,6 +4,7 @@ import { TeamOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
+import InfoTooltip from '../../../components/InfoTooltip';
 import { attendanceAPI } from '../../auth/api';
 
 const { Title, Paragraph, Text } = Typography;
@@ -77,72 +78,86 @@ export default function SuperAdminDashboard() {
       <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.email}</Title>
       <Paragraph type="secondary">Here is an overview of your organization's system health.</Paragraph>
 
-      {/* Content Area */}
-      <Flex gap={token.marginLG} wrap="wrap" style={{ marginTop: '40px' }}>
-        {loading ? (
-          <Spin />
-        ) : (
-          <div style={{
-            display: 'inline-flex',
-            flexDirection: 'column',
-            gap: '8px',
-            padding: '20px 32px',
-            border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: token.borderRadiusLG,
-            backgroundColor: token.colorBgLayout
-          }}>
-            <Text style={{ fontSize: '14px', color: token.colorTextSecondary, fontWeight: 500 }}>
-              <TeamOutlined style={{ marginRight: '8px' }} />
-              Total Users
-            </Text>
-            <Text style={{ fontSize: '36px', color: token.colorTextHeading, fontWeight: 600, lineHeight: 1 }}>
-              {totalEmployees}
-            </Text>
-          </div>
-        )}
+      {/* Content Area: main column + leaderboard rail */}
+      <Flex gap={token.marginXL} align="flex-start" wrap="wrap" style={{ marginTop: '40px' }} className="dash-columns">
+        <div style={{ flex: '1 1 320px', minWidth: 0 }} className="dash-col-main">
+          <Flex gap={token.marginLG} vertical>
+            {loading ? (
+              <Spin />
+            ) : (
+              <div style={{
+                display: 'inline-flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '20px 32px',
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadiusLG,
+                backgroundColor: token.colorBgLayout
+              }}>
+                <Text style={{ fontSize: '14px', color: token.colorTextSecondary, fontWeight: 500 }}>
+                  <TeamOutlined style={{ marginRight: '8px' }} />
+                  Total Users
+                </Text>
+                <Text style={{ fontSize: '36px', color: token.colorTextHeading, fontWeight: 600, lineHeight: 1 }}>
+                  {totalEmployees}
+                </Text>
+              </div>
+            )}
 
-        {/* Attendance Toggle Card */}
-        <Card
-          size="small"
-          style={{
-            border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: token.borderRadiusLG,
-            backgroundColor: token.colorBgLayout,
-            minWidth: 240,
-          }}
-        >
-          <Flex vertical gap={8}>
-            <Flex align="center" gap={8}>
-              <ClockCircleOutlined style={{ color: token.colorPrimary }} />
-              <Text strong style={{ fontSize: '14px' }}>Attendance Tracking</Text>
-            </Flex>
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              {user?.attendance_enabled
-                ? 'Attendance is being recorded on login.'
-                : 'Enable to track daily login-based attendance.'}
-            </Text>
-            <Switch
-              checked={!!user?.attendance_enabled}
-              loading={attendanceToggling}
-              onChange={handleAttendanceToggle}
-              checkedChildren="On"
-              unCheckedChildren="Off"
-            />
+            {/* Attendance Toggle Card */}
+            <Card
+              size="small"
+              style={{
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadiusLG,
+                backgroundColor: token.colorBgLayout,
+                minWidth: 240,
+              }}
+            >
+              <Flex vertical gap={8}>
+                <Flex align="center" gap={8}>
+                  <ClockCircleOutlined style={{ color: token.colorPrimary }} />
+                  <Text strong style={{ fontSize: '14px' }}>Attendance Tracking</Text>
+                  <InfoTooltip title="Turning this on means attendance will be tracked for your organization from now on." />
+                </Flex>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {user?.attendance_enabled
+                    ? 'Attendance is being recorded on login.'
+                    : 'Enable to track daily login-based attendance.'}
+                </Text>
+                <Switch
+                  checked={!!user?.attendance_enabled}
+                  loading={attendanceToggling}
+                  onChange={handleAttendanceToggle}
+                  checkedChildren="On"
+                  unCheckedChildren="Off"
+                />
+              </Flex>
+            </Card>
           </Flex>
-        </Card>
+        </div>
+
+        {/* Leaderboard rail */}
+        <div style={{ flex: '0 1 360px', width: '100%', maxWidth: 360 }} className="dash-col-rail">
+          <Leaderboard
+            entries={leaderboardData}
+            loading={leaderboardLoading}
+            teamOptions={orgTeams.map(t => ({ value: t.id, label: t.name }))}
+            onTeamFilterChange={setLeaderboardTeamFilter}
+            teamFilter={leaderboardTeamFilter}
+            showVisibilityToggle={false}
+          />
+        </div>
       </Flex>
 
-      {/* Leaderboard Section */}
-      <div style={{ marginTop: '48px' }}>
-        <Leaderboard
-          entries={leaderboardData}
-          loading={leaderboardLoading}
-          teamOptions={orgTeams.map(t => ({ value: t.id, label: t.name }))}
-          onTeamFilterChange={setLeaderboardTeamFilter}
-          teamFilter={leaderboardTeamFilter}
-          showVisibilityToggle={false}
-        />
-      </div>
+      <style>{`
+        @media (max-width: 640px) {
+          .dash-col-main, .dash-col-rail {
+            flex-basis: 100% !important;
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

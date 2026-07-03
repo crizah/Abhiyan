@@ -54,7 +54,7 @@ export default function LoginPage() {
           position: relative;
           overflow: hidden;
           border-radius: 32px;
-          background-color: #0F172A; /* Fallback background */
+          background-color: #18181B; /* Off-black fallback, no blue cast */
         }
 
         /* RIGHT PANEL */
@@ -73,11 +73,16 @@ export default function LoginPage() {
         }
 
         .login-logo-mark {
-          width: 44px;
-          height: 44px;
-          background: ${token.colorInfo};
-          border-radius: 10px;
+          display: block;
           margin: 0 auto 20px;
+        }
+
+        /* Tactile feedback: physical push on press, not just color swap */
+        .login-form-container button:active {
+          transform: scale(0.98);
+        }
+        .login-form-container button {
+          transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         /* Hide brand panel on mobile */
@@ -92,55 +97,29 @@ export default function LoginPage() {
       `}</style>
 
       <div className="login-root">
-        {/* LEFT — Liquid Chrome entirely fills this panel */}
+        {/* LEFT — PixelBlast animation fills this panel */}
         <div className="login-brand-wrapper">
           <div className="login-brand-panel">
             <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              {/* <LiquidChrome
-                baseColor={[0.1, 0.1, 0.1]}
-                speed={0.3}
-                amplitude={0.3}
-                interactive
-              /> */}
-
-
-                <PixelBlast
-
-    variant="square"
-
-    pixelSize={4}
-
-    color='#f5897a'
-
-    patternScale={2}
-
-    patternDensity={1}
-
-    pixelSizeJitter={0}
-
-    enableRipples
-
-    rippleSpeed={0.4}
-
-    rippleThickness={0.12}
-
-    rippleIntensityScale={1.5}
-
-    liquid={false}
-
-    liquidStrength={0.12}
-
-    liquidRadius={1.2}
-
-    liquidWobbleSpeed={5}
-
-    speed={0.5}
-
-    edgeFade={0.25}
-
-    transparent
-
-  />
+              <PixelBlast
+                variant="square"
+                pixelSize={4}
+                color="#E1637C"
+                patternScale={2}
+                patternDensity={1}
+                pixelSizeJitter={0}
+                enableRipples
+                rippleSpeed={0.4}
+                rippleThickness={0.12}
+                rippleIntensityScale={1.5}
+                liquid={false}
+                liquidStrength={0.12}
+                liquidRadius={1.2}
+                liquidWobbleSpeed={5}
+                speed={0.5}
+                edgeFade={0.25}
+                transparent
+              />
             </div>
           </div>
         </div>
@@ -150,9 +129,27 @@ export default function LoginPage() {
           <div className="login-form-container">
             <Flex vertical gap={token.marginXL}>
               <Flex vertical gap={token.marginXS} align="center">
-                {/* Placeholder for SVG Logo */}
-                <div className="login-logo-mark" />
-                <Title level={3} style={{ margin: 0, fontWeight: token.fontWeightStrong, color: token.colorInfo }}>
+                <svg
+                  className="login-logo-mark"
+                  width="44"
+                  height="44"
+                  viewBox="0 0 44 44"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="4" width="26" height="26" rx="8" transform="rotate(-8 17 17)" fill={token.colorText} />
+                  <rect x="16" y="16" width="22" height="22" rx="7" transform="rotate(14 27 27)" fill={token.colorPrimary} />
+                </svg>
+                <Title
+                  level={3}
+                  style={{
+                    margin: 0,
+                    fontWeight: token.fontWeightStrong,
+                    color: token.colorText,
+                    letterSpacing: '-0.02em',
+                  }}
+                >
                   Sign in to your account
                 </Title>
                 <Text style={{ color: token.colorTextSecondary }}>

@@ -1,24 +1,29 @@
 // src/config/theme.js
+// Single brand accent: Deep Rose. Keep every other surface neutral (zinc/off-black)
+// so the accent stays the only color statement in the UI.
+const deepRose = '#B3455C';
+const deepRoseHover = '#9A3A4E';
+const deepRoseActive = '#7F2F40';
+
 export const customTheme = {
   token: {
-    fontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`,
-    colorPrimary: '#FF4B33', // Pale Orange accent
-    colorInfo: '#1A365D',    // Navy Blue accent
-    colorTextBase: '#1f2937', // Dark Grey/Black for text
+    fontFamily: `'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`,
+    colorPrimary: deepRose,
+    colorTextBase: '#18181B', // Zinc-900 off-black, never pure #000
     colorBgBase: '#ffffff',
-    colorBgLayout: '#ffffff', // Light grey for app background
-    borderRadius: 6,
+    colorBgLayout: '#F7F5F2', // warm off-white, less stark than pure white
+    borderRadius: 10,
     wireframe: false,
   },
   components: {
     Button: {
-      colorPrimary: '#ff4b33',
-      colorPrimaryHover: '#FF333D',
-      colorPrimaryActive: '#CC8810',
+      colorPrimary: deepRose,
+      colorPrimaryHover: deepRoseHover,
+      colorPrimaryActive: deepRoseActive,
     },
     Input: {
-      activeBorderColor: '#1A365D',
-      hoverBorderColor: '#1A365D',
+      activeBorderColor: deepRose,
+      hoverBorderColor: deepRose,
     }
   }
 };

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
-import { CommentOutlined, SendOutlined, DownloadOutlined, PaperClipOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons';
+import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
-import { AudioRecorder } from './AudioRecorder';
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import dayjs from 'dayjs';
 
 const { Text, Paragraph, Title } = Typography;
@@ -248,6 +248,195 @@ export function CommentsSection({
   );
 }
 
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function roundBtnStyle(compact, filled) {
+  const size = compact ? 26 : 30;
+  return {
+    width: size, height: size, borderRadius: '50%', flexShrink: 0, padding: 0,
+    border: filled ? 'none' : '1px solid rgba(24, 24, 27, 0.15)',
+    background: filled ? '#B3455C' : 'transparent',
+    color: filled ? '#FFFFFF' : '#18181B',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
+}
+
+function AttachmentChip({ file, onRemove }) {
+  const isVoice = file.isVoiceNote;
+  const isUploading = file.status === 'uploading';
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef(null);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (playing) audioRef.current.pause();
+    else audioRef.current.play().catch(() => {});
+    setPlaying(p => !p);
+  };
+
+  if (isVoice) {
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: '#fff', border: '1px solid rgba(179, 69, 92, 0.35)',
+        borderRadius: 20, padding: '3px 10px 3px 3px',
+      }}>
+        <audio ref={audioRef} src={file.url} onEnded={() => setPlaying(false)} style={{ display: 'none' }} />
+        <button
+          type="button"
+          onClick={togglePlay}
+          disabled={isUploading}
+          style={{
+            width: 22, height: 22, borderRadius: '50%', border: 'none', flexShrink: 0,
+            background: '#B3455C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: isUploading ? 'default' : 'pointer', opacity: isUploading ? 0.5 : 1,
+          }}
+        >
+          {isUploading ? <LoadingOutlined style={{ fontSize: 11 }} /> : playing ? <PauseCircleOutlined style={{ fontSize: 11 }} /> : <PlayCircleOutlined style={{ fontSize: 11 }} />}
+        </button>
+        <span style={{ fontSize: 11, color: '#18181B' }}>
+          {isUploading ? 'Uploading voice note…' : `Voice note · ${formatDuration(file.duration || 0)}`}
+        </span>
+        <button type="button" onClick={onRemove} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(24,24,27,0.45)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      background: '#fff', border: '1px solid rgba(24,24,27,0.12)',
+      borderRadius: 20, padding: '3px 10px',
+    }}>
+      {isUploading && <LoadingOutlined style={{ fontSize: 11, color: '#B3455C' }} />}
+      <span style={{ fontSize: 11, color: '#18181B', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+      <button type="button" onClick={onRemove} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(24,24,27,0.45)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
+    </div>
+  );
+}
+
+function RecordingBar({ elapsed, onCancel, onStop, compact }) {
+  return (
+    <Flex align="center" gap={compact ? 8 : 10}>
+      <button type="button" onClick={onCancel} title="Discard" style={roundBtnStyle(compact, false)}>
+        <DeleteOutlined style={{ fontSize: compact ? 12 : 13 }} />
+      </button>
+      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f', flexShrink: 0, animation: 'rec-pulse 1.1s ease-in-out infinite' }} />
+      <Text style={{ fontSize: compact ? 12 : 13, color: '#18181B', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{formatDuration(elapsed)}</Text>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 3, height: compact ? 16 : 20, overflow: 'hidden' }}>
+        {Array.from({ length: 28 }).map((_, i) => (
+          <div key={i} style={{
+            width: 3, borderRadius: 2, background: 'rgba(179, 69, 92, 0.45)', flexShrink: 0,
+            height: `${28 + Math.abs(Math.sin(i * 1.7 + elapsed)) * 65}%`,
+            transition: 'height 0.2s ease',
+          }} />
+        ))}
+      </div>
+      <button type="button" onClick={onStop} title="Stop and attach" style={roundBtnStyle(compact, true)}>
+        <CheckOutlined style={{ fontSize: compact ? 12 : 14 }} />
+      </button>
+    </Flex>
+  );
+}
+
+// Chat-bot style composer shared by the update box and the comment reply box: a single
+// rounded bubble with the text field on top and a plus/mic/send toolbar anchored at its
+// bottom edge, mirroring familiar chat-input layouts. Recording swaps the bubble's contents
+// for a live waveform/timer bar instead of opening a separate control.
+function ChatComposer({
+  value, onChange, onSend, placeholder, mentionOptions,
+  fileList, setFileList, handleS3UploadWithPurge, deleteUnsavedS3File,
+  compact = false,
+}) {
+  const onVoiceStaged = (file, action) => {
+    setFileList(prev => {
+      if (action === 'add') return [...prev, file];
+      if (action === 'remove') return prev.filter(f => f.uid !== file.uid);
+      return prev.map(f => (f.uid === file.uid ? { ...f, ...file } : f));
+    });
+  };
+  const recorder = useVoiceRecorder(onVoiceStaged);
+
+  const removeFile = (file) => {
+    if (file.isVoiceNote && file.url) URL.revokeObjectURL(file.url);
+    else deleteUnsavedS3File?.(file);
+    setFileList(prev => prev.filter(f => f.uid !== file.uid));
+  };
+
+  const canSend = (value.trim() || fileList.length > 0) && !recorder.recording;
+
+  return (
+    <div style={{
+      background: recorder.recording ? 'rgba(179, 69, 92, 0.12)' : 'rgba(255, 255, 255, 0.22)',
+      backdropFilter: 'blur(2px)',                                                                                                       
+      WebkitBackdropFilter: 'blur(2px)',                                                                                                 
+      border: `1px solid ${recorder.recording ? 'rgba(179, 69, 92, 0.5)' : 'rgba(179, 69, 92, 0.35)'}`,   
+      borderRadius: compact ? 18 : 22,
+      padding: compact ? '8px 10px' : '10px 12px',
+      transition: 'background 0.15s ease, border-color 0.15s ease',
+    }}>
+      {recorder.recording ? (
+        <RecordingBar elapsed={recorder.elapsed} onCancel={recorder.cancel} onStop={recorder.stop} compact={compact} />
+      ) : (
+        <>
+          {fileList.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {fileList.map(f => <AttachmentChip key={f.uid} file={f} onRemove={() => removeFile(f)} />)}
+            </div>
+          )}
+          <Mentions
+            variant="borderless"
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            placeholder={placeholder}
+            value={value}
+            onChange={onChange}
+            onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); onSend(); } }}
+            options={mentionOptions}
+            style={{ padding: 0, fontSize: compact ? 13 : 14 }}
+          />
+          <Flex justify="space-between" align="center" style={{ marginTop: 6 }}>
+            <Upload
+              customRequest={(opt) => handleS3UploadWithPurge(opt, setFileList)}
+              fileList={fileList}
+              onChange={({ fileList: fl }) => setFileList(fl)}
+              showUploadList={false}
+              multiple
+            >
+              <button type="button" title="Attach file" style={roundBtnStyle(compact, false)}>
+                <PlusOutlined style={{ fontSize: compact ? 13 : 15 }} />
+              </button>
+            </Upload>
+            <Flex gap={6}>
+              <button type="button" title="Record voice note" onClick={recorder.start} style={roundBtnStyle(compact, false)}>
+                <AudioOutlined style={{ fontSize: compact ? 13 : 15 }} />
+              </button>
+              <button
+                type="button"
+                title="Send"
+                onClick={onSend}
+                disabled={!canSend}
+                style={{ ...roundBtnStyle(compact, true), opacity: canSend ? 1 : 0.4, cursor: canSend ? 'pointer' : 'default' }}
+              >
+                <SendOutlined style={{ fontSize: compact ? 13 : 15 }} />
+              </button>
+            </Flex>
+          </Flex>
+        </>
+      )}
+      <style>{`
+        @keyframes rec-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.8); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function CommentInput({ updateId, onSubmit, mentionOptions, handleS3UploadWithPurge, deleteUnsavedS3File }) {
   const [text, setText] = useState('');
   const [fileList, setFileList] = useState([]);
@@ -262,48 +451,18 @@ function CommentInput({ updateId, onSubmit, mentionOptions, handleS3UploadWithPu
 
   return (
     <div style={{ marginTop: 8 }}>
-      {fileList.length > 0 && (
-        <div style={{ marginBottom: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {fileList.map(f => (
-            <Tag
-              key={f.uid}
-              closable
-              onClose={() => { deleteUnsavedS3File?.(f); setFileList(prev => prev.filter(i => i.uid !== f.uid)); }}
-              style={{ borderRadius: 20, fontSize: 11 }}
-            >
-              {f.name}
-            </Tag>
-          ))}
-        </div>
-      )}
-      <Flex gap={6} align="center">
-        {handleS3UploadWithPurge && (
-          <Upload
-            customRequest={(opt) => handleS3UploadWithPurge(opt, setFileList)}
-            fileList={fileList}
-            onChange={({ fileList: fl }) => setFileList(fl)}
-            showUploadList={false}
-            multiple
-          >
-            <Button icon={<PaperClipOutlined />} shape="circle" size="small" title="Attach file" />
-          </Upload>
-        )}
-        {handleS3UploadWithPurge && (
-          <AudioRecorder onUploadSuccess={(fileObj) => setFileList(prev => [...prev, fileObj])} />
-        )}
-        <Mentions
-          style={{ flex: 1 }}
-          size="small"
-          placeholder="Write a comment… use @ to mention"
-          value={text}
-          onChange={setText}
-          onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-          options={mentionOptions}
-        />
-        <Button type="primary" size="small" icon={<SendOutlined />} onClick={handleSubmit} disabled={!text.trim() && fileList.length === 0}>
-          Reply
-        </Button>
-      </Flex>
+      <ChatComposer
+        value={text}
+        onChange={setText}
+        onSend={handleSubmit}
+        placeholder="Write a comment… use @ to mention"
+        mentionOptions={mentionOptions}
+        fileList={fileList}
+        setFileList={setFileList}
+        handleS3UploadWithPurge={handleS3UploadWithPurge}
+        deleteUnsavedS3File={deleteUnsavedS3File}
+        compact
+      />
     </div>
   );
 }
@@ -436,48 +595,18 @@ export function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate
   };
 
   return (
-    <div style={{ paddingTop: 14, borderTop: '1px solid #f0f0f0' }}>
-      {drawerFileList.length > 0 && (
-        <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {drawerFileList.map(f => (
-            <Tag
-              key={f.uid}
-              closable
-              onClose={() => { deleteUnsavedS3File(f); setDrawerFileList(drawerFileList.filter(item => item.uid !== f.uid)); }}
-              style={{ borderRadius: 20 }}
-            >
-              {f.name}
-            </Tag>
-          ))}
-        </div>
-      )}
-      <Flex gap={8} align="center">
-        <Upload
-          customRequest={(opt) => handleS3UploadWithPurge(opt, setDrawerFileList)}
-          fileList={drawerFileList}
-          onChange={({ fileList }) => setDrawerFileList(fileList)}
-          showUploadList={false}
-          multiple
-        >
-          <Button icon={<PaperClipOutlined />} shape="circle" size="small" title="Attach file" />
-        </Upload>
-        <AudioRecorder onUploadSuccess={(fileObj) => setDrawerFileList(prev => [...prev, fileObj])} />
-        <Mentions
-          style={{ flex: 1 }}
-          placeholder="Type an update… use @ to mention"
-          value={text}
-          onChange={setText}
-          options={mentionOptions}
-        />
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleClick}
-          disabled={!text.trim() && drawerFileList.length === 0}
-        >
-          Post
-        </Button>
-      </Flex>
+    <div style={{ paddingTop: 14, borderTop: '1px solid rgba(24, 24, 27, 0.08)' }}>
+      <ChatComposer
+        value={text}
+        onChange={setText}
+        onSend={handleClick}
+        placeholder="Add a task update… use @ to mention"
+        mentionOptions={mentionOptions}
+        fileList={drawerFileList}
+        setFileList={setDrawerFileList}
+        handleS3UploadWithPurge={handleS3UploadWithPurge}
+        deleteUnsavedS3File={deleteUnsavedS3File}
+      />
     </div>
   );
 }
@@ -756,7 +885,7 @@ export function TaskDetailsDrawer({
                 )}
               </div>
 
-              <div style={{ width: '50%', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '20px 24px 0', overflow: 'hidden' }}>
+              <div style={{ width: '50%', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '20px 24px 20px', overflow: 'hidden' }}>
                 <UpdateFeed
                   taskUpdates={taskUpdates}
                   loadingUpdates={loadingUpdates}

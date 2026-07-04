@@ -229,7 +229,7 @@ export default function UsersPage() {
       <Title level={3}>Users Directory</Title>
 
       <Flex gap="middle" style={{ marginBottom: '24px' }} align="center">
-        <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#fa8c16', hoverBorderColor: '#fa8c16' } } }}>
+        <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#B3455C', hoverBorderColor: '#B3455C' } } }}>
           <Input
             placeholder="Search by name or email..."
             prefix={<SearchOutlined />}
@@ -260,7 +260,7 @@ export default function UsersPage() {
           icon={<DownloadOutlined />}
           onClick={handleDownloadOrgReport}
           loading={downloadingReport}
-          style={{ marginLeft: 'auto' }}
+          style={{ marginLeft: 'auto', background: '#B3455C', border: 'none', color: '#FFFFFF' }}
         >
           Performance Report
         </Button>

@@ -67,10 +67,47 @@ func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename s
 		return "", "", "", fmt.Errorf("failed to generate presigned url: %w", err)
 	}
 
-	// 3. Construct the final URL where the file will permanently live
-	finalFileURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, objectKey)
+	// 3. Construct the final URL where the file will permanently live.
+	// Built via url.URL (not fmt.Sprintf) so characters like '#', '?', '%'
+	// and spaces in the filename are percent-encoded and round-trip cleanly
+	// back through extractKeyFromURL.
+	finalURL := url.URL{
+		Scheme: "https",
+		Host:   fmt.Sprintf("%s.s3.%s.amazonaws.com", s.bucketName, s.region),
+		Path:   "/" + objectKey,
+	}
+	finalFileURL := finalURL.String()
 
 	return request.URL, finalFileURL, objectKey, nil
+}
+
+// GeneratePresignedGetURL returns a temporary, signed URL for reading an object.
+func (s *S3Service) GeneratePresignedGetURL(ctx context.Context, objectKey string) (string, error) {
+	request, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(objectKey),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 1 * time.Hour
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate presigned get url: %w", err)
+	}
+	return request.URL, nil
+}
+
+// PresignFileURL extracts the object key from a stored file URL and returns a
+// presigned GET URL for it. Falls back to the original URL if the key can't
+// be extracted or presigning fails, so callers never see a broken link.
+func (s *S3Service) PresignFileURL(ctx context.Context, fileURL string) string {
+	key := s.extractKeyFromURL(fileURL)
+	if key == "" {
+		return fileURL
+	}
+	signedURL, err := s.GeneratePresignedGetURL(ctx, key)
+	if err != nil {
+		return fileURL
+	}
+	return signedURL
 }
 
 func (s *S3Service) DeleteObjects(ctx context.Context, fileURLs []string) {

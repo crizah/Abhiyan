@@ -45,6 +45,12 @@ func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, par
 	return nil
 }
 
+func (s *TaskService) presignAttachments(ctx context.Context, atts []schemas.AttachmentPayload) {
+	for i := range atts {
+		atts[i].FileURL = s.s3Service.PresignFileURL(ctx, atts[i].FileURL)
+	}
+}
+
 func (s *TaskService) diffAttachments(
 	ctx context.Context,
 	qtx *db.Queries,
@@ -369,6 +375,7 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 	if atts == nil {
 		atts = []schemas.AttachmentPayload{}
 	}
+	s.presignAttachments(ctx, atts)
 
 	dbTask, err := s.queries.GetTaskByID(ctx, tID)
 	if err != nil {
@@ -645,6 +652,9 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, 
 		}
 		attMap[uIDStr] = append(attMap[uIDStr], att)
 	}
+	for _, atts := range attMap {
+		s.presignAttachments(ctx, atts)
+	}
 
 	var mapped []schemas.TaskUpdateResponse
 	for _, u := range updates {
@@ -705,6 +715,9 @@ func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, li
 			}
 			aM[att.TaskCommentID.UUID.String()] = append(aM[att.TaskCommentID.UUID.String()], payload)
 		}
+	}
+	for _, atts := range aM {
+		s.presignAttachments(ctx, atts)
 	}
 
 	var comments []schemas.TaskUpdateCommentResponse

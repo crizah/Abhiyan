@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
 	github.com/aws/aws-sdk-go-v2/service/ses v1.35.2
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
-	github.com/crizah/Onion v0.0.0-20260626182533-73fb97fc74cf
+	github.com/crizah/Onion v0.0.0-20260702084133-0c62b847958e
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0

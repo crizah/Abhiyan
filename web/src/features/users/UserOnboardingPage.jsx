@@ -1,31 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Typography, Form, Input, Select, Button, message, Flex, List, Avatar, Badge } from 'antd';
-import { MailOutlined, SafetyCertificateOutlined, UserOutlined, TeamOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { MailOutlined, SafetyCertificateOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import Stepper, { Step } from '../../components/ui/Stepper';
+import InfoCard from '../../components/InfoCard';
 
 const { Title, Text, Paragraph } = Typography;
-
-const infoCardStyle = {
-  display: 'flex',
-  gap: 10,
-  alignItems: 'flex-start',
-  background: 'rgba(179, 69, 92, 0.06)',
-  border: '1px solid rgba(179, 69, 92, 0.2)',
-  borderRadius: 10,
-  padding: '12px 14px',
-  marginTop: 20,
-};
-
-function InfoCard({ children }) {
-  return (
-    <div style={infoCardStyle}>
-      <InfoCircleOutlined style={{ color: '#B3455C', marginTop: 2, flexShrink: 0 }} />
-      <Text style={{ fontSize: 12, color: 'rgba(24, 24, 27, 0.75)', lineHeight: 1.6 }}>{children}</Text>
-    </div>
-  );
-}
 
 export default function UserOnboardingPage() {
   const navigate = useNavigate();
@@ -113,7 +94,7 @@ export default function UserOnboardingPage() {
                 </Button>
               </Form>
 
-              <InfoCard>
+              <InfoCard style={{ marginTop: 20 }}>
                 Specify the employee's email and the system role you want them to have, you can always
                 change their role later from <Link to="/users" style={{ color: '#B3455C', fontWeight: 600 }}>Users</Link>.
                 Sending this will email them a secure invite link. Feel free to assign them to a team in the meantime.
@@ -137,7 +118,7 @@ export default function UserOnboardingPage() {
                 Go to Teams
               </Button>
 
-              <InfoCard>
+              <InfoCard style={{ marginTop: 20 }}>
                 To access platform features, a user needs to be part of a team. They won't be able to
                 participate in any activities until they accept their invite and are assigned to a team.
               </InfoCard>

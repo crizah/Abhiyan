@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Tabs, Card, Button, Table, Flex, Input, Select, Drawer, Tag, Popconfirm, Divider, message } from 'antd';
+import { Typography, Card, Button, Table, Flex, Input, Select, Tag, Popconfirm, message } from 'antd';
 import { TeamOutlined, DeleteOutlined, SettingOutlined, UserOutlined, SearchOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
+import { SlidingCardModal } from '../../components/SlidingCardModal';
+import PillTabPanel from '../../components/PillTabPanel';
+import InfoCard from '../../components/InfoCard';
 
 const { Title, Text } = Typography;
 
@@ -20,7 +23,6 @@ function useWindowWidth() {
 export default function TeamsPage() {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
-  const drawerWidth = isMobile ? '100%' : Math.min(Math.round(windowWidth * 0.7), 700);
 
   const [activeTab, setActiveTab] = useState('1');
   const [teams, setTeams] = useState([]);
@@ -280,26 +282,27 @@ export default function TeamsPage() {
         <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>Team Management</Title>
       </Flex>
 
-      <Card 
-        style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-        styles={{ body: { padding: isMobile ? '0 0 12px' : undefined } }}
+      <Card
+        style={{
+          borderRadius: '12px',
+          border: '1px solid rgba(24, 24, 27, 0.08)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        }}
       >
-        <Tabs 
-          activeKey={activeTab} 
+        <PillTabPanel
+          activeKey={activeTab}
           onChange={setActiveTab}
-          size={isMobile ? 'small' : 'middle'}
-          style={{ overflowX: 'auto' }}
-          items={[
+          tabs={[
             {
               key: '1',
-              label: <span><TeamOutlined /> Team Directory</span>,
-              children: (
-                <Table 
-                  columns={teamColumns} 
-                  dataSource={teams} 
-                  rowKey="id" 
-                  loading={loadingTeams} 
-                  pagination={false} 
+              label: <><TeamOutlined /> Team Directory</>,
+              content: (
+                <Table
+                  columns={teamColumns}
+                  dataSource={teams}
+                  rowKey="id"
+                  loading={loadingTeams}
+                  pagination={false}
                   scroll={{ x: 'max-content' }}
                   size={isMobile ? 'small' : 'middle'}
                 />
@@ -307,9 +310,9 @@ export default function TeamsPage() {
             },
             {
               key: '2',
-              label: <span><UserOutlined /> Team Members</span>,
-              children: (
-                <Flex vertical gap="medium" style={{ padding: isMobile ? '0 12px' : 0 }}>
+              label: <><UserOutlined /> Team Members</>,
+              content: (
+                <Flex vertical gap="medium">
                   {/* Dynamic Frontend Filtering Grid */}
                   <Flex gap="small" wrap="wrap" style={{ marginBottom: '12px' }}>
                     <Input
@@ -338,11 +341,11 @@ export default function TeamsPage() {
                     />
                   </Flex>
 
-                  <Table 
-                    columns={getAssignedUserColumns()} 
-                    dataSource={assignedUsers} 
-                    rowKey={(record) => selectedTeamFilter === 'ALL' ? record.id : `${record.id}-${record.team_name}`} 
-                    loading={loadingEmployees} 
+                  <Table
+                    columns={getAssignedUserColumns()}
+                    dataSource={assignedUsers}
+                    rowKey={(record) => selectedTeamFilter === 'ALL' ? record.id : `${record.id}-${record.team_name}`}
+                    loading={loadingEmployees}
                     scroll={{ x: 'max-content' }}
                     size={isMobile ? 'small' : 'middle'}
                     pagination={{
@@ -355,7 +358,7 @@ export default function TeamsPage() {
                         setCurrentPage(page);
                         setPageSize(size);
                       }
-                    }} 
+                    }}
                   />
                 </Flex>
               )
@@ -364,70 +367,92 @@ export default function TeamsPage() {
         />
       </Card>
 
-      {/* DRAWER 1: Manage Team Members */}
-      <Drawer
-        title={selectedTeam ? `Manage Members: ${selectedTeam.name}` : 'Manage Team'}
-        placement="right" 
-        width={drawerWidth}
-        onClose={() => setIsTeamDrawerOpen(false)} 
+      {/* Manage Team Members */}
+      <SlidingCardModal
         open={isTeamDrawerOpen}
-        styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
-      >
-        <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
-          Assigning a user as a "Team Admin" grants them access to manage this team.
-        </Text>
-        <Table 
-          columns={teamDrawerColumns} 
-          dataSource={teamMembers} 
-          rowKey="id" 
-          pagination={false} 
-          size="small" 
-          scroll={{ x: 'max-content' }}
-        />
-      </Drawer>
+        onClose={() => setIsTeamDrawerOpen(false)}
+        title={selectedTeam ? `Manage Members: ${selectedTeam.name}` : 'Manage Team'}
+        resetKey={selectedTeam?.id}
+        defaultWidth={640}
+        tabs={[
+          {
+            key: 'members',
+            label: 'Members',
+            content: (
+              <div>
+                <InfoCard style={{ marginBottom: 16 }}>
+                  You can change the team role for employees here or remove them from the team.
+                  Assigning someone as "Team Admin" grants them access to manage this team.
+                </InfoCard>
+                <Table
+                  columns={teamDrawerColumns}
+                  dataSource={teamMembers}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: 'max-content' }}
+                />
+              </div>
+            ),
+          },
+        ]}
+      />
 
-      {/* DRAWER 2: Manage User Teams */}
-      <Drawer
-        title={selectedUser ? `Manage Teams: ${selectedUser.full_name}` : 'Manage User'}
-        placement="right" 
-        width={drawerWidth}
-        onClose={() => setIsUserDrawerOpen(false)} 
+      {/* Manage User Teams */}
+      <SlidingCardModal
         open={isUserDrawerOpen}
-        styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
-      >
-        <Flex 
-          gap="small" 
-          align={isMobile ? 'stretch' : 'center'} 
-          vertical={isMobile}
-          style={{ marginBottom: '24px' }}
-        >
-          <Select 
-            placeholder="Add to another team..." 
-            style={{ flex: 1 }}
-            value={teamToAssign}
-            onChange={setTeamToAssign}
-            options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))} 
-          />
-          <Button 
-            type="primary" 
-            disabled={!teamToAssign} 
-            onClick={handleAssignToAdditionalTeam}
-            block={isMobile}
-          >
-            Add to Team
-          </Button>
-        </Flex>
-        <Divider />
-        <Text strong style={{ display: 'block', marginBottom: '16px' }}>Current Memberships</Text>
-        <Table 
-          columns={userDrawerColumns} 
-          dataSource={userTeams} 
-          rowKey="team_id" 
-          pagination={false} 
-          size="small" 
-          scroll={{ x: 'max-content' }}
-        />
-      </Drawer>
+        onClose={() => setIsUserDrawerOpen(false)}
+        title={selectedUser ? `Manage Teams: ${selectedUser.full_name}` : 'Manage User'}
+        resetKey={selectedUser?.id}
+        defaultWidth={640}
+        tabs={[
+          {
+            key: 'teams',
+            label: 'Teams',
+            content: (
+              <div>
+                <InfoCard style={{ marginBottom: 20 }}>
+                  You can change their role or assign them to an existing team, and remove them from
+                  teams. You can see all the teams this user is in right now, this card is here to
+                  manage the user's teams. Note you can only assign members to a team you're already
+                  an admin of.
+                </InfoCard>
+                <Flex
+                  gap="small"
+                  align={isMobile ? 'stretch' : 'center'}
+                  vertical={isMobile}
+                  style={{ marginBottom: '24px' }}
+                >
+                  <Select
+                    placeholder="Add to another team..."
+                    style={{ flex: 1 }}
+                    value={teamToAssign}
+                    onChange={setTeamToAssign}
+                    options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))}
+                  />
+                  <Button
+                    disabled={!teamToAssign}
+                    onClick={handleAssignToAdditionalTeam}
+                    block={isMobile}
+                    style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                  >
+                    Add to Team
+                  </Button>
+                </Flex>
+                <Text strong style={{ display: 'block', marginBottom: '16px' }}>Current Memberships</Text>
+                <Table
+                  columns={userDrawerColumns}
+                  dataSource={userTeams}
+                  rowKey="team_id"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: 'max-content' }}
+                />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

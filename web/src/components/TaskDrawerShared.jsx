@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
-import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons';
+import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
+import { fulfillmentColor, taskStatusColor, reviewStatusColor, roleColor } from '../utils/taskColors';
 import dayjs from 'dayjs';
 
 const { Text, Paragraph, Title } = Typography;
@@ -617,9 +618,9 @@ export function buildTaskColumns({ onView }) {
   return [
     { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
-    { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={status === 'COMPLETED' ? 'success' : 'processing'}>{status}</Tag> },
-    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={status === 'CLOSED' ? 'default' : status === 'FAILED' ? 'error' : 'blue'}>{status}</Tag> },
-    { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={status === 'APPROVED' ? 'gold' : status === 'REJECTED' ? 'error' : status === 'PENDING' ? 'purple' : 'default'}>{status}</Tag> },
+    { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={fulfillmentColor(status)}>{status}</Tag> },
+    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={taskStatusColor(status)}>{status}</Tag> },
+    { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={reviewStatusColor(status)}>{status}</Tag> },
     { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => onView(record)}>View Task</Button> },
   ];
 }
@@ -838,10 +839,17 @@ export function TaskDetailsDrawer({
                   </Paragraph>
                   <Divider style={{ margin: '12px 0' }} />
                   <Flex justify="space-between" wrap="wrap" gap={8}>
-                    <Text><InfoCircleOutlined /> Status: <Tag color={selectedTask.status === 'CLOSED' ? 'default' : 'blue'}>{selectedTask.status}</Tag></Text>
-                    <Text><CheckCircleOutlined /> Fulfillment: <Tag color={selectedTask.fulfillment_status === 'COMPLETED' ? 'success' : 'processing'}>{selectedTask.fulfillment_status}</Tag></Text>
-                    <Text>Review: <Tag color={selectedTask.review_status === 'APPROVED' ? 'gold' : selectedTask.review_status === 'REJECTED' ? 'error' : selectedTask.review_status === 'PENDING' ? 'purple' : 'default'}>{selectedTask.review_status}</Tag></Text>
+                    <Text><InfoCircleOutlined /> Status: <Tag color={taskStatusColor(selectedTask.status)}>{selectedTask.status}</Tag></Text>
+                    <Text><CheckCircleOutlined /> Fulfillment: <Tag color={fulfillmentColor(selectedTask.fulfillment_status)}>{selectedTask.fulfillment_status}</Tag></Text>
+                    <Text>Review: <Tag color={reviewStatusColor(selectedTask.review_status)}>{selectedTask.review_status}</Tag></Text>
                   </Flex>
+
+                  <Text style={{ display: 'block', marginTop: 8 }}>
+                    <CalendarOutlined /> Due:{' '}
+                    {(taskDetails?.task?.due_date || selectedTask.due_date)
+                      ? dayjs(taskDetails?.task?.due_date || selectedTask.due_date).format('MMM D, YYYY')
+                      : <Text type="secondary">No deadline</Text>}
+                  </Text>
 
                   {taskDetails && (
                     <div style={{ marginTop: 12 }}>
@@ -849,9 +857,9 @@ export function TaskDetailsDrawer({
                         const isCreator = taskDetails.task?.created_by && taskDetails.task.created_by === user?.id;
                         const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
                         const roles = [];
-                        if (isCreator) roles.push({ label: 'Task Creator', color: 'gold' });
-                        if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: 'blue' });
-                        else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: 'default' });
+                        if (isCreator) roles.push({ label: 'Task Creator', color: roleColor('CREATOR') });
+                        if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: roleColor('ASSIGNEE') });
+                        else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: roleColor('SUBSCRIBER') });
                         if (roles.length === 0) return null;
                         return (
                           <Flex align="center" gap={6} style={{ marginBottom: 8 }} wrap="wrap">

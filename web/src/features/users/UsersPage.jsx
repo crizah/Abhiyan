@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select, Typography, Tag, Avatar, Flex, message, ConfigProvider, Button, Drawer, Divider, Popconfirm } from 'antd';
+import { Table, Input, Select, Typography, Tag, Avatar, Flex, message, ConfigProvider, Button, Card, Divider, Popconfirm } from 'antd';
 import { UserOutlined, SearchOutlined, SettingOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
+import InfoTooltip from '../../components/InfoTooltip';
+import { SlidingCardModal } from '../../components/SlidingCardModal';
 
 const { Title, Text } = Typography;
 
@@ -18,16 +20,17 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Drawer Controls
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // Manage User modal controls
+  const [isManageOpen, setIsManageOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [systemRole, setSystemRole] = useState('');
   const [accountStatus, setAccountStatus] = useState('');
-  
+
   // Cross-Team State
   const [userTeams, setUserTeams] = useState([]);
   const [teamToAssign, setTeamToAssign] = useState(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadingUserReport, setDownloadingUserReport] = useState(false);
 
   // Fetch teams once on mount
   useEffect(() => {
@@ -69,7 +72,7 @@ export default function UsersPage() {
     setSelectedUser(user);
     setSystemRole(user.roles?.[0] || 'EMPLOYEE');
     setAccountStatus(user.status || 'ACTIVE');
-    setIsDrawerOpen(true);
+    setIsManageOpen(true);
     fetchUserTeams(user.id); // Fetch their teams
   };
 
@@ -89,8 +92,8 @@ export default function UsersPage() {
           : u
       ));
 
-      setIsDrawerOpen(false);
-      fetchUsers(); 
+      setIsManageOpen(false);
+      fetchUsers();
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to update system access profile.");
     }
@@ -142,6 +145,27 @@ export default function UsersPage() {
       message.error('Failed to download report');
     } finally {
       setDownloadingReport(false);
+    }
+  };
+
+  const handleDownloadUserReport = async () => {
+    if (!selectedUser) return;
+    setDownloadingUserReport(true);
+    try {
+      const res = await apiClient.get('/admin/reports/score-download', {
+        params: { user_id: selectedUser.id },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `score_report_${selectedUser.id.slice(0, 8)}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error('Failed to download report');
+    } finally {
+      setDownloadingUserReport(false);
     }
   };
 
@@ -275,56 +299,123 @@ export default function UsersPage() {
         pagination={{ current: currentPage, pageSize, total: totalUsers, showSizeChanger: true }}
       />
 
-      {/* SYSTEM AND MEMBERSHIP MANAGEMENT DRAWER */}
-      <Drawer
+      {/* MANAGE USER — same sliding pill-tab card pattern as the task details panel */}
+      <SlidingCardModal
+        open={isManageOpen}
+        onClose={() => setIsManageOpen(false)}
         title={selectedUser ? `Manage User: ${selectedUser.full_name}` : 'Manage User'}
-        placement="right" width={500} onClose={() => setIsDrawerOpen(false)} open={isDrawerOpen}
-      >
-        <Text strong>System Account Controls</Text>
-        <Flex vertical gap="medium" style={{ marginTop: '12px', marginBottom: '20px' }}>
-          <Flex align="center" justify="space-between">
-            <Text>System Access Role:</Text>
-            <Select value={systemRole} style={{ width: 220 }} onChange={setSystemRole}
-              options={[{ value: 'SUPER_ADMIN', label: 'Super Admin' }, { value: 'ADMIN', label: 'Admin' }, { value: 'EMPLOYEE', label: 'Employee' }]}
-            />
-          </Flex>
-          <Flex align="center" justify="space-between">
-            <Text>Account Operational Status:</Text>
-            <Select value={accountStatus} style={{ width: 220 }} onChange={setAccountStatus}
-              options={[
-                { value: 'ACTIVE', label: 'Active State' }, 
-                { value: 'SUSPENDED', label: 'Suspended (Blocked)' },
-                { value: 'INVITED', label: 'Invited (Pending)', disabled: true }
-              ]}
-            />
-          </Flex>
-          <Button type="primary" onClick={handleSaveSystemProfile} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
-            Save Account Status Changes
-          </Button>
-        </Flex>
+        resetKey={selectedUser?.id}
+        defaultWidth={640}
+        tabs={[
+          {
+            key: 'account',
+            label: 'Account',
+            content: (
+              <div>
+                <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                  <Title level={5} style={{ margin: 0 }}>System Account Controls</Title>
+                  <InfoTooltip title="Control users system roles here" />
+                </Flex>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 20 }}>
+                  Set this user's system-wide access role and whether their account is active.
+                </Text>
+                <Flex vertical gap="middle">
+                  <Flex align="center" justify="space-between">
+                    <Text>System Access Role:</Text>
+                    <Select value={systemRole} style={{ width: 220 }} onChange={setSystemRole}
+                      options={[{ value: 'SUPER_ADMIN', label: 'Super Admin' }, { value: 'ADMIN', label: 'Admin' }, { value: 'EMPLOYEE', label: 'Employee' }]}
+                    />
+                  </Flex>
+                  <Flex align="center" justify="space-between">
+                    <Text>Account Operational Status:</Text>
+                    <Select value={accountStatus} style={{ width: 220 }} onChange={setAccountStatus}
+                      options={[
+                        { value: 'ACTIVE', label: 'Active State' },
+                        { value: 'SUSPENDED', label: 'Suspended (Blocked)' },
+                        { value: 'INVITED', label: 'Invited (Pending)', disabled: true }
+                      ]}
+                    />
+                  </Flex>
+                  <Button
+                    onClick={handleSaveSystemProfile}
+                    style={{ alignSelf: 'flex-end', marginTop: 8, background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                  >
+                    Save Account Status Changes
+                  </Button>
+                </Flex>
+              </div>
+            ),
+          },
+          {
+            key: 'teams',
+            label: 'Teams',
+            content: (
+              <div>
+                <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                  <Title level={5} style={{ margin: 0 }}>Cross-Team Memberships</Title>
+                  <InfoTooltip title="Manage users team here, add to another team or remove from existing" />
+                </Flex>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                  Teams this user currently belongs to, with the ability to add or remove memberships.
+                </Text>
+                <Flex gap="small" align="center" style={{ marginBottom: '16px' }}>
+                  <Select
+                    placeholder="Add to another team..." style={{ flex: 1 }}
+                    value={teamToAssign} onChange={setTeamToAssign}
+                    options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))}
+                  />
+                  <Button type="default" disabled={!teamToAssign} onClick={handleAssignToAdditionalTeam}>
+                    Add to Team
+                  </Button>
+                </Flex>
+                <Table columns={userDrawerColumns} dataSource={userTeams} rowKey="team_id" pagination={false} size="small" />
+              </div>
+            ),
+          },
+          {
+            key: 'performance',
+            label: 'Performance',
+            content: (
+              <div>
+                <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                  <Title level={5} style={{ margin: 0 }}>Performance Overview</Title>
+                  <InfoTooltip title="Performance overview of completed tasks" />
+                </Flex>
+                <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, margin: '12px 0 20px' }}>
+                  <Text style={{ fontSize: 12 }}>
+                    Points are only granted once a task is approved. <Text strong style={{ fontSize: 12 }}>On-time completions</Text> earn a base of 10 points, plus up to 5 bonus points the earlier it's finished ahead of the due date (15 max). <Text strong style={{ fontSize: 12 }}>Late completions</Text> (approved after the due date) earn a flat 3 points. <Text strong style={{ fontSize: 12 }}>Missed deadlines</Text> and <Text strong style={{ fontSize: 12 }}>rejected submissions</Text> earn 0 points.
+                  </Text>
+                </Card>
 
-        <Divider />
+                {selectedUser && (
+                  <ScoreBreakdown userId={selectedUser.id} basePath="/admin/users" showDownload={false} />
+                )}
 
-        <Text strong style={{ display: 'block', marginBottom: '12px' }}>Cross-Team Memberships</Text>
-        <Flex gap="small" align="center" style={{ marginBottom: '16px' }}>
-          <Select 
-            placeholder="Add to another team..." style={{ flex: 1 }}
-            value={teamToAssign} onChange={setTeamToAssign}
-            options={teams.filter(t => !userTeams.some(ut => ut.team_id === t.id)).map(t => ({ label: t.name, value: t.id }))} 
-          />
-          <Button type="default" disabled={!teamToAssign} onClick={handleAssignToAdditionalTeam}>
-            Add to Team
-          </Button>
-        </Flex>
-        <Table columns={userDrawerColumns} dataSource={userTeams} rowKey="team_id" pagination={false} size="small" />
+                <Divider />
 
-        <Divider />
-
-        <Text strong style={{ display: 'block', marginBottom: '12px' }}>Performance Overview</Text>
-        {selectedUser && (
-          <ScoreBreakdown userId={selectedUser.id} basePath="/admin/users" />
-        )}
-      </Drawer>
+                <Card size="small" style={{ border: '1px solid rgba(24, 24, 27, 0.08)', borderRadius: 10 }}>
+                  <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                    <DownloadOutlined style={{ color: '#B3455C' }} />
+                    <Text strong style={{ fontSize: 14 }}>Download Report</Text>
+                    <InfoTooltip title="This generates the performance report for this user in CSV format." />
+                  </Flex>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                    Export this user's completed task history and points as a CSV file.
+                  </Text>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadUserReport}
+                    loading={downloadingUserReport}
+                    style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                  >
+                    Download CSV
+                  </Button>
+                </Card>
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

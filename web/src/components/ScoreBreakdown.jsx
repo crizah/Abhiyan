@@ -16,7 +16,7 @@ const EVENT_CONFIG = {
   REJECTION:          { color: 'volcano', label: 'Rejected', icon: <CloseCircleOutlined /> },
 };
 
-export default function ScoreBreakdown({ userId, basePath = '/admin/employees' }) {
+export default function ScoreBreakdown({ userId, basePath = '/admin/employees', showDownload = true }) {
   const { token } = theme.useToken();
   const [breakdown, setBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -146,15 +146,17 @@ export default function ScoreBreakdown({ userId, basePath = '/admin/employees' }
         locale={{ emptyText: <Empty description="No scoring events yet" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
       />
 
-      <Flex justify="flex-end" style={{ marginTop: 16 }}>
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleDownloadReport}
-          loading={downloading}
-        >
-          Download Report
-        </Button>
-      </Flex>
+      {showDownload && (
+        <Flex justify="flex-end" style={{ marginTop: 16 }}>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleDownloadReport}
+            loading={downloading}
+          >
+            Download Report
+          </Button>
+        </Flex>
+      )}
     </div>
   );
 }

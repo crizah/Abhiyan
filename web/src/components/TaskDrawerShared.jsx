@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useRef } from 'react';
 import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
 import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { fulfillmentColor, taskStatusColor, reviewStatusColor, roleColor } from '../utils/taskColors';
+import { SlidingCardModal } from './SlidingCardModal';
 import dayjs from 'dayjs';
 
 const { Text, Paragraph, Title } = Typography;
@@ -663,296 +662,119 @@ export function TaskDetailsDrawer({
   setDrawerFileList,
   onPostUpdate,
 }) {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [width, setWidth] = useState(PANEL_DEFAULT_WIDTH);
-  const draggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, width: PANEL_DEFAULT_WIDTH });
-
-  useEffect(() => {
-    if (open) setActiveTab('overview');
-  }, [open, selectedTask?.id]);
-
-  useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
-    if (open) window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  // Lock background scroll while open — belt-and-suspenders alongside the portal/backdrop,
-  // since Page Down / arrow keys can still scroll the document even without a hover target.
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [open]);
-
-  useEffect(() => {
-    const onMouseMove = (e) => {
-      if (!draggingRef.current) return;
-      const dx = e.clientX - dragStartRef.current.x;
-      const maxWidth = window.innerWidth - 80;
-      setWidth(Math.min(Math.max(dragStartRef.current.width + dx * 2, PANEL_MIN_WIDTH), maxWidth));
-    };
-    const onMouseUp = () => {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
-
-  const startResize = (e) => {
-    draggingRef.current = true;
-    dragStartRef.current = { x: e.clientX, width };
-    document.body.style.cursor = 'ew-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  // Portal straight to <body> — otherwise z-index only wins within the nearest positioned
-  // ancestor's stacking context, and here that ancestor sits below the app header/dock's
-  // own z-index at the root level, so a high z-index here alone wouldn't be enough.
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="task-modal-backdrop"
-          onClick={onClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            background: 'rgba(24, 24, 27, 0.55)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 24,
-          }}
-        >
-          <motion.div
-            onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, scale: 0.96, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            transition={{ type: 'spring', stiffness: 340, damping: 30 }}
-            style={{
-              position: 'relative',
-              width,
-              maxWidth: '100%',
-              height: '85vh',
-              backgroundColor: '#F7F5F2',
-              backgroundImage: 'radial-gradient(#18181B22 1px, transparent 1px)',
-              backgroundSize: '22px 22px',
-              borderRadius: 24,
-              border: '1px solid rgba(24, 24, 27, 0.08)',
-              boxShadow: '0 24px 64px -20px rgba(24, 24, 27, 0.35)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-        {/* Header */}
-        <Flex justify="space-between" align="center" style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
-          <Title level={4} style={{ margin: 0, letterSpacing: '-0.01em' }}>
-            {selectedTask?.title || 'Task Details'}
-          </Title>
-          <Flex align="center" gap={8}>
-            {extra}
-            <Button
-              type="text"
-              shape="circle"
-              icon={<CloseOutlined />}
-              onClick={onClose}
-              style={{ color: 'rgba(24, 24, 27, 0.55)' }}
-            />
-          </Flex>
+  const overviewContent = selectedTask && (
+    <>
+      <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, marginBottom: 16 }}>
+        <Paragraph style={{ margin: 0 }}>
+          {selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}
+        </Paragraph>
+        <Divider style={{ margin: '12px 0' }} />
+        <Flex justify="space-between" wrap="wrap" gap={8}>
+          <Text><InfoCircleOutlined /> Status: <Tag color={taskStatusColor(selectedTask.status)}>{selectedTask.status}</Tag></Text>
+          <Text><CheckCircleOutlined /> Fulfillment: <Tag color={fulfillmentColor(selectedTask.fulfillment_status)}>{selectedTask.fulfillment_status}</Tag></Text>
+          <Text>Review: <Tag color={reviewStatusColor(selectedTask.review_status)}>{selectedTask.review_status}</Tag></Text>
         </Flex>
 
-        {/* Overview / Activity toggle — same floating glass-bubble treatment as the app header */}
-        <div style={{ padding: '12px 24px 0' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              gap: 4,
-              padding: 4,
-              borderRadius: 999,
-              background: 'rgba(255, 255, 255, 0.22)',
-              backdropFilter: 'blur(2px)',
-              WebkitBackdropFilter: 'blur(2px)',
-              border: '1px solid rgba(24, 24, 27, 0.12)',
-            }}
-          >
-            {[
-              { key: 'overview', label: 'Overview' },
-              { key: 'activity', label: 'Activity & Updates' },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 999,
-                  border: 'none',
-                  background: activeTab === tab.key ? '#B3455C' : 'transparent',
-                  color: activeTab === tab.key ? '#FFFFFF' : 'rgba(24, 24, 27, 0.55)',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  transition: 'background 0.15s ease, color 0.15s ease',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Text style={{ display: 'block', marginTop: 8 }}>
+          <CalendarOutlined /> Due:{' '}
+          {(taskDetails?.task?.due_date || selectedTask.due_date)
+            ? dayjs(taskDetails?.task?.due_date || selectedTask.due_date).format('MMM D, YYYY')
+            : <Text type="secondary">No deadline</Text>}
+        </Text>
 
-        {selectedTask && (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Sliding track: both panels always mounted, side by side, translated as one
-                continuous motion — so Overview and Activity visibly cross paths instead of
-                one fading out before the other fades in. */}
-            <motion.div
-              animate={{ x: activeTab === 'overview' ? '0%' : '-50%' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-              style={{ display: 'flex', width: '200%', height: '100%' }}
-            >
-              <div className="task-scrollbar" style={{ width: '50%', flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 24px' }}>
-                <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, marginBottom: 16 }}>
-                  <Paragraph style={{ margin: 0 }}>
-                    {selectedTask.description || <Text type="secondary" italic>No description provided.</Text>}
-                  </Paragraph>
-                  <Divider style={{ margin: '12px 0' }} />
-                  <Flex justify="space-between" wrap="wrap" gap={8}>
-                    <Text><InfoCircleOutlined /> Status: <Tag color={taskStatusColor(selectedTask.status)}>{selectedTask.status}</Tag></Text>
-                    <Text><CheckCircleOutlined /> Fulfillment: <Tag color={fulfillmentColor(selectedTask.fulfillment_status)}>{selectedTask.fulfillment_status}</Tag></Text>
-                    <Text>Review: <Tag color={reviewStatusColor(selectedTask.review_status)}>{selectedTask.review_status}</Tag></Text>
-                  </Flex>
-
-                  <Text style={{ display: 'block', marginTop: 8 }}>
-                    <CalendarOutlined /> Due:{' '}
-                    {(taskDetails?.task?.due_date || selectedTask.due_date)
-                      ? dayjs(taskDetails?.task?.due_date || selectedTask.due_date).format('MMM D, YYYY')
-                      : <Text type="secondary">No deadline</Text>}
-                  </Text>
-
-                  {taskDetails && (
-                    <div style={{ marginTop: 12 }}>
-                      {(() => {
-                        const isCreator = taskDetails.task?.created_by && taskDetails.task.created_by === user?.id;
-                        const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
-                        const roles = [];
-                        if (isCreator) roles.push({ label: 'Task Creator', color: roleColor('CREATOR') });
-                        if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: roleColor('ASSIGNEE') });
-                        else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: roleColor('SUBSCRIBER') });
-                        if (roles.length === 0) return null;
-                        return (
-                          <Flex align="center" gap={6} style={{ marginBottom: 8 }} wrap="wrap">
-                            <Text style={{ fontSize: 12 }}>Your role:</Text>
-                            {roles.map(r => <Tag key={r.label} color={r.color} style={{ margin: 0 }}>{r.label}</Tag>)}
-                          </Flex>
-                        );
-                      })()}
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}
-                      </Text>
-                      {showReminders && (
-                        <>
-                          <br />
-                          <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders?.length || 0}</Text>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </Card>
-
-                {taskDetails?.attachments?.length > 0 && (
-                  <>
-                    <Title level={5} style={{ marginBottom: 10 }}>Task Attachments</Title>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {taskDetails.attachments.map((file, idx) => (
-                        <AttachmentRow key={idx} file={file} idx={idx} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div style={{ width: '50%', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '20px 24px 20px', overflow: 'hidden' }}>
-                <UpdateFeed
-                  taskUpdates={taskUpdates}
-                  loadingUpdates={loadingUpdates}
-                  hasMoreUpdates={hasMoreUpdates}
-                  updateOffset={updateOffset}
-                  fetchTaskUpdates={fetchTaskUpdates}
-                  taskId={selectedTask.id}
-                  commentsMap={commentsMap}
-                  commentOffsets={commentOffsets}
-                  hasMoreComments={hasMoreComments}
-                  loadingComments={loadingComments}
-                  expandedComments={expandedComments}
-                  toggleComments={toggleComments}
-                  fetchComments={fetchComments}
-                  postComment={postComment}
-                  cachedMentionOptions={cachedMentionOptions}
-                  canPost={selectedTask.status === 'OPEN'}
-                  updatesContainerRef={updatesContainerRef}
-                  handleS3UploadWithPurge={handleS3UploadWithPurge}
-                  deleteUnsavedS3File={deleteUnsavedS3File}
-                />
-
-                {selectedTask.status === 'OPEN' && (
-                  <UpdateComposer
-                    drawerFileList={drawerFileList}
-                    setDrawerFileList={setDrawerFileList}
-                    onPostUpdate={onPostUpdate}
-                    mentionOptions={cachedMentionOptions}
-                    handleS3UploadWithPurge={handleS3UploadWithPurge}
-                    deleteUnsavedS3File={deleteUnsavedS3File}
-                  />
-                )}
-              </div>
-            </motion.div>
+        {taskDetails && (
+          <div style={{ marginTop: 12 }}>
+            {(() => {
+              const isCreator = taskDetails.task?.created_by && taskDetails.task.created_by === user?.id;
+              const myParticipant = taskDetails.participants.find(p => p.id === user?.id);
+              const roles = [];
+              if (isCreator) roles.push({ label: 'Task Creator', color: roleColor('CREATOR') });
+              if (myParticipant?.role === 'ASSIGNEE') roles.push({ label: 'Assignee', color: roleColor('ASSIGNEE') });
+              else if (myParticipant?.role === 'SUBSCRIBER') roles.push({ label: 'Subscriber', color: roleColor('SUBSCRIBER') });
+              if (roles.length === 0) return null;
+              return (
+                <Flex align="center" gap={6} style={{ marginBottom: 8 }} wrap="wrap">
+                  <Text style={{ fontSize: 12 }}>Your role:</Text>
+                  {roles.map(r => <Tag key={r.label} color={r.color} style={{ margin: 0 }}>{r.label}</Tag>)}
+                </Flex>
+              );
+            })()}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Assignees: {taskDetails.participants.filter(p => p.role === 'ASSIGNEE').map(p => p.full_name).join(', ')}
+            </Text>
+            {showReminders && (
+              <>
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>Reminders: {taskDetails.reminders?.length || 0}</Text>
+              </>
+            )}
           </div>
         )}
+      </Card>
 
-        {/* Resize handle — dragging changes total width by 2x the delta so the card stays centered */}
-        <div
-          onMouseDown={startResize}
-          title="Drag to resize"
-          style={{
-            position: 'absolute', top: 0, right: -8, width: 16, height: '100%',
-            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
-          }}
-        >
-          <div style={{ width: 6, height: 64, borderRadius: 6, background: '#B3455C' }} />
-        </div>
-
-        <style>{`
-          .task-scrollbar { scrollbar-color: #B3455C transparent; scrollbar-width: thin; }
-          .task-scrollbar::-webkit-scrollbar { width: 8px; }
-          .task-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .task-scrollbar::-webkit-scrollbar-thumb { background: #B3455C; border-radius: 8px; }
-        `}</style>
-          </motion.div>
-        </motion.div>
+      {taskDetails?.attachments?.length > 0 && (
+        <>
+          <Title level={5} style={{ marginBottom: 10 }}>Task Attachments</Title>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {taskDetails.attachments.map((file, idx) => (
+              <AttachmentRow key={idx} file={file} idx={idx} />
+            ))}
+          </div>
+        </>
       )}
-    </AnimatePresence>,
-    document.body
+    </>
+  );
+
+  const activityContent = selectedTask && (
+    <>
+      <UpdateFeed
+        taskUpdates={taskUpdates}
+        loadingUpdates={loadingUpdates}
+        hasMoreUpdates={hasMoreUpdates}
+        updateOffset={updateOffset}
+        fetchTaskUpdates={fetchTaskUpdates}
+        taskId={selectedTask.id}
+        commentsMap={commentsMap}
+        commentOffsets={commentOffsets}
+        hasMoreComments={hasMoreComments}
+        loadingComments={loadingComments}
+        expandedComments={expandedComments}
+        toggleComments={toggleComments}
+        fetchComments={fetchComments}
+        postComment={postComment}
+        cachedMentionOptions={cachedMentionOptions}
+        canPost={selectedTask.status === 'OPEN'}
+        updatesContainerRef={updatesContainerRef}
+        handleS3UploadWithPurge={handleS3UploadWithPurge}
+        deleteUnsavedS3File={deleteUnsavedS3File}
+      />
+
+      {selectedTask.status === 'OPEN' && (
+        <UpdateComposer
+          drawerFileList={drawerFileList}
+          setDrawerFileList={setDrawerFileList}
+          onPostUpdate={onPostUpdate}
+          mentionOptions={cachedMentionOptions}
+          handleS3UploadWithPurge={handleS3UploadWithPurge}
+          deleteUnsavedS3File={deleteUnsavedS3File}
+        />
+      )}
+    </>
+  );
+
+  return (
+    <SlidingCardModal
+      open={open}
+      onClose={onClose}
+      title={selectedTask?.title || 'Task Details'}
+      extra={extra}
+      resetKey={selectedTask?.id}
+      defaultWidth={PANEL_DEFAULT_WIDTH}
+      minWidth={PANEL_MIN_WIDTH}
+      tabs={[
+        { key: 'overview', label: 'Overview', content: overviewContent },
+        { key: 'activity', label: 'Activity & Updates', scrollable: false, content: activityContent },
+      ]}
+    />
   );
 }

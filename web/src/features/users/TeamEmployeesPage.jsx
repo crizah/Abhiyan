@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select,Button, Typography, Tag, Avatar, Dropdown, Flex, message, ConfigProvider, Drawer } from 'antd';
-import { UserOutlined, SearchOutlined, MoreOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Table, Input, Select, Button, Typography, Tag, Avatar, Flex, message, ConfigProvider, Card, Divider, Tooltip } from 'antd';
+import { UserOutlined, SearchOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
+import InfoTooltip from '../../components/InfoTooltip';
+import { SlidingCardModal } from '../../components/SlidingCardModal';
 
 const { Title, Text } = Typography;
 
@@ -22,7 +24,6 @@ function useWindowWidth() {
 export default function TeamEmployeesPage() {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
-  const drawerWidth = isMobile ? '100%' : Math.min(Math.round(windowWidth * 0.7), 700);
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,10 +41,11 @@ export default function TeamEmployeesPage() {
   // Dynamic Team Options
   const [teamOptions, setTeamOptions] = useState([{ value: 'ALL', label: 'All My Teams' }]);
 
-  // Drawer State
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // Manage-performance modal state
+  const [isManageOpen, setIsManageOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadingUserReport, setDownloadingUserReport] = useState(false);
 
   useEffect(() => {
     fetchTeamOptions();
@@ -95,7 +97,7 @@ export default function TeamEmployeesPage() {
 
   const handleManageAccess = (record) => {
     setSelectedUser(record);
-    setIsDrawerOpen(true);
+    setIsManageOpen(true);
   };
 
   const handleDownloadAllReports = async () => {
@@ -119,19 +121,26 @@ export default function TeamEmployeesPage() {
     }
   };
 
-  const getActionMenu = (record) => (
-    <div style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px' }}>
-      <div
-        onClick={() => handleManageAccess(record)}
-        style={{ padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '4px' }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-      >
-        <BarChartOutlined style={{ color: '#fa8c16' }} />
-        <Text>View Performance</Text>
-      </div>
-    </div>
-  );
+  const handleDownloadUserReport = async () => {
+    if (!selectedUser) return;
+    setDownloadingUserReport(true);
+    try {
+      const res = await apiClient.get('/admin/reports/score-download', {
+        params: { user_id: selectedUser.id },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `score_report_${selectedUser.id.slice(0, 8)}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error('Failed to download report');
+    } finally {
+      setDownloadingUserReport(false);
+    }
+  };
 
   const columns = [
     {
@@ -176,11 +185,11 @@ export default function TeamEmployeesPage() {
     {
       title: '',
       key: 'actions',
-      width: 50,
+      width: 140,
       render: (_, record) => (
-        <Dropdown dropdownRender={() => getActionMenu(record)} trigger={['click']} placement="bottomRight">
-          <MoreOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
-        </Dropdown>
+        <Button size="small" icon={<BarChartOutlined />} onClick={() => handleManageAccess(record)}>
+          Performance
+        </Button>
       ),
     },
   ];
@@ -191,30 +200,42 @@ export default function TeamEmployeesPage() {
       maxWidth: '1200px', 
       margin: '0 auto' 
     }}>
-      <Title level={isMobile ? 4 : 3} style={{ marginBottom: '24px', marginTop: 0 }}>
-        Employees
-      </Title>
+      <Flex justify="space-between" align="center" wrap="wrap" gap={12} style={{ marginBottom: '16px' }}>
+        <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
+          Employees
+        </Title>
+        <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleDownloadAllReports}
+            loading={downloadingReport}
+            style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+          >
+            Performance Report
+          </Button>
+        </Tooltip>
+      </Flex>
 
-      <Flex gap="small" wrap="wrap" style={{ marginBottom: '24px' }} align="center">
-        <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#fa8c16', hoverBorderColor: '#fa8c16' } } }}>
+      <Flex wrap="wrap" gap={12} style={{ marginBottom: '24px' }} align="center">
+        <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#B3455C', hoverBorderColor: '#B3455C' } } }}>
           <Input
             placeholder="Search by name or email..."
             prefix={<SearchOutlined />}
-            style={{ width: isMobile ? '100%' : '300px' }}
+            style={{ flex: '2 1 220px', minWidth: 200 }}
             onChange={(e) => setSearchText(e.target.value)}
           />
         </ConfigProvider>
-        
-        <Select 
-          value={teamFilter} 
-          style={{ width: isMobile ? '100%' : 180 }} 
+
+        <Select
+          value={teamFilter}
+          style={{ flex: '1 1 160px', minWidth: 150 }}
           onChange={setTeamFilter}
           options={teamOptions}
         />
 
-        <Select 
-          value={roleFilter} 
-          style={{ width: isMobile ? '100%' : 150 }} 
+        <Select
+          value={roleFilter}
+          style={{ flex: '1 1 140px', minWidth: 130 }}
           onChange={setRoleFilter}
           options={[
             { value: 'ALL', label: 'All Roles' },
@@ -225,7 +246,7 @@ export default function TeamEmployeesPage() {
 
         <Select
           value={statusFilter}
-          style={{ width: isMobile ? '100%' : 150 }}
+          style={{ flex: '1 1 140px', minWidth: 130 }}
           onChange={setStatusFilter}
           options={[
             { value: 'ALL', label: 'All Statuses' },
@@ -234,15 +255,6 @@ export default function TeamEmployeesPage() {
             { value: 'SUSPENDED', label: 'Suspended' },
           ]}
         />
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleDownloadAllReports}
-          loading={downloadingReport}
-          style={{ marginLeft: 'auto' }}
-        >
-          {!isMobile && 'Performance Report'}
-        </Button>
       </Flex>
 
       <div style={{ overflow: 'hidden' }}>
@@ -265,19 +277,58 @@ export default function TeamEmployeesPage() {
         />
       </div>
 
-      {/* DRAWER: Manage Access */}
-      <Drawer
+      {/* PERFORMANCE — same sliding centered card pattern as Manage User on the Users page */}
+      <SlidingCardModal
+        open={isManageOpen}
+        onClose={() => setIsManageOpen(false)}
         title={selectedUser ? `Performance: ${selectedUser.full_name}` : 'Performance'}
-        placement="right"
-        width={drawerWidth}
-        onClose={() => setIsDrawerOpen(false)}
-        open={isDrawerOpen}
-        styles={{ body: { padding: isMobile ? '16px 12px' : '24px' } }}
-      >
-        {selectedUser && (
-          <ScoreBreakdown userId={selectedUser.id} basePath="/admin/employees" />
-        )}
-      </Drawer>
+        resetKey={selectedUser?.id}
+        defaultWidth={640}
+        tabs={[
+          {
+            key: 'performance',
+            label: 'Performance',
+            content: (
+              <div>
+                <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                  <Title level={5} style={{ margin: 0 }}>Performance Overview</Title>
+                  <InfoTooltip title="Performance overview of completed tasks" />
+                </Flex>
+                <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10, margin: '12px 0 20px' }}>
+                  <Text style={{ fontSize: 12 }}>
+                    Points are only granted once a task is approved. <Text strong style={{ fontSize: 12 }}>On-time completions</Text> earn a base of 10 points, plus up to 5 bonus points the earlier it's finished ahead of the due date (15 max). <Text strong style={{ fontSize: 12 }}>Late completions</Text> (approved after the due date) earn a flat 3 points. <Text strong style={{ fontSize: 12 }}>Missed deadlines</Text> and <Text strong style={{ fontSize: 12 }}>rejected submissions</Text> earn 0 points.
+                  </Text>
+                </Card>
+
+                {selectedUser && (
+                  <ScoreBreakdown userId={selectedUser.id} basePath="/admin/employees" showDownload={false} />
+                )}
+
+                <Divider />
+
+                <Card size="small" style={{ border: '1px solid rgba(24, 24, 27, 0.08)', borderRadius: 10 }}>
+                  <Flex align="center" gap={6} style={{ marginBottom: 4 }}>
+                    <DownloadOutlined style={{ color: '#B3455C' }} />
+                    <Text strong style={{ fontSize: 14 }}>Download Report</Text>
+                    <InfoTooltip title="This generates the performance report for this user in CSV format." />
+                  </Flex>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                    Export this user's completed task history and points as a CSV file.
+                  </Text>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadUserReport}
+                    loading={downloadingUserReport}
+                    style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                  >
+                    Download CSV
+                  </Button>
+                </Card>
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

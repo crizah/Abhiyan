@@ -140,41 +140,45 @@ export function SlidingCardModal({
               </Flex>
             </Flex>
 
-            {/* Tab toggle — floating glass-bubble treatment, same as the app header */}
-            <div style={{ padding: '12px 24px 0' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  gap: 4,
-                  padding: 4,
-                  borderRadius: 999,
-                  background: 'rgba(255, 255, 255, 0.22)',
-                  backdropFilter: 'blur(2px)',
-                  WebkitBackdropFilter: 'blur(2px)',
-                  border: '1px solid rgba(24, 24, 27, 0.12)',
-                }}
-              >
-                {tabs.map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveKey(tab.key)}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: 999,
-                      border: 'none',
-                      background: activeKey === tab.key ? '#B3455C' : 'transparent',
-                      color: activeKey === tab.key ? '#FFFFFF' : 'rgba(24, 24, 27, 0.55)',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      transition: 'background 0.15s ease, color 0.15s ease',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+            {/* Tab toggle — floating glass-bubble treatment, same as the app header. Skipped
+                entirely for a single-tab modal, where a lone always-active pill would just be
+                visual noise. */}
+            {n > 1 && (
+              <div style={{ padding: '12px 24px 0' }}>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    gap: 4,
+                    padding: 4,
+                    borderRadius: 999,
+                    background: 'rgba(255, 255, 255, 0.22)',
+                    backdropFilter: 'blur(2px)',
+                    WebkitBackdropFilter: 'blur(2px)',
+                    border: '1px solid rgba(24, 24, 27, 0.12)',
+                  }}
+                >
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveKey(tab.key)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 999,
+                        border: 'none',
+                        background: activeKey === tab.key ? '#B3455C' : 'transparent',
+                        color: activeKey === tab.key ? '#FFFFFF' : 'rgba(24, 24, 27, 0.55)',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease, color 0.15s ease',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
               {/* Sliding track: every panel is always mounted, side by side, translated as one

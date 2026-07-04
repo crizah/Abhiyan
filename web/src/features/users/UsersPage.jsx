@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select, Typography, Tag, Avatar, Flex, message, ConfigProvider, Button, Card, Divider, Popconfirm } from 'antd';
+import { Table, Input, Select, Typography, Tag, Avatar, Flex, message, ConfigProvider, Button, Card, Divider, Popconfirm, Tooltip } from 'antd';
 import { UserOutlined, SearchOutlined, SettingOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
@@ -250,19 +250,31 @@ export default function UsersPage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={3}>Users Directory</Title>
+      <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
+        <Title level={3} style={{ margin: 0 }}>Users Directory</Title>
+        <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleDownloadOrgReport}
+            loading={downloadingReport}
+            style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+          >
+            Performance Report
+          </Button>
+        </Tooltip>
+      </Flex>
 
-      <Flex gap="middle" style={{ marginBottom: '24px' }} align="center">
+      <Flex wrap="wrap" gap={12} style={{ marginBottom: '24px' }} align="center">
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#B3455C', hoverBorderColor: '#B3455C' } } }}>
           <Input
             placeholder="Search by name or email..."
             prefix={<SearchOutlined />}
-            style={{ width: '300px' }}
+            style={{ flex: '1 1 220px', minWidth: 200 }}
             onChange={(e) => setSearchText(e.target.value)}
           />
         </ConfigProvider>
 
-        <Select defaultValue="ALL" style={{ width: 150 }} onChange={setRoleFilter}
+        <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setRoleFilter}
           options={[
             { value: 'ALL', label: 'All Roles' },
             { value: 'SUPER_ADMIN', label: 'Super Admin' },
@@ -271,7 +283,7 @@ export default function UsersPage() {
           ]}
         />
 
-        <Select defaultValue="ALL" style={{ width: 150 }} onChange={setStatusFilter}
+        <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setStatusFilter}
           options={[
             { value: 'ALL', label: 'All Statuses' },
             { value: 'ACTIVE', label: 'Active' },
@@ -279,15 +291,6 @@ export default function UsersPage() {
             { value: 'SUSPENDED', label: 'Suspended' },
           ]}
         />
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleDownloadOrgReport}
-          loading={downloadingReport}
-          style={{ marginLeft: 'auto', background: '#B3455C', border: 'none', color: '#FFFFFF' }}
-        >
-          Performance Report
-        </Button>
       </Flex>
 
       <Table 

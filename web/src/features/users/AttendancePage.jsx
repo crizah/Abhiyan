@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table, Select, DatePicker, Button, Tag, Flex, Typography,
-  Drawer, Statistic, Row, Col, message, theme, Divider, Avatar
+  message, theme, Avatar, Card, Tooltip as AntTooltip
 } from 'antd';
 import {
   DownloadOutlined, UserOutlined, CalendarOutlined,
 } from '@ant-design/icons';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import dayjs from 'dayjs';
 import apiClient from '../../config/axios';
+import { SlidingCardModal } from '../../components/SlidingCardModal';
+import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
 
 const { Title, Text } = Typography;
 
+const PRESENT_COLOR = fulfillmentColor('COMPLETED');
+const ABSENT_COLOR = reviewStatusColor('REJECTED');
+
 const STATUS_TAG = {
-  present: <Tag color="success">Present</Tag>,
-  absent:  <Tag color="error">Absent</Tag>,
+  present: <Tag color={PRESENT_COLOR}>Present</Tag>,
+  absent:  <Tag color={ABSENT_COLOR}>Absent</Tag>,
 };
 
 
@@ -109,8 +114,8 @@ export default function AttendancePage() {
 
   const pieData = userSummary
     ? [
-        { name: 'Present', value: userSummary.present_count || 0, color: '#52c41a' },
-        { name: 'Absent',  value: userSummary.absent_count  || 0, color: '#ff4d4f' },
+        { name: 'Present', value: userSummary.present_count || 0, color: PRESENT_COLOR },
+        { name: 'Absent',  value: userSummary.absent_count  || 0, color: ABSENT_COLOR },
       ].filter(d => d.value > 0)
     : [];
 
@@ -175,13 +180,16 @@ export default function AttendancePage() {
             options={teamOptions}
             style={{ minWidth: 160 }}
           />
-          <Button
-            icon={<DownloadOutlined />}
-            loading={downloadingReport}
-            onClick={handleDownloadReport}
-          >
-            Generate Report
-          </Button>
+          <AntTooltip title="Generates the attendance report for the selected date and team filter">
+            <Button
+              icon={<DownloadOutlined />}
+              loading={downloadingReport}
+              onClick={handleDownloadReport}
+              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+            >
+              Generate Report
+            </Button>
+          </AntTooltip>
         </Flex>
       </Flex>
 
@@ -194,69 +202,99 @@ export default function AttendancePage() {
         size="middle"
       />
 
-      <Drawer
+      <SlidingCardModal
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setUserSummary(null); setSelectedUser(null); }}
         title={selectedUser ? `${selectedUser.first_name} ${selectedUser.last_name}` : 'User Report'}
-        width="60vw"
+        resetKey={selectedUser?.id}
+        defaultWidth={640}
         extra={
-          <Button
-            icon={<DownloadOutlined />}
-            loading={downloadingUserReport}
-            onClick={handleDownloadUserReport}
-            size="small"
-          >
-            Download Report
-          </Button>
+          <AntTooltip title="Download this user's attendance report as a CSV file">
+            <Button
+              icon={<DownloadOutlined />}
+              loading={downloadingUserReport}
+              onClick={handleDownloadUserReport}
+              size="small"
+              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+            >
+              Download Report
+            </Button>
+          </AntTooltip>
         }
-      >
-        {summaryLoading && <Text type="secondary">Loading…</Text>}
+        tabs={[
+          {
+            key: 'report',
+            label: 'Report',
+            content: (
+              <div>
+                {summaryLoading && <Text type="secondary">Loading…</Text>}
 
-        {userSummary && !summaryLoading && (
-          <Flex vertical gap={token.marginLG}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Statistic title="Days Present" value={userSummary.present_count} valueStyle={{ color: token.colorSuccess }} />
-              </Col>
-              <Col span={12}>
-                <Statistic title="Days Absent" value={userSummary.absent_count} valueStyle={{ color: token.colorError }} />
-              </Col>
-            </Row>
+                {userSummary && !summaryLoading && (
+                  <Flex vertical gap={20}>
+                    <Flex gap={12}>
+                      <div style={{
+                        flex: 1, padding: '16px 20px',
+                        border: '1px solid rgba(24, 24, 27, 0.08)', borderRadius: 12,
+                        backgroundColor: '#fafafa',
+                      }}>
+                        <Text style={{ fontSize: 12, color: 'rgba(24, 24, 27, 0.55)' }}>Days Present</Text>
+                        <div style={{ fontSize: 28, fontWeight: 600, color: PRESENT_COLOR, lineHeight: 1.3 }}>
+                          {userSummary.present_count}
+                        </div>
+                      </div>
+                      <div style={{
+                        flex: 1, padding: '16px 20px',
+                        border: '1px solid rgba(24, 24, 27, 0.08)', borderRadius: 12,
+                        backgroundColor: '#fafafa',
+                      }}>
+                        <Text style={{ fontSize: 12, color: 'rgba(24, 24, 27, 0.55)' }}>Days Absent</Text>
+                        <div style={{ fontSize: 28, fontWeight: 600, color: ABSENT_COLOR, lineHeight: 1.3 }}>
+                          {userSummary.absent_count}
+                        </div>
+                      </div>
+                    </Flex>
 
-            <Divider style={{ margin: 0 }} />
+                    {pieData.length > 0 && (
+                      <Card size="small" style={{ backgroundColor: '#fafafa', border: 'none', borderRadius: 10 }}>
+                        <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Attendance Breakdown</Text>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                              {pieData.map((entry, i) => (
+                                <Cell key={i} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </Card>
+                    )}
 
-            {pieData.length > 0 && (
-              <>
-                <Text strong>Attendance Breakdown</Text>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                      {pieData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </>
-            )}
-
-            <Divider style={{ margin: 0 }} />
-
-            <Text strong>Recent History</Text>
-            <Flex vertical gap={4}>
-              {(userSummary.history || []).slice(0, 20).map((h) => (
-                <Flex key={h.date} justify="space-between" align="center">
-                  <Text style={{ fontSize: 13 }}>{h.date}</Text>
-                  {STATUS_TAG[h.present ? 'present' : 'absent']}
-                </Flex>
-              ))}
-              {!userSummary.history?.length && <Text type="secondary">No history found.</Text>}
-            </Flex>
-          </Flex>
-        )}
-      </Drawer>
+                    <div>
+                      <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Recent History</Text>
+                      <Flex vertical gap={6}>
+                        {(userSummary.history || []).slice(0, 20).map((h) => (
+                          <Flex
+                            key={h.date}
+                            justify="space-between"
+                            align="center"
+                            style={{ padding: '8px 12px', borderRadius: 8, backgroundColor: '#fafafa' }}
+                          >
+                            <Text style={{ fontSize: 13 }}>{dayjs(h.date).format('MMM D, YYYY')}</Text>
+                            {STATUS_TAG[h.present ? 'present' : 'absent']}
+                          </Flex>
+                        ))}
+                        {!userSummary.history?.length && <Text type="secondary">No history found.</Text>}
+                      </Flex>
+                    </div>
+                  </Flex>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
     </Flex>
   );
 }

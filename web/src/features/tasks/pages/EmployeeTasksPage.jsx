@@ -230,7 +230,7 @@ export default function EmployeeTasksPage() {
         user={user}
         extra={canSubmit && (
           <Popconfirm title="Submit this task for review?" onConfirm={submitTaskForReview}>
-            <Button type="primary" style={{ backgroundColor: '#52c41a' }}>Submit for Review</Button>
+            <Button type="primary" style={{ backgroundColor: '#B3455C', border: 'none' }}>Submit for Review</Button>
           </Popconfirm>
         )}
         taskUpdates={taskUpdates}

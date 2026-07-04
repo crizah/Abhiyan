@@ -547,9 +547,9 @@ export default function TeamTasksPage() {
             {selectedTask?.status === 'OPEN' ? (
               selectedTask?.review_status === 'PENDING' ? (
                 <>
-                  <Button danger onClick={openActionModal}>Reject</Button>
+                  <Button onClick={openActionModal} style={{ background: 'transparent', border: '1px solid #B3455C', color: '#B3455C' }}>Reject</Button>
                   <Popconfirm title="Approve and close this task?" onConfirm={handleApprove}>
-                    <Button type="primary" style={{ backgroundColor: '#52c41a' }}>Approve</Button>
+                    <Button style={{ backgroundColor: '#B3455C', border: 'none', color: '#FFFFFF' }}>Approve</Button>
                   </Popconfirm>
                 </>
               ) : (

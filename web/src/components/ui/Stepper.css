@@ -1,0 +1,146 @@
+.outer-container {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.step-circle-container {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 20px;
+  background-color: #FFFFFF;
+  box-shadow: 0 4px 20px rgba(24, 24, 27, 0.06);
+}
+
+.step-indicator-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.step-content-default {
+  position: relative;
+  overflow: hidden;
+}
+
+.step-default {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.footer-container {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.footer-nav {
+  margin-top: 2.5rem;
+  display: flex;
+}
+
+.footer-nav.spread {
+  justify-content: space-between;
+}
+
+.footer-nav.end {
+  justify-content: flex-end;
+}
+
+.back-button {
+  transition: all 200ms;
+  border-radius: 10px;
+  padding: 8px 20px;
+  background: transparent;
+  border: 1px solid #B3455C;
+  color: #B3455C;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background: rgba(179, 69, 92, 0.08);
+}
+
+.back-button.inactive {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.next-button {
+  transition: all 200ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background-color: #B3455C;
+  color: #fff;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 8px 20px;
+  cursor: pointer;
+}
+
+.next-button:hover {
+  background-color: #9A3A4E;
+}
+
+.next-button:active {
+  background-color: #7F2F40;
+}
+
+.step-indicator {
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+
+.step-indicator-inner {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.active-dot {
+  height: 0.75rem;
+  width: 0.75rem;
+  border-radius: 9999px;
+  background-color: #fff;
+}
+
+.step-number {
+  font-size: 0.875rem;
+}
+
+.step-connector {
+  position: relative;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+  height: 0.125rem;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background-color: rgba(24, 24, 27, 0.12);
+}
+
+.step-connector-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+}
+
+.check-icon {
+  height: 1rem;
+  width: 1rem;
+  color: #fff;
+}

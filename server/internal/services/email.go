@@ -33,7 +33,7 @@ func NewEmailService(ctx context.Context, senderEmail string) (*EmailService, er
 func (es *EmailService) SendReminderEmail(ctx context.Context, recipientEmail string, taskName string, taskDeadline string) error {
 	subject := "Task Reminder!"
 	htmlBody := fmt.Sprintf(`
-		<h2>This is a reminder to complete you task %s. Please complete the given task before the deadline %s and submit for admin review.</h2>
+		<h1>This is a reminder to complete you task %s. Please complete the given task before the deadline %s and submit for admin review.</h1>
 	`, taskName, taskDeadline)
 
 	input := &ses.SendEmailInput{

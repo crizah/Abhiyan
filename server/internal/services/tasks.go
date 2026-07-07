@@ -146,7 +146,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	}
 
 	// 2. Add Assignees and get their email ids
-	var assigneeEmails []string
+	// var assigneeEmails []string
 	for _, assigneeID := range req.AssigneeIDs {
 		uID := util.ParseUUID(assigneeID)
 		err := qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{
@@ -158,8 +158,8 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 			return db.Task{}, err
 		}
 
-		email, _ := qtx.GetEmailByUser(ctx, uID) // n+1
-		assigneeEmails = append(assigneeEmails, email)
+		// email, _ := qtx.GetEmailByUser(ctx, uID) // n+1
+		// assigneeEmails = append(assigneeEmails, email)
 
 	}
 

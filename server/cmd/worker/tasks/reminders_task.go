@@ -8,6 +8,7 @@ import (
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
+	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/crizah/Onion/app"
 )
 
@@ -38,6 +39,8 @@ func NewPollDueRemindersTask(dbConn *sql.DB, queries *db.Queries, onionApp *app.
 		log.Printf("[Poller] Found %d due reminders! Dispatching \n", len(reminders))
 
 		for _, rem := range reminders {
+			taskDeadline, _ := qtx.GetTaskDeadline(ctx, rem.TaskID)
+			formattedDeadline := util.FormatDeadline(taskDeadline)
 
 			if rem.Channel == db.ReminderChannelWHATSAPP {
 				// send to whatsapp
@@ -50,8 +53,9 @@ func NewPollDueRemindersTask(dbConn *sql.DB, queries *db.Queries, onionApp *app.
 					}
 
 					err := onionApp.Enqueue(ctx, "send_reminder_whatsapp", map[string]any{
-						"rPN":      n.String,
-						"taskName": rem.TaskTitle,
+						"rPN":          n.String,
+						"taskName":     rem.TaskTitle,
+						"taskDeadline": formattedDeadline,
 					})
 					if err != nil {
 						log.Printf("[Poller] Failed to enqueue whatsapp for %s: %v\n", n.String, err)
@@ -69,8 +73,9 @@ func NewPollDueRemindersTask(dbConn *sql.DB, queries *db.Queries, onionApp *app.
 
 				for _, email := range assigneeEmails {
 					err := onionApp.Enqueue(ctx, "send_reminder_email", map[string]any{
-						"email":    email,
-						"taskName": rem.TaskTitle,
+						"email":        email,
+						"taskName":     rem.TaskTitle,
+						"taskDeadline": formattedDeadline,
 					})
 					if err != nil {
 						log.Printf("[Poller] Failed to enqueue email for %s: %v\n", email, err)

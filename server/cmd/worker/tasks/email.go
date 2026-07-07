@@ -73,10 +73,15 @@ func NewSendReminderEmailTask(emailService *services.EmailService) func(context.
 			return nil, fmt.Errorf("missing or invalid 'taskName' argument")
 		}
 
+		taskDeadline, ok := args["taskDeadline"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'taskDeadline' argument")
+		}
+
 		fmt.Printf("Attempting to send reminder email to %s...\n", email)
 
 		// 2. AWS SES
-		err := emailService.SendReminderEmail(ctx, email, taskName)
+		err := emailService.SendReminderEmail(ctx, email, taskName, taskDeadline)
 		if err != nil {
 			fmt.Printf("Failed to send email to %s: %v\n", email, err)
 			return nil, err

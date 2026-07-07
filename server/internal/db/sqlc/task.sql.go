@@ -629,6 +629,17 @@ func (q *Queries) GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid
 	return items, nil
 }
 
+const getTaskDeadline = `-- name: GetTaskDeadline :one
+SELECT due_date from tasks WHERE id = $1
+`
+
+func (q *Queries) GetTaskDeadline(ctx context.Context, id uuid.UUID) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getTaskDeadline, id)
+	var due_date sql.NullTime
+	err := row.Scan(&due_date)
+	return due_date, err
+}
+
 const getTaskDetailsForNotifications = `-- name: GetTaskDetailsForNotifications :one
 SELECT title FROM tasks WHERE id = $1
 `

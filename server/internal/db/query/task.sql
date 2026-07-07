@@ -112,6 +112,9 @@ LIMIT $2 OFFSET $3;
 -- name: UpdateTaskDeadline :exec
 UPDATE tasks SET due_date = $2 WHERE id = $1;
 
+-- name: GetTaskDeadline :one
+SELECT due_date from tasks WHERE id = $1;
+
 -- name: AddUpdateComment :one
 INSERT INTO task_update_comments (task_update_id, user_id, content)
 VALUES ($1, $2, $3) RETURNING id;

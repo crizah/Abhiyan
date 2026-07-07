@@ -21,9 +21,15 @@ func NewSendReminderWhatsappTask(whatsappService *services.WhatsappService) func
 			return nil, fmt.Errorf("missing or invalid 'taskName' argument")
 		}
 
+		taskDeadline, ok := args["taskDeadline"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'taskDeadline' argument")
+
+		}
+
 		fmt.Printf("Attempting to send reminder whatsapp to %s...\n", n)
 
-		err := whatsappService.SendReminderWhatsapp(ctx, n, taskName)
+		err := whatsappService.SendReminderWhatsapp(ctx, n, taskName, taskDeadline)
 		if err != nil {
 			fmt.Printf("Failed to send whatsapp to %s: %v\n", n, err)
 			return nil, err

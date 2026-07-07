@@ -30,11 +30,11 @@ func NewEmailService(ctx context.Context, senderEmail string) (*EmailService, er
 	}, nil
 }
 
-func (es *EmailService) SendReminderEmail(ctx context.Context, recipientEmail string, taskName string) error {
-	subject := "Reminder to complete task "
+func (es *EmailService) SendReminderEmail(ctx context.Context, recipientEmail string, taskName string, taskDeadline string) error {
+	subject := "Task Reminder!"
 	htmlBody := fmt.Sprintf(`
-		<h2>You have a pending task, name: %s</h2>
-	`, taskName)
+		<h2>This is a reminder to complete you task %s. Please complete the given task before the deadline %s and submit for admin review.</h2>
+	`, taskName, taskDeadline)
 
 	input := &ses.SendEmailInput{
 		Source: aws.String(es.sender),

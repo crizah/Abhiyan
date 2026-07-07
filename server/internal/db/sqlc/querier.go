@@ -68,6 +68,7 @@ type Querier interface {
 	GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error)
 	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskCommentAttachmentsRow, error)
+	GetTaskDeadline(ctx context.Context, id uuid.UUID) (sql.NullTime, error)
 	GetTaskDetailsForNotifications(ctx context.Context, id uuid.UUID) (string, error)
 	GetTaskParticipants(ctx context.Context, taskID uuid.UUID) ([]GetTaskParticipantsRow, error)
 	GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Reminder, error)

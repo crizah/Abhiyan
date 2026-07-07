@@ -26,7 +26,7 @@ func NewWhatsappService(ctx context.Context, at string, bp string) *WhatsappServ
 
 }
 
-func (w *WhatsappService) SendReminderWhatsapp(ctx context.Context, rPN string, taskName string) error {
+func (w *WhatsappService) SendReminderWhatsapp(ctx context.Context, rPN string, taskName string, taskDeadline string) error {
 	// this is only test code, not sending actual messages rn
 	// 1. Parse the phone number
 	formattedNumber := util.ParsePhoneNumber(rPN)
@@ -34,19 +34,35 @@ func (w *WhatsappService) SendReminderWhatsapp(ctx context.Context, rPN string, 
 	// 2. Build the API URL
 	url := fmt.Sprintf("https://graph.facebook.com/v17.0/%s/messages", w.numberId)
 
-	// 3. Construct the JSON payload for a standard text message
+	// 3. Construct the JSON payload your custom template
 	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"to":                formattedNumber,
 		"type":              "template",
 		"template": map[string]any{
-			"name": "hello_world",
+			"name": "task_reminder",
 			"language": map[string]string{
-				"code": "en_US",
+				"code": "en",
+			},
+			"components": []map[string]any{
+				{
+					"type": "body",
+					"parameters": []map[string]string{
+						{
+							"type":           "text",
+							"parameter_name": "task_name",
+							"text":           taskName,
+						},
+						{
+							"type":           "text",
+							"parameter_name": "task_deadline",
+							"text":           taskDeadline,
+						},
+					},
+				},
 			},
 		},
 	}
-
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal whatsapp payload: %w", err)

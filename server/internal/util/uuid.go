@@ -1,6 +1,7 @@
 package util
 
 import (
+	"database/sql"
 	"strings"
 
 	"github.com/google/uuid"
@@ -22,4 +23,13 @@ func ParsePhoneNumber(rawNumber string) string {
 
 	// Prepend the 91 country code
 	return "91" + cleanNumber
+}
+
+func FormatDeadline(nt sql.NullTime) string {
+	if !nt.Valid {
+		return "No deadline set"
+	}
+
+	// Formats to: "Jan 02, 2006 at 03:04 PM"
+	return nt.Time.Format("Jan 02, 2006 at 03:04 PM")
 }

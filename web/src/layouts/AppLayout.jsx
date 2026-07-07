@@ -115,14 +115,9 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
   };
 
   const getNotificationStyle = (item) => {
-    if (item.is_system) return { bg: '#fffbe6', border: '#fa8c16' }; 
+    if (item.is_system) return { bg: 'rgba(107, 33, 168, 0.06)', border: '#6B21A8' };
     if (item.is_read) return { bg: 'transparent', border: 'transparent' };
-    
-    switch(item.type) {
-      case 'SUCCESS': return { bg: '#f6ffed', border: '#52c41a' }; 
-      case 'WARNING': return { bg: '#fff2f0', border: '#f5222d' }; 
-      default: return { bg: '#e6f7ff', border: '#1890ff' }; 
-    }
+    return { bg: 'rgba(30, 58, 138, 0.06)', border: '#1E3A8A' };
   };
 
   const notificationDropdown = (
@@ -146,7 +141,7 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
       </div>
       
       {/* Scrollable Body */}
-      <div style={{ maxHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div className="notif-scrollbar" style={{ maxHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
         {notifications.length === 0 ? (
           <div style={{ padding: '32px 24px', textAlign: 'center' }}>
             <BellOutlined style={{ fontSize: '24px', color: token.colorTextQuaternary, marginBottom: '8px' }} />
@@ -178,7 +173,7 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
                           <Text strong style={{ fontSize: '13px', color: token.colorText, lineHeight: '1.2' }}>
                             {item.title}
                           </Text>
-                          {item.is_system && <Tag color="orange" style={{ margin: 0, fontSize: '10px', lineHeight: '14px', padding: '0 4px' }}>System</Tag>}
+                          {item.is_system && <Tag color="#6B21A8" style={{ margin: 0, fontSize: '10px', lineHeight: '14px', padding: '0 4px' }}>System</Tag>}
                         </Flex>
                        <Text type="secondary" style={{ fontSize: '11px', color: 'green', whiteSpace: 'nowrap', marginLeft: '8px' }}>
   {item.is_system ? 'Live Queue' : formatTimeAgo(item.created_at)}
@@ -210,6 +205,13 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
           />
         )}
       </div>
+
+      <style>{`
+        .notif-scrollbar { scrollbar-color: #B3455C transparent; scrollbar-width: thin; }
+        .notif-scrollbar::-webkit-scrollbar { width: 8px; }
+        .notif-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .notif-scrollbar::-webkit-scrollbar-thumb { background: #B3455C; border-radius: 8px; }
+      `}</style>
     </div>
   );
 

@@ -1,0 +1,29 @@
+.abhiyan-logo {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.abhiyan-logo-scale {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  height: 120px;
+  transform-origin: center center;
+}
+
+.circular-text.abhiyan-logo-circular {
+  width: 120px;
+  height: 120px;
+  color: #B3455C;
+  cursor: pointer;
+}
+
+.circular-text.abhiyan-logo-circular span {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #9A3A4E;
+}

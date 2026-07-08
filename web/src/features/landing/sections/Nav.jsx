@@ -1,21 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import CircularText from '../../../components/ui/CircularText';
+import Logo from '../../../components/Logo';
 
 export default function Nav() {
   return (
     <header className="landing-nav">
       <Link to="/" className="landing-nav-mark" aria-label="Home">
-        <span className="nav-logo-clip">
-          <div className="nav-logo-scale">
-            <CircularText
-              text=" ABHIYAN*ABHIYAN*"
-              onHover="speedUp"
-              spinDuration={20}
-              className="nav-logo-circular"
-            />
-          </div>
-        </span>
+        <Logo size={34} />
         <span>Abhiyan</span>
       </Link>
 

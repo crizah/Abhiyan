@@ -4,6 +4,7 @@ import { App, Button, Flex, Form, Input, Typography, theme, Row, Col } from 'ant
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api';
 import PixelBlast from '../../../components/ui/PixelBlast';
+import Logo from '../../../components/Logo';
 
 const { Title, Text } = Typography;
 
@@ -124,18 +125,7 @@ export default function RegisterOrgPage() {
           <div className="register-form-container">
             <Flex vertical gap={token.marginLG}>
               <Flex vertical gap={token.marginXS} align="center" style={{ textAlign: 'center' }}>
-                <svg
-                  className="register-logo-mark"
-                  width="44"
-                  height="44"
-                  viewBox="0 0 44 44"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
-                  <rect x="4" y="4" width="26" height="26" rx="8" transform="rotate(-8 17 17)" fill={token.colorText} />
-                  <rect x="16" y="16" width="22" height="22" rx="7" transform="rotate(14 27 27)" fill={token.colorPrimary} />
-                </svg>
+                <Logo size={44} />
                 <Title level={3} style={{ margin: 0, color: token.colorText, letterSpacing: '-0.02em' }}>
                   Create Organization
                 </Title>

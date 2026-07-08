@@ -4,6 +4,7 @@ import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
 import PixelBlast from '../../../components/ui/PixelBlast';
+import Logo from '../../../components/Logo';
 
 const { Title, Text } = Typography;
 
@@ -167,18 +168,7 @@ export default function AcceptInvitePage() {
           <div className="invite-form-container">
             <Flex vertical gap={themeToken.marginXL}>
               <Flex vertical gap={themeToken.marginXS} align="center" style={{ textAlign: 'center' }}>
-                <svg
-                  className="invite-logo-mark"
-                  width="44"
-                  height="44"
-                  viewBox="0 0 44 44"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
-                  <rect x="4" y="4" width="26" height="26" rx="8" transform="rotate(-8 17 17)" fill={themeToken.colorText} />
-                  <rect x="16" y="16" width="22" height="22" rx="7" transform="rotate(14 27 27)" fill={themeToken.colorPrimary} />
-                </svg>
+                <Logo size={44} />
 
                 {invalid ? (
                   <>

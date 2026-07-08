@@ -184,11 +184,58 @@
   color: var(--text);
 }
 
+.landing-hero-content h1 em {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.landing-hero-rotating.text-rotate {
+  display: inline-flex;
+  align-items: baseline;
+  vertical-align: baseline;
+  perspective: 400px;
+}
+
+.landing-hero-rotating-char {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
 .landing-hero-sub {
   margin: 0;
   font-size: 18px;
   line-height: 1.5;
   color: var(--text-secondary);
+  min-height: 3em;
+}
+
+.landing-hero-sub em {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent-deep);
+}
+
+.landing-hero-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: landing-cursor-blink 0.9s steps(1) infinite;
+}
+
+@keyframes landing-cursor-blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .landing-hero-actions {

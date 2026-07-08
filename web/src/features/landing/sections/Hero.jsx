@@ -32,9 +32,9 @@ export default function Hero() {
           <Link to="/register-org" className="landing-btn landing-btn-primary">
             Get Started
           </Link>
-          <Link to="/features" className="landing-btn landing-btn-ghost">
+          <a href="#features" className="landing-btn landing-btn-ghost">
             Explore Features
-          </Link>
+          </a>
         </div>
       </div>
     </section>

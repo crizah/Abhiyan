@@ -7,7 +7,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages & Layouts
 import LandingPage from './features/landing/LandingPage';
-import FeaturesPage from './features/landing/FeaturesPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterOrgPage from './features/auth/pages/RegisterOrgPage';
 import AppLayout from './layouts/AppLayout';
@@ -67,7 +66,6 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<RootRoute />} />
-              <Route path="/features" element={<FeaturesPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register-org" element={<RegisterOrgPage />} />
               <Route path="/accept-invite" element={<AcceptInvitePage />} />

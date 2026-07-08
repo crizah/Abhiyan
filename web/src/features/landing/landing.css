@@ -11,7 +11,6 @@
   min-height: 100vh;
   background-color: var(--bg);
   color: var(--text);
-  overflow-x: hidden;
 }
 
 .landing-page * {
@@ -60,6 +59,41 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* CircularText renders crisp at a real font size, then this wrapper scales the
+   whole rendered layer down — avoids the sub-pixel jitter of rotating ~5px text. */
+.nav-logo-clip {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.nav-logo-scale {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  height: 120px;
+  transform: translate(-50%, -50%) scale(0.2833);
+  transform-origin: center center;
+}
+
+.circular-text.nav-logo-circular {
+  width: 120px;
+  height: 120px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.circular-text.nav-logo-circular span {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--accent-deep);
 }
 
 .landing-nav-mark span {
@@ -220,6 +254,212 @@
   color: var(--text);
 }
 
+/* ---------- Features scroll reveal ---------- */
+.fscroll-intro {
+  position: relative;
+  z-index: 1;
+  padding: 140px 24px 60px;
+  text-align: center;
+}
+
+.fscroll-heading-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin-bottom: 14px;
+}
+
+.fscroll-intro h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.fscroll-intro h2 em {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.fscroll {
+  position: relative;
+}
+
+.fscroll-sticky {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--bg);
+}
+
+.fscroll-texture {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#18181B22 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.fscroll-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.fscroll-bg {
+  position: absolute;
+  inset: 0;
+}
+
+.fscroll-numeral {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: min(38vw, 420px);
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+.fscroll-numeral-right {
+  right: -4vw;
+}
+
+.fscroll-numeral-left {
+  left: -4vw;
+}
+
+.fscroll-doodle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(38vw, 420px);
+  height: min(38vw, 420px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.fscroll-doodle-right {
+  right: 2vw;
+}
+
+.fscroll-doodle-left {
+  left: 2vw;
+}
+
+.fscroll-text {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(440px, 42vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 2;
+}
+
+.fscroll-text-left {
+  left: max(6vw, 40px);
+}
+
+.fscroll-text-right {
+  right: max(6vw, 40px);
+  align-items: flex-end;
+  text-align: right;
+}
+
+.fscroll-kicker {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.fscroll-text-right .fscroll-kicker {
+  align-self: flex-end;
+}
+
+.fscroll-text h3 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.fscroll-text p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 42ch;
+}
+
+/* Center timeline */
+.fscroll-timeline {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 62vh;
+  width: 3px;
+  z-index: 3;
+}
+
+.fscroll-timeline-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 24, 27, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fscroll-timeline-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: top;
+  border-radius: 3px;
+  box-shadow: 0 0 12px rgba(179, 69, 92, 0.35);
+}
+
+.fscroll-node-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 6px rgba(179, 69, 92, 0.35);
+  z-index: 3;
+}
+
+.fscroll-leader {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px rgba(179, 69, 92, 0.16), 0 2px 10px rgba(179, 69, 92, 0.45);
+  z-index: 4;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
   .landing-nav {
@@ -229,5 +469,61 @@
 
   .landing-nav-links {
     display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .fscroll {
+    height: auto !important;
+  }
+
+  .fscroll-sticky {
+    position: relative;
+    top: auto;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 64px;
+    padding: 40px 0 80px;
+  }
+
+  .fscroll-texture {
+    display: none;
+  }
+
+  .fscroll-timeline {
+    display: none;
+  }
+
+  .fscroll-layer {
+    position: relative !important;
+    inset: auto;
+    opacity: 1 !important;
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+  }
+
+  .fscroll-text,
+  .fscroll-text-left,
+  .fscroll-text-right {
+    position: relative !important;
+    top: auto;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    width: 100%;
+    padding: 0 28px;
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+
+  .fscroll-text-right .fscroll-kicker {
+    align-self: flex-start;
+  }
+
+  .fscroll-numeral,
+  .fscroll-doodle {
+    opacity: 0.5;
   }
 }

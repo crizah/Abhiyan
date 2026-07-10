@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Flex, Typography, Spin, Button, theme } from 'antd';
+import { App, Modal, Flex, Typography, Spin, Button, theme } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled, ReloadOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { attendanceAPI } from '../features/auth/api';
@@ -10,6 +10,7 @@ const { Text, Title } = Typography;
 export default function AttendanceCapture() {
   const { user } = useAuth();
   const { token } = theme.useToken();
+  const { message } = App.useApp();
 
   const [modalOpen, setModalOpen] = useState(false);
   // screen: 'capture' | 'submitting' | 'matched' | 'unmatched'
@@ -55,7 +56,8 @@ export default function AttendanceCapture() {
     try {
       await attendanceAPI.markAttendance(object_key);
       startPolling();
-    } catch {
+    } catch (error) {
+      message.error(error.response?.data?.error || 'Failed to mark attendance.');
       setScreen('capture');
     }
   };

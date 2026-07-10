@@ -1,6 +1,6 @@
-output "api_url" {
-  value = module.routing.api_url
-}
+# output "api_url" {
+#   value = module.routing.api_url
+# }
 
 output "worker_ecr_url" {
   value = module.compute.worker_ecr_url

@@ -67,14 +67,14 @@ module "compute" {
   depends_on = [module.data]
 }
 
-module "routing" {
-  source = "./modules/routing"
+# module "routing" {
+#   source = "./modules/routing"
 
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
+#   providers = {
+#     aws           = aws
+#     aws.us_east_1 = aws.us_east_1
+#   }
 
-  domain         = var.domain
-  api_gateway_id = module.compute.api_gateway_id
-}
+#   domain         = var.domain
+#   api_gateway_id = module.compute.api_gateway_id
+# }

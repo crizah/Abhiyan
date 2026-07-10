@@ -1,6 +1,6 @@
 // src/features/auth/pages/LoginPage.jsx
-import React, { useState } from 'react';
-import { App, Button, Flex, Form, Input, Typography, theme } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { App, Button, Divider, Flex, Form, Input, Typography, theme } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { authAPI } from '../api';
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const googleButtonRef = useRef(null);
 
   const onFinish = async (values) => {
     try {
@@ -31,6 +32,61 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  const onGoogleCredential = async (response) => {
+    try {
+      setIsLoading(true);
+      await authAPI.googleLogin(response.credential);
+      await login();
+      message.success('Welcome back!');
+      navigate('/dashboard');
+    } catch (error) {
+      message.error(error.response?.data?.error || 'Failed to sign in with Google');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Google Identity Services loads its script async (see public/index.html),
+  // so poll briefly until window.google is available before rendering the button.
+  useEffect(() => {
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    if (!clientId) return undefined;
+
+    let cancelled = false;
+
+    const renderButton = () => {
+      if (cancelled || !googleButtonRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: onGoogleCredential,
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        width: 392,
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      renderButton();
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        clearInterval(interval);
+        renderButton();
+      }
+    }, 100);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -83,7 +139,7 @@ export default function LoginPage() {
         .login-form-container button {
           transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        
+
         /* Hide brand panel on mobile */
         @media (max-width: 768px) {
           .login-brand-wrapper {
@@ -172,6 +228,15 @@ export default function LoginPage() {
                   </Link>
                 </Flex>
               </Form>
+
+              {process.env.REACT_APP_GOOGLE_CLIENT_ID && (
+                <>
+                  <Divider style={{ margin: 0, color: token.colorTextSecondary }}>or</Divider>
+                  <Flex justify="center">
+                    <div ref={googleButtonRef} />
+                  </Flex>
+                </>
+              )}
 
               <Flex justify="center">
                 <Text style={{ color: token.colorTextSecondary }}>

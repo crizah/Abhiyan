@@ -17,6 +17,12 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// GoogleLoginRequest carries the ID token ("credential") handed back by
+// Google Identity Services on the frontend after the user picks an account.
+type GoogleLoginRequest struct {
+	Credential string `json:"credential" binding:"required"`
+}
+
 type InviteUserRequest struct {
 	Email string `json:"email" binding:"required,email"`
 	// FirstName string `json:"first_name" binding:"required"`

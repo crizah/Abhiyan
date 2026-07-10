@@ -37,6 +37,7 @@ func main() {
 	}
 	s := os.Getenv("JWT_SECRET")
 	s_byte := []byte(s)
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 
 	// initialise task queue
 	broker_url := os.Getenv("BROKER_URL")
@@ -71,7 +72,7 @@ func main() {
 	queries := db.New(dbConn)
 
 	// --- 1. Initialize Services ---
-	authService := services.NewAuthService(dbConn, s_byte, onionApp)
+	authService := services.NewAuthService(dbConn, s_byte, googleClientID, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
 	s3Service, err := services.NewS3Service(context.Background())
@@ -114,6 +115,7 @@ func main() {
 			// Public
 			auth.POST("/register-org", authLimiter, authHandler.RegisterOrg)
 			auth.POST("/login", authLimiter, authHandler.Login)
+			auth.POST("/google-login", authLimiter, authHandler.GoogleLogin)
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/accept-invite", authLimiter, authHandler.AcceptInvite)
 			auth.POST("/resend-invite", authLimiter, authHandler.ResendPublicInvite)

@@ -18,18 +18,20 @@ import (
 )
 
 type AuthService struct {
-	db        *sql.DB     // Needed to start transactions
-	Queries   *db.Queries // The sqlc query wrapper
-	JwtSecret []byte
-	onionApp  *app.App
+	db             *sql.DB     // Needed to start transactions
+	Queries        *db.Queries // The sqlc query wrapper
+	JwtSecret      []byte
+	GoogleClientID string
+	onionApp       *app.App
 }
 
-func NewAuthService(dbConn *sql.DB, s []byte, oa *app.App) *AuthService {
+func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App) *AuthService {
 	return &AuthService{
-		db:        dbConn,
-		Queries:   db.New(dbConn),
-		JwtSecret: s,
-		onionApp:  oa,
+		db:             dbConn,
+		Queries:        db.New(dbConn),
+		JwtSecret:      s,
+		GoogleClientID: googleClientID,
+		onionApp:       oa,
 	}
 }
 
@@ -134,7 +136,56 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 		return "", errors.New("invalid email or password")
 	}
 
-	// Fetch user roles
+	// 4. Generate and return the Access JWT
+	token, err := s.issueAccessToken(ctx, user, req.Email)
+	if err != nil {
+		return "", errors.New("failed to generate authentication token")
+	}
+
+	return token, nil
+}
+
+// LoginWithGoogle authenticates a user via a Google Sign-In ID token instead
+// of a password. It never creates accounts: the email in the verified Google
+// token must already belong to an onboarded user (one that has completed
+// invite acceptance and has credentials on file), exactly like Login above -
+// this only swaps out *how* identity is proven, not the account model.
+func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (string, error) {
+	claims, err := util.VerifyGoogleIDToken(credential, s.GoogleClientID)
+	if err != nil {
+		return "", errors.New("invalid google credential")
+	}
+
+	user, err := s.Queries.GetUserByEmail(ctx, claims.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errors.New("no account found for this email")
+		}
+		return "", err
+	}
+
+	// Require the same onboarding precondition as password login: a user
+	// only has credentials once they've accepted their invite. Without this,
+	// a Google login could let someone into an account that never finished
+	// onboarding (no phone/name on file, no role assigned yet).
+	if _, err := s.Queries.GetUserCredentials(ctx, user.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errors.New("account setup incomplete: please check your email for the invite link")
+		}
+		return "", err
+	}
+
+	token, err := s.issueAccessToken(ctx, user, claims.Email)
+	if err != nil {
+		return "", errors.New("failed to generate authentication token")
+	}
+
+	return token, nil
+}
+
+// issueAccessToken mints the session JWT shared by every login path
+// (password or Google), after that path has already proven identity.
+func (s *AuthService) issueAccessToken(ctx context.Context, user db.User, email string) (string, error) {
 	roles, err := s.Queries.GetUserSystemRoles(ctx, user.ID)
 	if err != nil || len(roles) == 0 {
 		return "", errors.New("user has no assigned roles")
@@ -153,23 +204,14 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 		}
 	}
 
-	// 4. Generate and return the Access JWT
-	JwtSecret := s.JwtSecret
-
-	// Assuming user.Role is generated as a custom enum type by sqlc, we cast it to string
-	token, err := util.GenerateAccessToken(
+	return util.GenerateAccessToken(
 		user.ID.String(),
 		user.OrgID.String(),
 		activeRole,
-		req.Email,
-		JwtSecret,
+		email,
+		s.JwtSecret,
 		24*time.Hour, // 1-day expiration
 	)
-	if err != nil {
-		return "", errors.New("failed to generate authentication token")
-	}
-
-	return token, nil
 }
 
 // // --- Invite User (Admin Only) ---

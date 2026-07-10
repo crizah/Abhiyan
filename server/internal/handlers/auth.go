@@ -135,6 +135,28 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged in"})
 }
 
+func (h *AuthHandler) GoogleLogin(c *gin.Context) {
+	var req schemas.GoogleLoginRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token, err := h.authService.LoginWithGoogle(c.Request.Context(), req.Credential)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	cookieDomain, isSecure, sameSite := cookieConfig()
+
+	c.SetSameSite(sameSite)
+	c.SetCookie("access_token", token, 86400, "/", cookieDomain, isSecure, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged in"})
+}
+
 func (h *AuthHandler) Logout(c *gin.Context) {
 	cookieDomain, isSecure, sameSite := cookieConfig()
 

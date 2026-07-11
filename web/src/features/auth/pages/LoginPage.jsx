@@ -17,6 +17,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const googleButtonRef = useRef(null);
 
+  const runtimeGoogleId = window.RUNTIME_CONFIG?.REACT_APP_GOOGLE_CLIENT_ID;
+  const googleClientId =
+    (runtimeGoogleId && runtimeGoogleId !== '${REACT_APP_GOOGLE_CLIENT_ID}' ? runtimeGoogleId : null) ||
+    process.env.REACT_APP_GOOGLE_CLIENT_ID ||
+    null;
+
   const onFinish = async (values) => {
     try {
       setIsLoading(true);
@@ -50,7 +56,7 @@ export default function LoginPage() {
   // Google Identity Services loads its script async (see public/index.html),
   // so poll briefly until window.google is available before rendering the button.
   useEffect(() => {
-    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    const clientId = googleClientId;
     if (!clientId) return undefined;
 
     let cancelled = false;
@@ -229,7 +235,7 @@ export default function LoginPage() {
                 </Flex>
               </Form>
 
-              {process.env.REACT_APP_GOOGLE_CLIENT_ID && (
+              {googleClientId && (
                 <>
                   <Divider style={{ margin: 0, color: token.colorTextSecondary }}>or</Divider>
                   <Flex justify="center">

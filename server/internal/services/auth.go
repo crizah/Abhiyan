@@ -151,7 +151,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 // invite acceptance and has credentials on file), exactly like Login above -
 // this only swaps out *how* identity is proven, not the account model.
 func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (string, error) {
-	claims, err := util.VerifyGoogleIDToken(credential, s.GoogleClientID)
+	claims, err := util.VerifyGoogleIDToken(ctx, credential, s.GoogleClientID)
 	if err != nil {
 		return "", errors.New("invalid google credential")
 	}

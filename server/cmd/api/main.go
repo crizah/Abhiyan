@@ -51,11 +51,13 @@ func main() {
 		DashboardAddr: dashboard_addr,
 		DefaultQueue:  "default",
 		Queues: []broker.Queue{
+			{Name: "auth", Priority: 10},
 			{Name: "critical", Priority: 10},
 			{Name: "reminders", Priority: 7},
 			{Name: "polling", Priority: 7},
 		},
 		TaskRoutes: map[string]string{
+			"verify_google_token":       "auth",
 			"send_invite_email":         "critical",
 			"send_password_reset_email": "critical",
 			"send_reminder_email":       "reminders",
@@ -72,7 +74,7 @@ func main() {
 	queries := db.New(dbConn)
 
 	// --- 1. Initialize Services ---
-	authService := services.NewAuthService(dbConn, s_byte, googleClientID, onionApp)
+	authService := services.NewAuthService(dbConn, s_byte, googleClientID, onionApp, rdb)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
 	s3Service, err := services.NewS3Service(context.Background())

@@ -8,11 +8,12 @@ import (
 
 	"github.com/crizah/Abhiyan/server/cmd/worker/tasks"
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
-	"github.com/crizah/Abhiyan/server/internal/services" // Import your services package
+	"github.com/crizah/Abhiyan/server/internal/services"
 	app "github.com/crizah/Onion/app"
 	broker "github.com/crizah/Onion/broker"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -51,6 +52,10 @@ func main() {
 	// 2. Initialize Onion App
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+
+	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
+
 	onionApp, err := app.New(app.Config{
 		BrokerAddr:    broker_url,
 		BackendURL:    dbURL,
@@ -59,6 +64,7 @@ func main() {
 		Concurrency:  10,
 		DefaultQueue: "default",
 		Queues: []broker.Queue{
+			{Name: "auth", Priority: 10},
 			{Name: "critical", Priority: 10},
 			{Name: "reminders", Priority: 7},
 			{Name: "polling", Priority: 7},
@@ -84,6 +90,9 @@ func main() {
 	// register missed deadline poller
 	onionApp.Register("poll_missed_deadlines", tasks.NewPollMissedDeadlinesTask(queries))
 
+	// register google auth verification
+	onionApp.Register("verify_google_token", tasks.NewVerifyGoogleTokenTask(rdb, googleClientID))
+
 	// register face validation
 	rekognitionService, err := services.NewRekognitionService(context.Background())
 	if err != nil {
@@ -102,6 +111,7 @@ func main() {
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
+			"verify_google_token":         "auth",
 			"send_invite_email":           "critical",
 			"send_password_reset_email":   "critical",
 			"send_reminder_email":         "reminders",

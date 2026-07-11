@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -13,26 +14,29 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/crizah/Onion/app"
-
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	db             *sql.DB     // Needed to start transactions
-	Queries        *db.Queries // The sqlc query wrapper
+	db             *sql.DB
+	Queries        *db.Queries
 	JwtSecret      []byte
 	GoogleClientID string
 	onionApp       *app.App
+	rdb            *redis.Client
 }
 
-func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App) *AuthService {
+func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App, rdb *redis.Client) *AuthService {
 	return &AuthService{
 		db:             dbConn,
 		Queries:        db.New(dbConn),
 		JwtSecret:      s,
 		GoogleClientID: googleClientID,
 		onionApp:       oa,
+		rdb:            rdb,
 	}
 }
 
@@ -146,43 +150,70 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	return token, nil
 }
 
-// LoginWithGoogle authenticates a user via a Google Sign-In ID token instead
-// of a password. It never creates accounts: the email in the verified Google
-// token must already belong to an onboarded user (one that has completed
-// invite acceptance and has credentials on file), exactly like Login above -
-// this only swaps out *how* identity is proven, not the account model.
+// LoginWithGoogle authenticates a user via a Google Sign-In ID token.
+// Because the API Lambda has no outbound internet access, it cannot call
+// Google directly. Instead it enqueues a verify_google_token job on the
+// dedicated auth queue, then polls Redis for the result written by the ECS
+// worker (which does have internet access).
 func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (string, error) {
-	claims, err := util.VerifyGoogleIDToken(ctx, credential, s.GoogleClientID)
-	if err != nil {
-		log.Printf("google login error (clientID=%q): %v", s.GoogleClientID, err)
-		return "", errors.New("invalid google credential")
+	jobID := uuid.New().String()
+	resultKey := "google_auth:" + jobID
+
+	if err := s.onionApp.Enqueue(ctx, "verify_google_token", map[string]any{
+		"job_id":     jobID,
+		"credential": credential,
+	}); err != nil {
+		return "", fmt.Errorf("failed to queue google token verification: %w", err)
 	}
 
-	user, err := s.Queries.GetUserByEmail(ctx, claims.Email)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", errors.New("no account found for this email")
+	// Poll Redis until the worker writes a result or we time out.
+	// 250ms intervals × 40 = 10 seconds max wait.
+	const pollInterval = 250 * time.Millisecond
+	const maxWait = 10 * time.Second
+	deadline := time.Now().Add(maxWait)
+
+	for time.Now().Before(deadline) {
+		val, err := s.rdb.Get(ctx, resultKey).Result()
+		if err == nil {
+			var result struct {
+				Email string `json:"email"`
+				Error string `json:"error"`
+			}
+			if jsonErr := json.Unmarshal([]byte(val), &result); jsonErr != nil {
+				return "", errors.New("invalid google credential")
+			}
+			if result.Error != "" {
+				return "", errors.New(result.Error)
+			}
+
+			// Token verified — now apply the same DB preconditions as password login.
+			user, dbErr := s.Queries.GetUserByEmail(ctx, result.Email)
+			if dbErr != nil {
+				if errors.Is(dbErr, sql.ErrNoRows) {
+					return "", errors.New("no account found for this email")
+				}
+				return "", dbErr
+			}
+
+			if _, credErr := s.Queries.GetUserCredentials(ctx, user.ID); credErr != nil {
+				if errors.Is(credErr, sql.ErrNoRows) {
+					return "", errors.New("account setup incomplete: please check your email for the invite link")
+				}
+				return "", credErr
+			}
+
+			token, tokenErr := s.issueAccessToken(ctx, user, result.Email)
+			if tokenErr != nil {
+				return "", errors.New("failed to generate authentication token")
+			}
+			return token, nil
 		}
-		return "", err
+
+		time.Sleep(pollInterval)
 	}
 
-	// Require the same onboarding precondition as password login: a user
-	// only has credentials once they've accepted their invite. Without this,
-	// a Google login could let someone into an account that never finished
-	// onboarding (no phone/name on file, no role assigned yet).
-	if _, err := s.Queries.GetUserCredentials(ctx, user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", errors.New("account setup incomplete: please check your email for the invite link")
-		}
-		return "", err
-	}
-
-	token, err := s.issueAccessToken(ctx, user, claims.Email)
-	if err != nil {
-		return "", errors.New("failed to generate authentication token")
-	}
-
-	return token, nil
+	log.Printf("google login timed out waiting for worker result (job_id=%s)", jobID)
+	return "", errors.New("google verification timed out, please try again")
 }
 
 // issueAccessToken mints the session JWT shared by every login path

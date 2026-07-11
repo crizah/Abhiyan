@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"time"
 
 	"github.com/crizah/Abhiyan/server/cmd/worker/tasks"
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -112,8 +113,16 @@ func main() {
 	// register attendance cron
 	onionApp.Register("batch_insert_attendance", tasks.NewBatchInsertAttendanceTask(queries))
 
+	// cron schedules (e.g. the daily attendance batch) are meant to fire at
+	// local IST times regardless of the host/container's own timezone
+	istLocation, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		log.Fatalf("failed to load IST location: %v", err)
+	}
+
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
+		Location: istLocation,
 		TaskRoutes: map[string]string{
 			"verify_google_token":           "auth",
 			"send_invite_email":             "critical",

@@ -66,6 +66,8 @@ github.com/crizah/Onion v0.0.0-20260707144632-531ab6108d8c h1:jkfIOhpc+/js8EaC3B
 github.com/crizah/Onion v0.0.0-20260707144632-531ab6108d8c/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
 github.com/crizah/Onion v0.0.0-20260707145248-8f0909290e2e h1:e1Wf4sEB/oUd+MwY48Q2EnFPX/uG/4IFLdBpPwwKpiM=
 github.com/crizah/Onion v0.0.0-20260707145248-8f0909290e2e/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260711221738-64ef76b3c4cc h1:Sd9CA02K2keE53y9aKDhkbXRLyyWkP8WG+vTsw2bl3k=
+github.com/crizah/Onion v0.0.0-20260711221738-64ef76b3c4cc/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

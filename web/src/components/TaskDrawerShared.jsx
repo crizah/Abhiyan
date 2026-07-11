@@ -36,7 +36,11 @@ export function Avatar({ firstName, lastName, size = 32 }) {
 export function renderMentions(content) {
   if (!content) return null;
   return content.split(/(@\w+)/g).map((part, i) => {
-    if (!part.startsWith('@')) return <span key={i}>{part}</span>;
+    if (!part.startsWith('@')) {
+      return part.split('\n').map((line, j, arr) => (
+        <span key={`${i}-${j}`}>{line}{j < arr.length - 1 && <br />}</span>
+      ));
+    }
     return (
       <Popover
         key={i}

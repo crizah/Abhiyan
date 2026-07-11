@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -153,6 +154,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (string, error) {
 	claims, err := util.VerifyGoogleIDToken(ctx, credential, s.GoogleClientID)
 	if err != nil {
+		log.Printf("google login error (clientID=%q): %v", s.GoogleClientID, err)
 		return "", errors.New("invalid google credential")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/crizah/Abhiyan/server/internal/util"
@@ -35,6 +36,7 @@ func NewVerifyGoogleTokenTask(rdb *redis.Client, googleClientID string) func(con
 
 		claims, err := util.VerifyGoogleIDToken(ctx, credential, googleClientID)
 		if err != nil {
+			log.Printf("verify_google_token: verification failed (job_id=%s): %v", jobID, err)
 			result = GoogleAuthResult{Error: "invalid google credential"}
 		} else {
 			result = GoogleAuthResult{Email: claims.Email}

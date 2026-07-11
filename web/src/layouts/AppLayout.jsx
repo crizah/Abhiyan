@@ -57,7 +57,7 @@ const StandardMenuItem = ({ label, icon, onClick, token }) => {
   );
 };
 
-const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
+const GlobalHeader = ({ user, token, navigate, onRoleSwitch, isMobile }) => {
   const [notifications, setNotifications] = useState([]);
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -229,6 +229,21 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
   ];
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
 
+  // On mobile the header is too narrow for the inline expanding pill row (it pushes
+  // the avatar off the fixed-width header), so switch to an overlay dropdown instead.
+  const roleDropdownMenu = (
+    <div style={{ backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, padding: '8px 0', minWidth: '160px' }}>
+      {ROLE_OPTIONS.map(role => (
+        <StandardMenuItem
+          key={role.key}
+          label={role.label}
+          onClick={() => onRoleSwitch(role.key)}
+          token={token}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <Header
       className="app-header"
@@ -259,66 +274,91 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch }) => {
             <BellOutlined style={{ fontSize: '20px', cursor: 'pointer', color: token.colorTextSecondary }} />
           </Badge>
         </Dropdown>
-<motion.div style={{ display: 'flex', alignItems: 'center' }}> 
-  <Tooltip title={roleMenuOpen ? '' : 'Switch Role'}>
-    <motion.button
-      onClick={() => setRoleMenuOpen(o => !o)}
-      className="role-switch-btn"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 34,
-        height: 34,
-        flexShrink: 0,
-        borderRadius: '50%',
-        border: '1px solid rgba(179, 69, 92, 0.25)',
-        background: roleMenuOpen ? '#B3455C' : 'rgba(179, 69, 92, 0.12)',
-        color: roleMenuOpen ? '#FFFFFF' : '#B3455C',
-        cursor: 'pointer',
-      }}
-      transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-    >
-      <UserSwitchOutlined style={{ fontSize: 16 }} />
-    </motion.button>
-  </Tooltip>
-
-  <AnimatePresence initial={false}>
-    {roleMenuOpen && (
-      <motion.div
-        key="role-options"
-        // 2. Added marginLeft to the animation states
-        initial={{ width: 0, opacity: 0, marginLeft: 0 }}
-        animate={{ width: 'auto', opacity: 1, marginLeft: 6 }} 
-        exit={{ width: 0, opacity: 0, marginLeft: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-        style={{ display: 'flex', gap: 6, overflow: 'hidden' }}
+{isMobile ? (
+  <Dropdown dropdownRender={() => roleDropdownMenu} placement="bottomRight" trigger={['click']}>
+    <Tooltip title="Switch Role">
+      <button
+        className="role-switch-btn"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          borderRadius: '50%',
+          border: '1px solid rgba(179, 69, 92, 0.25)',
+          background: 'rgba(179, 69, 92, 0.12)',
+          color: '#B3455C',
+          cursor: 'pointer',
+        }}
       >
-        {ROLE_OPTIONS.map(role => (
-          <button
-            key={role.key}
-            className="role-pill"
-            onClick={() => { setRoleMenuOpen(false); onRoleSwitch(role.key); }}
-            style={{
-              whiteSpace: 'nowrap',
-              padding: '6px 14px',
-              borderRadius: 999,
-              border: '1px solid rgba(179, 69, 92, 0.25)',
-              background: 'rgba(179, 69, 92, 0.12)',
-              color: '#B3455C',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            {role.label}
-          </button>
-        ))}
-      </motion.div>
-    )}
-  </AnimatePresence>
-</motion.div>
+        <UserSwitchOutlined style={{ fontSize: 16 }} />
+      </button>
+    </Tooltip>
+  </Dropdown>
+) : (
+  <motion.div style={{ display: 'flex', alignItems: 'center' }}>
+    <Tooltip title={roleMenuOpen ? '' : 'Switch Role'}>
+      <motion.button
+        onClick={() => setRoleMenuOpen(o => !o)}
+        className="role-switch-btn"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          borderRadius: '50%',
+          border: '1px solid rgba(179, 69, 92, 0.25)',
+          background: roleMenuOpen ? '#B3455C' : 'rgba(179, 69, 92, 0.12)',
+          color: roleMenuOpen ? '#FFFFFF' : '#B3455C',
+          cursor: 'pointer',
+        }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+      >
+        <UserSwitchOutlined style={{ fontSize: 16 }} />
+      </motion.button>
+    </Tooltip>
+
+    <AnimatePresence initial={false}>
+      {roleMenuOpen && (
+        <motion.div
+          key="role-options"
+          // 2. Added marginLeft to the animation states
+          initial={{ width: 0, opacity: 0, marginLeft: 0 }}
+          animate={{ width: 'auto', opacity: 1, marginLeft: 6 }}
+          exit={{ width: 0, opacity: 0, marginLeft: 0 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+          style={{ display: 'flex', gap: 6, overflow: 'hidden' }}
+        >
+          {ROLE_OPTIONS.map(role => (
+            <button
+              key={role.key}
+              className="role-pill"
+              onClick={() => { setRoleMenuOpen(false); onRoleSwitch(role.key); }}
+              style={{
+                whiteSpace: 'nowrap',
+                padding: '6px 14px',
+                borderRadius: 999,
+                border: '1px solid rgba(179, 69, 92, 0.25)',
+                background: 'rgba(179, 69, 92, 0.12)',
+                color: '#B3455C',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {role.label}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </motion.div>
+)}
 
         <Dropdown dropdownRender={() => customHeaderDropdown} placement="bottomRight" trigger={['click']}>
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
@@ -500,7 +540,7 @@ export default function AppLayout() {
         </div>
       </div>
 
-      <GlobalHeader user={user} token={token} navigate={navigate} onRoleSwitch={handleRoleSwitch} />
+      <GlobalHeader user={user} token={token} navigate={navigate} onRoleSwitch={handleRoleSwitch} isMobile={isMobile} />
 
       <div className="app-dock-wrap" style={{ position: 'fixed', bottom: '28px', left: '28px', right: '28px', zIndex: 30 }}>
         <Dock

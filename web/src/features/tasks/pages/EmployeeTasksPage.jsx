@@ -217,6 +217,7 @@ export default function EmployeeTasksPage() {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{ current: currentPage, pageSize, total: totalTasks, showSizeChanger: true }}
           onChange={(pagination) => { setCurrentPage(pagination.current); setPageSize(pagination.pageSize); }}
         />

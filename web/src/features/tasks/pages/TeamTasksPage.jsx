@@ -403,6 +403,7 @@ export default function TeamTasksPage() {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{
             current: currentPage,
             pageSize: pageSize,

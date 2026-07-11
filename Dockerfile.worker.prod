@@ -17,7 +17,7 @@ FROM alpine:latest
 
 # CA certs needed for HTTPS calls to AWS Rekognition, OpenAI Whisper, SES
 # ffmpeg needed for transcoding voice notes to a playback format iOS can decode
-RUN apk --no-cache add ca-certificates ffmpeg
+RUN apk --no-cache add ca-certificates ffmpeg tzdata
 
 WORKDIR /app
 

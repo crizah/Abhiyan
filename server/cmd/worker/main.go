@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/crizah/Abhiyan/server/cmd/worker/tasks"
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"

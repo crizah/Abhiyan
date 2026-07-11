@@ -19,6 +19,9 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# ffmpeg needed for transcoding voice notes to a playback format iOS can decode
+RUN apk --no-cache add ffmpeg
+
 # Copy only the compiled binary from the builder stage
 COPY --from=builder /worker /app/worker
 COPY server/.env /app/.env

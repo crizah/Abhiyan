@@ -19,6 +19,15 @@ export default function EmployeeTasksPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
 
+  // Only scope the table to a horizontal scroll container on narrow screens —
+  // on desktop the columns should keep stretching to fill the card like before.
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDetails, setTaskDetails] = useState(null);
@@ -206,9 +215,9 @@ export default function EmployeeTasksPage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
+      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
-        <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 250 }} options={teams.map(t => ({ label: t.name, value: t.id }))} placeholder="Select a Team" />
+        <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 250, maxWidth: '100%' }} options={teams.map(t => ({ label: t.name, value: t.id }))} placeholder="Select a Team" />
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
@@ -217,7 +226,7 @@ export default function EmployeeTasksPage() {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 'max-content' }}
+          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{ current: currentPage, pageSize, total: totalTasks, showSizeChanger: true }}
           onChange={(pagination) => { setCurrentPage(pagination.current); setPageSize(pagination.pageSize); }}
         />

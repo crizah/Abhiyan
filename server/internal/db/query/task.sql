@@ -208,23 +208,29 @@ INSERT INTO attachments (
 
 -- name: GetTaskAttachments :many
 SELECT a.id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_id = $1 AND a.task_update_id IS NULL;
 
 -- name: GetTaskUpdateAttachments :many
 SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_update_id = ANY($1::uuid[]);
 
 -- name: GetTaskCommentAttachments :many
 SELECT a.id, a.task_comment_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_comment_id = ANY($1::uuid[]);
 
 -- name: DeleteTaskAttachments :exec

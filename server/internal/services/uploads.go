@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -68,17 +69,34 @@ func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename s
 	}
 
 	// 3. Construct the final URL where the file will permanently live.
-	// Built via url.URL (not fmt.Sprintf) so characters like '#', '?', '%'
-	// and spaces in the filename are percent-encoded and round-trip cleanly
-	// back through extractKeyFromURL.
+	return request.URL, s.buildFileURL(objectKey), objectKey, nil
+}
+
+// buildFileURL constructs the permanent public URL for an object key. Built via
+// url.URL (not fmt.Sprintf) so characters like '#', '?', '%' and spaces in the
+// filename are percent-encoded and round-trip cleanly back through extractKeyFromURL.
+func (s *S3Service) buildFileURL(objectKey string) string {
 	finalURL := url.URL{
 		Scheme: "https",
 		Host:   fmt.Sprintf("%s.s3.%s.amazonaws.com", s.bucketName, s.region),
 		Path:   "/" + objectKey,
 	}
-	finalFileURL := finalURL.String()
+	return finalURL.String()
+}
 
-	return request.URL, finalFileURL, objectKey, nil
+// UploadBytes writes data directly to S3 under objectKey and returns the
+// permanent public URL, symmetric to DownloadByKey.
+func (s *S3Service) UploadBytes(ctx context.Context, objectKey string, data []byte, contentType string) (string, error) {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucketName),
+		Key:         aws.String(objectKey),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to S3: %w", err)
+	}
+	return s.buildFileURL(objectKey), nil
 }
 
 // GeneratePresignedGetURL returns a temporary, signed URL for reading an object.

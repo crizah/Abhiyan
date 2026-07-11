@@ -32,6 +32,16 @@ export default function UsersPage() {
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
 
+  // Only scope the table to a horizontal scroll container on narrow screens —
+  // without it, the browser squeezes the User column's name/email down to
+  // near-zero width instead of letting the table scroll.
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   // Fetch teams once on mount
   useEffect(() => {
     fetchTeams();
@@ -250,7 +260,7 @@ export default function UsersPage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
+      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '16px' }}>
         <Title level={3} style={{ margin: 0 }}>Users Directory</Title>
         <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
           <Button
@@ -293,11 +303,12 @@ export default function UsersPage() {
         />
       </Flex>
 
-      <Table 
-        columns={columns} 
-        dataSource={users} 
-        rowKey="id" 
+      <Table
+        columns={columns}
+        dataSource={users}
+        rowKey="id"
         loading={loading}
+        scroll={isMobile ? { x: 'max-content' } : undefined}
         onChange={(p) => { setCurrentPage(p.current); setPageSize(p.pageSize); }}
         pagination={{ current: currentPage, pageSize, total: totalUsers, showSizeChanger: true }}
       />

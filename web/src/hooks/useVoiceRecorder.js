@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { message } from 'antd';
 import { uploadFileToS3 } from '../utils/S3Upload';
+import { getMicErrorMessage } from '../utils/micAccess';
 
 // Stages a recorded voice note into the caller's fileList the same way a regular
 // file attachment stages: `onStaged(file, 'add')` immediately with status 'uploading'
@@ -64,8 +65,8 @@ export function useVoiceRecorder(onStaged) {
         elapsedRef.current += 1;
         setElapsed(elapsedRef.current);
       }, 1000);
-    } catch {
-      message.error('Microphone access denied.');
+    } catch (err) {
+      message.error(getMicErrorMessage(err));
     }
   }, [onStaged]);
 

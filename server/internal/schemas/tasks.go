@@ -136,4 +136,5 @@ type AttachmentPayload struct {
 	FileSize            int64  `json:"file_size"`
 	TranscriptionStatus string `json:"transcription_status,omitempty"`
 	TranscriptionText   string `json:"transcription_text,omitempty"`
+	PlaybackURL         string `json:"playback_url,omitempty"`
 }

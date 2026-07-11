@@ -28,6 +28,15 @@ export default function TeamTasksPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
 
+  // Only scope the table to a horizontal scroll container on narrow screens —
+  // on desktop the columns should keep stretching to fill the card like before.
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -389,10 +398,10 @@ export default function TeamTasksPage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
+      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
-        <Flex gap="small">
-          <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 200 }} options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]} placeholder="Select a Team" />
+        <Flex gap="small" wrap>
+          <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 200, maxWidth: '100%' }} options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]} placeholder="Select a Team" />
           <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }} disabled={!activeTeamId || activeTeamId === 'ALL'}>Assign New Task</Button>
         </Flex>
       </Flex>
@@ -403,7 +412,7 @@ export default function TeamTasksPage() {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 'max-content' }}
+          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{
             current: currentPage,
             pageSize: pageSize,

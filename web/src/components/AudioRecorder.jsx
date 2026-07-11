@@ -9,6 +9,7 @@ import {
   PauseCircleOutlined 
 } from '@ant-design/icons';
 import { uploadFileToS3 } from '../utils/S3Upload';
+import { getMicErrorMessage } from '../utils/micAccess';
 
 const { Text } = Typography;
 
@@ -66,7 +67,7 @@ export const AudioRecorder = ({ onUploadSuccess }) => {
       setRecording(true);
     } catch (err) {
       console.error("Microphone access denied", err);
-      message.error("Microphone access denied.");
+      message.error(getMicErrorMessage(err));
     }
   };
 

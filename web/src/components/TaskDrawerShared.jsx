@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
-import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, SoundOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined } from '@ant-design/icons';
+import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { fulfillmentColor, taskStatusColor, reviewStatusColor, roleColor } from '../utils/taskColors';
@@ -97,12 +97,7 @@ function fileIcon(file) {
 export function AttachmentRow({ file, idx }) {
   if (file.file_type?.startsWith('audio/')) {
     return (
-      <div key={idx} style={{
-        background: '#fafafa', borderRadius: 10, padding: '8px 12px',
-        border: '1px solid #f0f0f0',
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <SoundOutlined style={{ color: '#8c8c8c', fontSize: 15 }} />
+      <div key={idx}>
         <AudioAttachment file={file} />
       </div>
     );

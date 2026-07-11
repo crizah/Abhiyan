@@ -22,6 +22,7 @@ type Querier interface {
 	CancelTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
+	CompleteAudioTranscode(ctx context.Context, arg CompleteAudioTranscodeParams) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
 	CompleteTranscription(ctx context.Context, arg CompleteTranscriptionParams) error
 	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
@@ -37,6 +38,7 @@ type Querier interface {
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
+	FailAudioTranscode(ctx context.Context, arg FailAudioTranscodeParams) error
 	FailTranscription(ctx context.Context, arg FailTranscriptionParams) error
 	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
 	// 1. Identify teams where this user is an admin
@@ -60,6 +62,7 @@ type Querier interface {
 	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
+	GetPendingAudioTranscodes(ctx context.Context) ([]GetPendingAudioTranscodesRow, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetPendingTranscriptions(ctx context.Context) ([]GetPendingTranscriptionsRow, error)
 	GetTaskAssigneeEmails(ctx context.Context, taskID uuid.UUID) ([]string, error)
@@ -107,6 +110,7 @@ type Querier interface {
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
 	GetUsersByOrgPaginated(ctx context.Context, arg GetUsersByOrgPaginatedParams) ([]GetUsersByOrgPaginatedRow, error)
 	InsertAttachment(ctx context.Context, arg InsertAttachmentParams) (uuid.UUID, error)
+	InsertAudioTranscode(ctx context.Context, attachmentID uuid.UUID) error
 	InsertScoreEvent(ctx context.Context, arg InsertScoreEventParams) (EmployeeScore, error)
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
@@ -119,6 +123,7 @@ type Querier interface {
 	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
 	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
 	SetAttendanceResult(ctx context.Context, arg SetAttendanceResultParams) error
+	SetAudioTranscodeProcessing(ctx context.Context, id uuid.UUID) error
 	SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error

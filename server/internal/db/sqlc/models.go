@@ -13,6 +13,50 @@ import (
 	"github.com/google/uuid"
 )
 
+type AudioTranscodeStatus string
+
+const (
+	AudioTranscodeStatusPENDING    AudioTranscodeStatus = "PENDING"
+	AudioTranscodeStatusPROCESSING AudioTranscodeStatus = "PROCESSING"
+	AudioTranscodeStatusCOMPLETED  AudioTranscodeStatus = "COMPLETED"
+	AudioTranscodeStatusFAILED     AudioTranscodeStatus = "FAILED"
+)
+
+func (e *AudioTranscodeStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AudioTranscodeStatus(s)
+	case string:
+		*e = AudioTranscodeStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AudioTranscodeStatus: %T", src)
+	}
+	return nil
+}
+
+type NullAudioTranscodeStatus struct {
+	AudioTranscodeStatus AudioTranscodeStatus `json:"audio_transcode_status"`
+	Valid                bool                 `json:"valid"` // Valid is true if AudioTranscodeStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAudioTranscodeStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.AudioTranscodeStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AudioTranscodeStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAudioTranscodeStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AudioTranscodeStatus), nil
+}
+
 type ParticipantRole string
 
 const (
@@ -551,6 +595,16 @@ type AttendanceRecord struct {
 	AttendanceDate sql.NullTime   `json:"attendance_date"`
 	CreatedAt      sql.NullTime   `json:"created_at"`
 	UpdatedAt      sql.NullTime   `json:"updated_at"`
+}
+
+type AudioTranscode struct {
+	ID                uuid.UUID                `json:"id"`
+	AttachmentID      uuid.UUID                `json:"attachment_id"`
+	Status            NullAudioTranscodeStatus `json:"status"`
+	TranscodedFileUrl sql.NullString           `json:"transcoded_file_url"`
+	ErrorMessage      sql.NullString           `json:"error_message"`
+	CreatedAt         sql.NullTime             `json:"created_at"`
+	UpdatedAt         sql.NullTime             `json:"updated_at"`
 }
 
 type EmployeeScore struct {

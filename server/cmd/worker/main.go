@@ -86,6 +86,11 @@ func main() {
 	onionApp.Register("poll_pending_transcriptions", tasks.NewPollPendingTranscriptionsTask(queries, onionApp))
 	onionApp.Register("transcribe_audio", tasks.NewTranscribeAudioTask(queries, s3Service, whisperService))
 
+	// register audio transcode (separate from transcription: produces a
+	// universally-playable copy of voice notes for cross-browser/iOS playback)
+	onionApp.Register("poll_pending_audio_transcodes", tasks.NewPollPendingAudioTranscodesTask(queries, onionApp))
+	onionApp.Register("transcode_audio", tasks.NewTranscodeAudioTask(queries, s3Service))
+
 	// register missed deadline poller
 	onionApp.Register("poll_missed_deadlines", tasks.NewPollMissedDeadlinesTask(queries))
 
@@ -110,18 +115,20 @@ func main() {
 	// map to queue
 	onionApp.UpdateConfig(app.Config{
 		TaskRoutes: map[string]string{
-			"verify_google_token":         "auth",
-			"send_invite_email":           "critical",
-			"send_password_reset_email":   "critical",
-			"send_reminder_email":         "reminders",
-			"send_reminder_whatsapp":      "reminders",
-			"poll_due_reminders":          "polling",
-			"poll_pending_transcriptions": "polling",
-			"transcribe_audio":            "default",
-			"poll_missed_deadlines":       "polling",
-			"validate_face":               "default",
-			"compare_faces":               "default",
-			"batch_insert_attendance":     "polling",
+			"verify_google_token":           "auth",
+			"send_invite_email":             "critical",
+			"send_password_reset_email":     "critical",
+			"send_reminder_email":           "reminders",
+			"send_reminder_whatsapp":        "reminders",
+			"poll_due_reminders":            "polling",
+			"poll_pending_transcriptions":   "polling",
+			"transcribe_audio":              "default",
+			"poll_pending_audio_transcodes": "polling",
+			"transcode_audio":               "default",
+			"poll_missed_deadlines":         "polling",
+			"validate_face":                 "default",
+			"compare_faces":                 "default",
+			"batch_insert_attendance":       "polling",
 		},
 	})
 
@@ -134,6 +141,11 @@ func main() {
 	err = onionApp.Schedule("system_transcription_tick", "poll_pending_transcriptions", "@every 30s", nil)
 	if err != nil {
 		log.Fatalf("failed to schedule transcription tick: %v", err)
+	}
+
+	err = onionApp.Schedule("system_audio_transcode_tick", "poll_pending_audio_transcodes", "@every 30s", nil)
+	if err != nil {
+		log.Fatalf("failed to schedule audio transcode tick: %v", err)
 	}
 
 	err = onionApp.Schedule("system_missed_deadline_tick", "poll_missed_deadlines", "@every 5m", nil)

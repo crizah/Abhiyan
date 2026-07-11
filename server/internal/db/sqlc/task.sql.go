@@ -508,20 +508,24 @@ func (q *Queries) GetTaskAssigneePhones(ctx context.Context, taskID uuid.UUID) (
 
 const getTaskAttachments = `-- name: GetTaskAttachments :many
 SELECT a.id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_id = $1 AND a.task_update_id IS NULL
 `
 
 type GetTaskAttachmentsRow struct {
-	ID                  uuid.UUID               `json:"id"`
-	FileName            string                  `json:"file_name"`
-	FileUrl             string                  `json:"file_url"`
-	FileType            string                  `json:"file_type"`
-	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
-	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
-	TranscriptText      sql.NullString          `json:"transcript_text"`
+	ID                  uuid.UUID                `json:"id"`
+	FileName            string                   `json:"file_name"`
+	FileUrl             string                   `json:"file_url"`
+	FileType            string                   `json:"file_type"`
+	FileSizeBytes       sql.NullInt64            `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus  `json:"transcription_status"`
+	TranscriptText      sql.NullString           `json:"transcript_text"`
+	TranscodeStatus     NullAudioTranscodeStatus `json:"transcode_status"`
+	TranscodedFileUrl   sql.NullString           `json:"transcoded_file_url"`
 }
 
 func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) ([]GetTaskAttachmentsRow, error) {
@@ -541,6 +545,8 @@ func (q *Queries) GetTaskAttachments(ctx context.Context, taskID uuid.NullUUID) 
 			&i.FileSizeBytes,
 			&i.TranscriptionStatus,
 			&i.TranscriptText,
+			&i.TranscodeStatus,
+			&i.TranscodedFileUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -580,21 +586,25 @@ func (q *Queries) GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error) {
 
 const getTaskCommentAttachments = `-- name: GetTaskCommentAttachments :many
 SELECT a.id, a.task_comment_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_comment_id = ANY($1::uuid[])
 `
 
 type GetTaskCommentAttachmentsRow struct {
-	ID                  uuid.UUID               `json:"id"`
-	TaskCommentID       uuid.NullUUID           `json:"task_comment_id"`
-	FileName            string                  `json:"file_name"`
-	FileUrl             string                  `json:"file_url"`
-	FileType            string                  `json:"file_type"`
-	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
-	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
-	TranscriptText      sql.NullString          `json:"transcript_text"`
+	ID                  uuid.UUID                `json:"id"`
+	TaskCommentID       uuid.NullUUID            `json:"task_comment_id"`
+	FileName            string                   `json:"file_name"`
+	FileUrl             string                   `json:"file_url"`
+	FileType            string                   `json:"file_type"`
+	FileSizeBytes       sql.NullInt64            `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus  `json:"transcription_status"`
+	TranscriptText      sql.NullString           `json:"transcript_text"`
+	TranscodeStatus     NullAudioTranscodeStatus `json:"transcode_status"`
+	TranscodedFileUrl   sql.NullString           `json:"transcoded_file_url"`
 }
 
 func (q *Queries) GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskCommentAttachmentsRow, error) {
@@ -615,6 +625,8 @@ func (q *Queries) GetTaskCommentAttachments(ctx context.Context, dollar_1 []uuid
 			&i.FileSizeBytes,
 			&i.TranscriptionStatus,
 			&i.TranscriptText,
+			&i.TranscodeStatus,
+			&i.TranscodedFileUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -735,21 +747,25 @@ func (q *Queries) GetTaskReminders(ctx context.Context, taskID uuid.UUID) ([]Rem
 
 const getTaskUpdateAttachments = `-- name: GetTaskUpdateAttachments :many
 SELECT a.id, a.task_update_id, a.file_name, a.file_url, a.file_type, a.file_size_bytes,
-       t.status AS transcription_status, t.transcript_text
+       t.status AS transcription_status, t.transcript_text,
+       at.status AS transcode_status, at.transcoded_file_url
 FROM attachments a
 LEFT JOIN transcriptions t ON t.attachment_id = a.id
+LEFT JOIN audio_transcodes at ON at.attachment_id = a.id
 WHERE a.task_update_id = ANY($1::uuid[])
 `
 
 type GetTaskUpdateAttachmentsRow struct {
-	ID                  uuid.UUID               `json:"id"`
-	TaskUpdateID        uuid.NullUUID           `json:"task_update_id"`
-	FileName            string                  `json:"file_name"`
-	FileUrl             string                  `json:"file_url"`
-	FileType            string                  `json:"file_type"`
-	FileSizeBytes       sql.NullInt64           `json:"file_size_bytes"`
-	TranscriptionStatus NullTranscriptionStatus `json:"transcription_status"`
-	TranscriptText      sql.NullString          `json:"transcript_text"`
+	ID                  uuid.UUID                `json:"id"`
+	TaskUpdateID        uuid.NullUUID            `json:"task_update_id"`
+	FileName            string                   `json:"file_name"`
+	FileUrl             string                   `json:"file_url"`
+	FileType            string                   `json:"file_type"`
+	FileSizeBytes       sql.NullInt64            `json:"file_size_bytes"`
+	TranscriptionStatus NullTranscriptionStatus  `json:"transcription_status"`
+	TranscriptText      sql.NullString           `json:"transcript_text"`
+	TranscodeStatus     NullAudioTranscodeStatus `json:"transcode_status"`
+	TranscodedFileUrl   sql.NullString           `json:"transcoded_file_url"`
 }
 
 func (q *Queries) GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.UUID) ([]GetTaskUpdateAttachmentsRow, error) {
@@ -770,6 +786,8 @@ func (q *Queries) GetTaskUpdateAttachments(ctx context.Context, dollar_1 []uuid.
 			&i.FileSizeBytes,
 			&i.TranscriptionStatus,
 			&i.TranscriptText,
+			&i.TranscodeStatus,
+			&i.TranscodedFileUrl,
 		); err != nil {
 			return nil, err
 		}

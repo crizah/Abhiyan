@@ -40,6 +40,7 @@ func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, par
 	}
 	if strings.HasPrefix(params.FileType, "audio/") {
 		qtx.InsertTranscription(ctx, attID)
+		qtx.InsertAudioTranscode(ctx, attID)
 	}
 
 	return nil
@@ -48,6 +49,9 @@ func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, par
 func (s *TaskService) presignAttachments(ctx context.Context, atts []schemas.AttachmentPayload) {
 	for i := range atts {
 		atts[i].FileURL = s.s3Service.PresignFileURL(ctx, atts[i].FileURL)
+		if atts[i].PlaybackURL != "" {
+			atts[i].PlaybackURL = s.s3Service.PresignFileURL(ctx, atts[i].PlaybackURL)
+		}
 	}
 }
 
@@ -370,6 +374,9 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 			att.TranscriptionStatus = string(a.TranscriptionStatus.TranscriptionStatus)
 			att.TranscriptionText = a.TranscriptText.String
 		}
+		if a.TranscodeStatus.Valid && a.TranscodeStatus.AudioTranscodeStatus == "COMPLETED" {
+			att.PlaybackURL = a.TranscodedFileUrl.String
+		}
 		atts = append(atts, att)
 	}
 	if atts == nil {
@@ -650,6 +657,9 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, 
 			att.TranscriptionStatus = string(a.TranscriptionStatus.TranscriptionStatus)
 			att.TranscriptionText = a.TranscriptText.String
 		}
+		if a.TranscodeStatus.Valid && a.TranscodeStatus.AudioTranscodeStatus == "COMPLETED" {
+			att.PlaybackURL = a.TranscodedFileUrl.String
+		}
 		attMap[uIDStr] = append(attMap[uIDStr], att)
 	}
 	for _, atts := range attMap {
@@ -712,6 +722,9 @@ func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, li
 			if att.TranscriptionStatus.Valid {
 				payload.TranscriptionStatus = string(att.TranscriptionStatus.TranscriptionStatus)
 				payload.TranscriptionText = att.TranscriptText.String
+			}
+			if att.TranscodeStatus.Valid && att.TranscodeStatus.AudioTranscodeStatus == "COMPLETED" {
+				payload.PlaybackURL = att.TranscodedFileUrl.String
 			}
 			aM[att.TaskCommentID.UUID.String()] = append(aM[att.TaskCommentID.UUID.String()], payload)
 		}

@@ -52,7 +52,7 @@ func VerifyGoogleIDToken(ctx context.Context, tokenStr, clientID string) (*Googl
 	}
 
 	if claims.Audience != clientID {
-		return nil, errors.New("google token audience mismatch")
+		return nil, fmt.Errorf("google token audience mismatch: got %q want %q", claims.Audience, clientID)
 	}
 
 	if claims.Issuer != "accounts.google.com" && claims.Issuer != "https://accounts.google.com" {

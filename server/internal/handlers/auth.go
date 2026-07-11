@@ -219,12 +219,14 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 			hasPrivilege = true
 			break
 		}
-	}
-
-	// If they are a SUPER_ADMIN, they inherit the right to drop down to any role context
-	for _, r := range roles {
+		// SUPER_ADMIN inherits ADMIN and EMPLOYEE; ADMIN inherits EMPLOYEE
 		if string(r) == "SUPER_ADMIN" {
 			hasPrivilege = true
+			break
+		}
+		if string(r) == "ADMIN" && req.TargetRole == "EMPLOYEE" {
+			hasPrivilege = true
+			break
 		}
 	}
 

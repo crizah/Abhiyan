@@ -52,10 +52,25 @@ dev-down:
 analyse-sql:
 	cd server && go run ../indexlens.go --schemas ./internal/db/schemas --queries ./internal/db/query
 
+# Use after adding new secrets/env vars to the worker task definition via Terraform.
+# Terraform creates a new revision but won't update the service (ignore_changes).
+worker-update:
+	@REVISION=$$(aws ecs describe-task-definition --task-definition abhiyan-worker --region ap-south-1 --query 'taskDefinition.revision' --output text) && \
+	echo "Updating worker service to abhiyan-worker:$$REVISION..." && \
+	aws ecs update-service \
+		--cluster abhiyan-prod \
+		--service abhiyan-worker \
+		--task-definition abhiyan-worker:$$REVISION \
+		--force-new-deployment \
+		--region ap-south-1 \
+		--query 'service.serviceArn' \
+		--output text > /dev/null && \
+	echo "Done. New deployment started."
+
 worker-dashboard:
 	@TASK=$$(aws ecs list-tasks --cluster abhiyan-prod --service-name abhiyan-worker --query 'taskArns[0]' --output text --region ap-south-1) && \
 	ENI=$$(aws ecs describe-tasks --cluster abhiyan-prod --tasks $$TASK --region ap-south-1 --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text) && \
 	IP=$$(aws ec2 describe-network-interfaces --network-interface-ids $$ENI --region ap-south-1 --query 'NetworkInterfaces[0].Association.PublicIp' --output text) && \
 	echo "http://$$IP:8081"
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql worker-dashboard
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql worker-dashboard worker-update

@@ -52,4 +52,10 @@ dev-down:
 analyse-sql:
 	cd server && go run ../indexlens.go --schemas ./internal/db/schemas --queries ./internal/db/query
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql
+worker-dashboard:
+	@TASK=$$(aws ecs list-tasks --cluster abhiyan-prod --service-name abhiyan-worker --query 'taskArns[0]' --output text --region ap-south-1) && \
+	ENI=$$(aws ecs describe-tasks --cluster abhiyan-prod --tasks $$TASK --region ap-south-1 --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text) && \
+	IP=$$(aws ec2 describe-network-interfaces --network-interface-ids $$ENI --region ap-south-1 --query 'NetworkInterfaces[0].Association.PublicIp' --output text) && \
+	echo "http://$$IP:8081"
+
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql worker-dashboard

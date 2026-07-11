@@ -53,7 +53,6 @@ func main() {
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-
 	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
 
 	onionApp, err := app.New(app.Config{

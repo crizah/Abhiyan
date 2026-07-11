@@ -45,7 +45,8 @@ resource "aws_ecs_task_definition" "worker" {
       { name = "FRONTEND_URL",            valueFrom = "/${var.project}/prod/FRONTEND_URL" },
       { name = "AWS_SES_SENDER",          valueFrom = "/${var.project}/prod/AWS_SES_SENDER" },
       { name = "WHATSAPP_ACCESS_TOKEN",   valueFrom = "/${var.project}/prod/WHATSAPP_ACCESS_TOKEN" },
-      { name = "PHONE_ID",                valueFrom = "/${var.project}/prod/PHONE_ID" }
+      { name = "PHONE_ID",                valueFrom = "/${var.project}/prod/PHONE_ID" },
+      { name = "GOOGLE_CLIENT_ID",        valueFrom = "/${var.project}/prod/GOOGLE_CLIENT_ID" }
     ]
 
     environment = [

@@ -88,6 +88,12 @@ export default function ForgotPasswordPage() {
             min-height: 100vh;
           }
         }
+
+        @media (max-width: 400px) {
+          .forgot-form-panel {
+            padding: 24px 16px;
+          }
+        }
       `}</style>
 
       <div className="forgot-root">

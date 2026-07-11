@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Typography, Flex, message, theme } from 'antd';
+import { Form, Input, Button, Typography, Flex, Row, Col, message, theme } from 'antd';
 import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
@@ -133,6 +133,12 @@ export default function AcceptInvitePage() {
             min-height: 100vh;
           }
         }
+
+        @media (max-width: 400px) {
+          .invite-form-panel {
+            padding: 24px 16px;
+          }
+        }
       `}</style>
 
       <div className="invite-root">
@@ -208,24 +214,26 @@ export default function AcceptInvitePage() {
                 </>
               ) : (
                 <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
-                  <Flex gap="middle">
-                    <Form.Item
-                      name="first_name"
-                      label="First Name"
-                      style={{ flex: 1 }}
-                      rules={[{ required: true, message: 'First name is required' }]}
-                    >
-                      <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
-                    </Form.Item>
+                  <Row gutter={[16, 0]}>
+                    <Col xs={24} sm={12}>
+                      <Form.Item
+                        name="first_name"
+                        label="First Name"
+                        rules={[{ required: true, message: 'First name is required' }]}
+                      >
+                        <Input prefix={<UserOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                      </Form.Item>
+                    </Col>
 
-                    <Form.Item
-                      name="last_name"
-                      label="Last Name"
-                      style={{ flex: 1 }}
-                    >
-                      <Input size="large" />
-                    </Form.Item>
-                  </Flex>
+                    <Col xs={24} sm={12}>
+                      <Form.Item
+                        name="last_name"
+                        label="Last Name"
+                      >
+                        <Input size="large" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
                   <Form.Item
                     name="phone"

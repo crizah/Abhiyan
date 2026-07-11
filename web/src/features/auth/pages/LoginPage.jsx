@@ -60,6 +60,16 @@ export default function LoginPage() {
     if (!clientId) return undefined;
 
     let cancelled = false;
+    let pollInterval;
+    let resizeTimer;
+
+    // Google's button takes a fixed pixel width, so we cap it to the
+    // container's actual width to avoid overflowing narrow screens.
+    const getButtonWidth = () => {
+      const container = googleButtonRef.current?.parentElement;
+      if (!container) return 392;
+      return Math.min(392, Math.floor(container.getBoundingClientRect().width));
+    };
 
     const renderButton = () => {
       if (cancelled || !googleButtonRef.current) return;
@@ -71,25 +81,33 @@ export default function LoginPage() {
         type: 'standard',
         theme: 'outline',
         size: 'large',
-        width: 392,
+        width: getButtonWidth(),
       });
+    };
+
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderButton, 150);
     };
 
     if (window.google?.accounts?.id) {
       renderButton();
-      return undefined;
+    } else {
+      pollInterval = setInterval(() => {
+        if (window.google?.accounts?.id) {
+          clearInterval(pollInterval);
+          renderButton();
+        }
+      }, 100);
     }
 
-    const interval = setInterval(() => {
-      if (window.google?.accounts?.id) {
-        clearInterval(interval);
-        renderButton();
-      }
-    }, 100);
+    window.addEventListener('resize', handleResize);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(pollInterval);
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -153,6 +171,12 @@ export default function LoginPage() {
           }
           .login-form-panel {
             min-height: 100vh;
+          }
+        }
+
+        @media (max-width: 400px) {
+          .login-form-panel {
+            padding: 24px 16px;
           }
         }
       `}</style>

@@ -90,6 +90,12 @@ export default function RegisterOrgPage() {
             min-height: 100vh;
           }
         }
+
+        @media (max-width: 400px) {
+          .register-form-panel {
+            padding: 24px 16px;
+          }
+        }
       `}</style>
 
       <div className="register-root">
@@ -138,13 +144,13 @@ export default function RegisterOrgPage() {
                 <Title level={5} style={{ marginTop: 0, marginBottom: token.marginMD, color: token.colorPrimary }}>
                   Organization Details
                 </Title>
-                <Row gutter={16}>
-                  <Col span={12}>
+                <Row gutter={[16, 0]}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="org_name" label="Company Name" rules={[{ required: true }]}>
                       <Input size="large" placeholder="MNC Corp" />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="org_domain" label="Domain (Optional)">
                       <Input size="large" placeholder="mnc.com" />
                     </Form.Item>
@@ -156,13 +162,13 @@ export default function RegisterOrgPage() {
                 <Title level={5} style={{ marginTop: 0, marginBottom: token.marginMD, color: token.colorPrimary }}>
                   Admin Details
                 </Title>
-                <Row gutter={16}>
-                  <Col span={12}>
+                <Row gutter={[16, 0]}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="admin_first_name" label="First Name" rules={[{ required: true }]}>
                       <Input size="large" placeholder="Jane" />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="admin_last_name" label="Last Name">
                       <Input size="large" placeholder="Doe" />
                     </Form.Item>
@@ -173,13 +179,13 @@ export default function RegisterOrgPage() {
                   <Input size="large" placeholder="jane.doe@mnc.com" />
                 </Form.Item>
 
-                <Row gutter={16}>
-                  <Col span={12}>
+                <Row gutter={[16, 0]}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="admin_phone" label="Phone Number" rules={[{ required: true }]}>
                       <Input size="large" placeholder="+1 234 567 8900" />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
+                  <Col xs={24} sm={12}>
                     <Form.Item name="admin_password" label="Password" rules={[{ required: true, min: 8 }]}>
                       <Input.Password size="large" placeholder="••••••••" />
                     </Form.Item>

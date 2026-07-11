@@ -92,6 +92,12 @@ export default function ResetPasswordPage() {
             min-height: 100vh;
           }
         }
+
+        @media (max-width: 400px) {
+          .reset-form-panel {
+            padding: 24px 16px;
+          }
+        }
       `}</style>
 
       <div className="reset-root">

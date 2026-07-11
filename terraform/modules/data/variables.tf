@@ -51,3 +51,8 @@ variable "cookie_domain" {
   type        = string
   description = "Domain for cookies e.g. yourdomain.com"
 }
+
+variable "google_client_id"{
+  type = string
+  description = "google client id for oauth"
+}

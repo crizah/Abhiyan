@@ -122,6 +122,14 @@ resource "aws_ssm_parameter" "phone_id" {
   tags = { Project = var.project }
 }
 
+resource "aws_ssm_parameter" "google_client_id" {
+  name  = "/${var.project}/prod/GOOGLE_CLIENT_ID"
+  type  = "String"
+  value = var.google_client_id
+
+  tags = { Project = var.project }
+}
+
 resource "aws_ssm_parameter" "cookie_domain" {
   name  = "/${var.project}/prod/COOKIE_DOMAIN"
   type  = "String"

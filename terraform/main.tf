@@ -48,6 +48,7 @@ module "data" {
   aws_ses_sender     = var.aws_ses_sender
   phone_id           = var.phone_id
   cookie_domain      = var.cookie_domain
+  google_client_id   = var.google_client_id
 }
 
 module "compute" {

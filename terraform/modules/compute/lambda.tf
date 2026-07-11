@@ -40,6 +40,10 @@ data "aws_ssm_parameter" "openai_api_key" {
   name            = "/${var.project}/prod/OPENAI_API_KEY"
   with_decryption = true
 }
+data "aws_ssm_parameter" "google_client_id" {
+  name            = "/${var.project}/prod/GOOGLE_CLIENT_ID"
+  with_decryption = true
+}
 
 resource "aws_s3_bucket" "lambda_deployments" {
   bucket = var.lambda_deployment_bucket
@@ -102,6 +106,7 @@ resource "aws_lambda_function" "api" {
       COOKIE_DOMAIN         = data.aws_ssm_parameter.cookie_domain.value
       WHATSAPP_ACCESS_TOKEN = data.aws_ssm_parameter.whatsapp_access_token.value
       OPENAI_API_KEY        = data.aws_ssm_parameter.openai_api_key.value
+      GOOGLE_CLIENT_ID      = data.aws_ssm_parameter.google_client_id.value
     }
   }
 

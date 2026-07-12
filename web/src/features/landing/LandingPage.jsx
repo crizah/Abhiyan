@@ -2,6 +2,7 @@ import React from 'react';
 import Nav from './sections/Nav';
 import Hero from './sections/Hero';
 import FeatureScroll from './sections/FeatureScroll';
+import Footer from './sections/Footer';
 import './landing.css';
 
 export default function LandingPage() {
@@ -10,6 +11,7 @@ export default function LandingPage() {
       <Nav />
       <Hero />
       <FeatureScroll />
+      <Footer />
     </div>
   );
 }

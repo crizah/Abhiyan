@@ -449,3 +449,42 @@
     padding: 0 28px;
   }
 }
+
+/* ---------- Footer ---------- */
+.landing-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 22px;
+  padding: 40px 24px 48px;
+  background-color: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.landing-footer-mark {
+  display: flex;
+}
+
+.landing-footer-tagline {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.landing-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.landing-footer-copy {
+  margin: 32px 0 0;
+  font-size: 12.5px;
+  color: rgba(24, 24, 27, 0.4);
+}

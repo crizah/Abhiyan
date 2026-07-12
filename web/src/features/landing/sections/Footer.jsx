@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { GithubOutlined } from '@ant-design/icons';
 import Logo from '../../../components/Logo';
 
 export default function Footer() {
@@ -21,6 +22,16 @@ export default function Footer() {
           Sign Up
         </Link>
       </div>
+
+      <a
+        href="https://github.com/crizah/Abhiyan"
+        target="_blank"
+        rel="noreferrer"
+        className="landing-footer-github"
+        aria-label="Abhiyan on GitHub"
+      >
+        <GithubOutlined />
+      </a>
 
       <p className="landing-footer-copy">© {new Date().getFullYear()} Abhiyan. All rights reserved.</p>
     </footer>

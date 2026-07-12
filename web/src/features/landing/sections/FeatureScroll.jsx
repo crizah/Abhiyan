@@ -1,5 +1,4 @@
-import React, { useRef } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
+import React from 'react';
 import { SHOWCASES } from './showcases';
 
 const FEATURES = [
@@ -40,58 +39,12 @@ const FEATURES = [
   },
 ];
 
-const N = FEATURES.length;
-
-function FeatureLayer({ feature, index, progress }) {
-  const start = index / N;
-  const end = (index + 1) / N;
-  const w = (1 / N) * 0.22;
-
-  const inLo = index === 0 ? start : start - w;
-  const inHi = index === 0 ? start : start + w;
-  const outLo = index === N - 1 ? end : end - w;
-  const outHi = index === N - 1 ? end : end + w;
-
-  const opacity = useTransform(
-    progress,
-    [inLo, inHi, outLo, outHi],
-    [index === 0 ? 1 : 0, 1, 1, index === N - 1 ? 1 : 0]
-  );
-  const shift = useTransform(progress, [inLo, inHi, outLo, outHi], [24, 0, 0, -24]);
-
-  const Showcase = SHOWCASES[feature.key];
-
-  return (
-    <motion.div className="fscroll-layer" style={{ opacity }}>
-      <div className="fscroll-bg" style={{ background: `radial-gradient(ellipse 60% 55% at 80% 50%, ${feature.accent}22 0%, transparent 70%)` }} />
-      <div className="fscroll-pair">
-        <motion.div className="fscroll-text fscroll-text-left" style={{ y: shift }}>
-          <span className="fscroll-kicker" style={{ color: feature.accent, borderColor: `${feature.accent}44` }}>
-            {feature.kicker}
-          </span>
-          <h3>{feature.title}</h3>
-          <p>{feature.body}</p>
-        </motion.div>
-
-        {Showcase && (
-          <div className="fscroll-showcase">
-            <Showcase />
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
+// Plain stacked list, normal document scroll — no pinning, no scroll-scrubbed
+// motion. Each row is divided from the next by a top border plus its own
+// kicker/heading, which is enough to break the page up on its own.
 export default function FeatureScroll() {
-  const sectionRef = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start start', 'end end'],
-  });
-
   return (
-    <>
+    <section id="features" className="fscroll">
       <div className="fscroll-intro">
         <span className="fscroll-heading-tag">What Abhiyan does</span>
         <h2>
@@ -99,15 +52,28 @@ export default function FeatureScroll() {
         </h2>
       </div>
 
-      <section id="features" className="fscroll" ref={sectionRef} style={{ height: `${N * 170}vh` }}>
-        <div className="fscroll-sticky">
-          <div className="fscroll-texture" />
+      <div className="fscroll-list">
+        {FEATURES.map((feature) => {
+          const Showcase = SHOWCASES[feature.key];
+          return (
+            <div className="fscroll-row" key={feature.key}>
+              <div className="fscroll-text fscroll-text-left">
+                <span className="fscroll-kicker" style={{ color: feature.accent, borderColor: `${feature.accent}44` }}>
+                  {feature.kicker}
+                </span>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
+              </div>
 
-          {FEATURES.map((f, i) => (
-            <FeatureLayer key={f.key} feature={f} index={i} progress={scrollYProgress} />
-          ))}
-        </div>
-      </section>
-    </>
+              {Showcase && (
+                <div className="fscroll-showcase">
+                  <Showcase />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

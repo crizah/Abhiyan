@@ -302,46 +302,28 @@
 
 .fscroll {
   position: relative;
+  padding: 0 24px 40px;
 }
 
-.fscroll-sticky {
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  overflow: hidden;
-  background-color: var(--bg);
+.fscroll-list {
+  display: flex;
+  flex-direction: column;
+  max-width: min(1180px, 90vw);
+  margin: 0 auto;
 }
 
-.fscroll-texture {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(#18181B22 1px, transparent 1px);
-  background-size: 22px 22px;
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.fscroll-layer {
-  position: absolute;
-  inset: 0;
-}
-
-.fscroll-bg {
-  position: absolute;
-  inset: 0;
-}
-
-.fscroll-pair {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  width: min(1180px, 90vw);
+.fscroll-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: clamp(32px, 5vw, 72px);
+  padding: 64px 0;
+  border-top: 1px solid var(--border);
+}
+
+.fscroll-row:first-child {
+  border-top: none;
+  padding-top: 40px;
 }
 
 .fscroll-showcase {
@@ -400,53 +382,21 @@
 }
 
 @media (max-width: 860px) {
-  .fscroll {
-    height: auto !important;
-  }
-
-  .fscroll-sticky {
-    position: relative;
-    top: auto;
-    height: auto;
-    display: flex;
+  .fscroll-row {
     flex-direction: column;
-    gap: 64px;
-    padding: 40px 0 80px;
-  }
-
-  .fscroll-texture {
-    display: none;
-  }
-
-  .fscroll-layer {
-    position: relative !important;
-    inset: auto;
-    opacity: 1 !important;
-    display: flex;
-  }
-
-  .fscroll-pair {
-    position: relative !important;
-    inset: auto !important;
-    top: auto !important;
-    left: auto !important;
-    transform: none !important;
-    width: 100%;
-    flex-direction: column !important;
-    align-items: center;
-    gap: 24px;
-    padding: 0 0 20px;
+    align-items: flex-start;
+    padding: 40px 0;
   }
 
   .fscroll-text {
     width: 100%;
-    padding: 0 28px;
+    flex: 0 0 auto;
   }
 
   .fscroll-showcase {
     width: 100%;
     max-width: 360px;
-    padding: 0 28px;
+    flex: 0 0 auto;
   }
 }
 

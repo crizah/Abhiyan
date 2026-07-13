@@ -445,7 +445,7 @@ export default function TeamTasksPage() {
             <Form.Item name="subscribers" label="Subscribers" style={{ flex: 1 }}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
           </Flex>
           <Form.Item name="due_date" label="Deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-          
+
           <Divider orientation="left">Automated Reminders</Divider>
           <Form.List name="reminders">
              {(fields, { add, remove }) => (
@@ -486,7 +486,7 @@ export default function TeamTasksPage() {
             <Form.Item name="subscribers" label="Subscribers" style={{ flex: 1 }}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
           </Flex>
           <Form.Item name="due_date" label="Deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-          
+
           <Divider orientation="left">Automated Reminders</Divider>
           <Form.List name="reminders">
              {(fields, { add, remove }) => (

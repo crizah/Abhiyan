@@ -426,7 +426,7 @@ func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, 
 	for _, e := range events {
 		dueDate := "N/A"
 		if e.DueDateSnapshot.Valid {
-			dueDate = e.DueDateSnapshot.Time.Format("2006-01-02")
+			dueDate = e.DueDateSnapshot.Time.In(util.IST).Format("2006-01-02")
 		}
 		cw.Write([]string{
 			e.TaskTitle,
@@ -434,7 +434,7 @@ func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, 
 			e.EsEventType,
 			fmt.Sprintf("%d", e.PointsAwarded),
 			dueDate,
-			e.EventAt.Format("2006-01-02"),
+			e.EventAt.In(util.IST).Format("2006-01-02"),
 		})
 	}
 

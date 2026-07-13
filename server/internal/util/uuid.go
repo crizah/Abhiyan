@@ -3,9 +3,22 @@ package util
 import (
 	"database/sql"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+// IST is the business timezone all human-facing dates/times are displayed in,
+// regardless of what timezone the DB connection or host happens to report
+// times in (Postgres/lib-pq hand back times in whatever the session's
+// TimeZone GUC is, which defaults to UTC on RDS).
+var IST = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		return time.FixedZone("IST", 5*60*60+30*60)
+	}
+	return loc
+}()
 
 // ParseUUID safely converts a string to a uuid.UUID.
 // If the string is invalid, it returns uuid.Nil (a zeroed UUID).
@@ -30,6 +43,8 @@ func FormatDeadline(nt sql.NullTime) string {
 		return "No deadline set"
 	}
 
-	// Formats to: "Jan 02, 2006 at 03:04 PM"
-	return nt.Time.Format("Jan 02, 2006 at 03:04 PM")
+	// Convert to IST before formatting — the value read from the DB is
+	// otherwise in whatever timezone the Postgres session reports (e.g. UTC),
+	// not the org's local time.
+	return nt.Time.In(IST).Format("Jan 02, 2006 at 03:04 PM")
 }

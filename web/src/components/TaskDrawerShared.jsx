@@ -615,7 +615,7 @@ export function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate
 export function buildTaskColumns({ onView }) {
   return [
     { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
-    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY') : <Text type="secondary">No deadline</Text> },
+    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY h:mm A') : <Text type="secondary">No deadline</Text> },
     { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={fulfillmentColor(status)}>{status}</Tag> },
     { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={taskStatusColor(status)}>{status}</Tag> },
     { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={reviewStatusColor(status)}>{status}</Tag> },
@@ -677,7 +677,7 @@ export function TaskDetailsDrawer({
         <Text style={{ display: 'block', marginTop: 8 }}>
           <CalendarOutlined /> Due:{' '}
           {(taskDetails?.task?.due_date || selectedTask.due_date)
-            ? dayjs(taskDetails?.task?.due_date || selectedTask.due_date).format('MMM D, YYYY')
+            ? dayjs(taskDetails?.task?.due_date || selectedTask.due_date).format('MMM D, YYYY h:mm A')
             : <Text type="secondary">No deadline</Text>}
         </Text>
 

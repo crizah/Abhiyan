@@ -25,7 +25,7 @@ import (
 
 func main() {
 	// In Lambda, env vars are injected by Terraform at deploy time.
-	// Locally, load from .env file.
+	// Locally, load from .env file
 	godotenv.Load()
 
 	db_url := os.Getenv("DB_URL")

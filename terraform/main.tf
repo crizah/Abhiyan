@@ -65,7 +65,6 @@ module "compute" {
   github_repo              = var.github_repo
   frontend_url             = var.frontend_url
 
-  depends_on = [module.data]
 }
 
 # module "routing" {

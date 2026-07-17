@@ -31,15 +31,27 @@ func main() {
 	queries := db.New(dbConn)
 
 	// 1. Initialize AWS SES Service
-	senderEmail := os.Getenv("AWS_SES_SENDER") // e.g., "no-reply@yourdomain.com"
+	// senderEmail := os.Getenv("AWS_SES_SENDER") // e.g., "no-reply@yourdomain.com"
+	// if senderEmail == "" {
+	// 	log.Fatal("AWS_SES_SENDER environment variable is not set")
+	// }
+
+	// emailService, err := services.NewEmailService(context.Background(), senderEmail)
+	// if err != nil {
+	// 	log.Fatalf("Failed to initialize AWS SES client: %v", err)
+	// }
+
+	// initialise resend email service
+	senderEmail := os.Getenv("RESEND_SENDER")
 	if senderEmail == "" {
-		log.Fatal("AWS_SES_SENDER environment variable is not set")
+		log.Fatal("RESEND_SENDER environment variable is not set")
+	}
+	resendApiKey := os.Getenv("RESEND_API_KEY")
+	if resendApiKey == "" {
+		log.Fatalf("RESEND_API_KEY variable is not set")
 	}
 
-	emailService, err := services.NewEmailService(context.Background(), senderEmail)
-	if err != nil {
-		log.Fatalf("Failed to initialize AWS SES client: %v", err)
-	}
+	emailService := services.NewEmailServiceResend(resendApiKey, senderEmail)
 
 	wa := os.Getenv("WHATSAPP_ACCESS_TOKEN")
 	bp := os.Getenv("PHONE_ID")

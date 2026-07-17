@@ -28,6 +28,10 @@ aws_ses_sender = "noreply@yourdomain.com"
 # ── WhatsApp ──────────────────────────────────────────────────────────────────
 phone_id = "your-whatsapp-phone-id"
 
+# ── Resend ────────────────────────────────────────────────────────────────────
+# Must be a verified sender email/domain in Resend
+resend_sender = "noreply@yourdomain.com"
+
 # ── Secrets set AFTER terraform apply via CLI (not stored in tfvars) ──────────
 #
 # These are created as CHANGE_ME placeholders by Terraform.
@@ -36,6 +40,7 @@ phone_id = "your-whatsapp-phone-id"
 #   aws ssm put-parameter --name "/abhiyan/prod/JWT_SECRET"            --value "..." --type SecureString --overwrite
 #   aws ssm put-parameter --name "/abhiyan/prod/OPENAI_API_KEY"        --value "..." --type SecureString --overwrite
 #   aws ssm put-parameter --name "/abhiyan/prod/WHATSAPP_ACCESS_TOKEN" --value "..." --type SecureString --overwrite
+#   aws ssm put-parameter --name "/abhiyan/prod/RESEND_API_KEY"        --value "..." --type SecureString --overwrite
 #
 # Note: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are NOT needed in production.
 # Lambda and ECS use their IAM roles automatically — no credentials required.

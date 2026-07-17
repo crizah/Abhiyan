@@ -47,6 +47,7 @@ module "data" {
   s3_bucket_name     = var.s3_bucket_name
   aws_ses_sender     = var.aws_ses_sender
   phone_id           = var.phone_id
+  resend_sender      = var.resend_sender
   cookie_domain      = var.cookie_domain
   google_client_id   = var.google_client_id
 }

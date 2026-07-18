@@ -56,7 +56,7 @@ func (rs *EmailServiceResend) SendReminderEmail(ctx context.Context,
 	taskDeadline string) error {
 
 	htmlBody := fmt.Sprintf(`
-		<h1>This is a reminder to complete you task %s. Please complete the given task before the deadline %s and submit for admin review.</h1>
+		<h1>This is a reminder to complete you task "%s". Please complete the given task before the deadline %s and submit for admin review.</h1>
 	`, taskName, taskDeadline)
 
 	params, ok := rs.getBaseParam(recipientEmail, Tasksubject, htmlBody).(*resend.SendEmailRequest)

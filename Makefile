@@ -2,6 +2,8 @@ DB_URL         ?= postgres://postgres:password@localhost:5432/abhiyan_dev?sslmod
 MIGRATIONS_DIR  = server/internal/db/migrations
 BUILD_DIR = server/cmd/api
 BINARY          = abhiyan
+SSM_PREFIX      = /abhiyan/prod
+type           ?= SecureString
 
 build:
 	cd server && GOOS=linux go build -o $(BINARY) cmd/api/main.go
@@ -40,6 +42,12 @@ migrate-status:
 unfuck-atlas:
 	atlas migrate hash --dir "file://server/internal/db/migrations"
 
+# Sanity-checks the multi-org membership backfill. Defaults to dev (DB_URL);
+# pass a different one for prod, e.g.:
+#   make verify-multi-org DB_URL="postgres://user:pass@prod-host:5432/abhiyan_prod?sslmode=require"
+verify-multi-org:
+	psql "$(DB_URL)" -f server/scripts/verify_multi_org_membership.sql
+
 sqlc:
 	sqlc generate -f server/sqlc.yaml
 
@@ -67,10 +75,25 @@ worker-update:
 		--output text > /dev/null && \
 	echo "Done. New deployment started."
 
+# Set/overwrite an SSM param directly (bypasses Terraform — for the
+# "CHANGE_ME" placeholders that have ignore_changes = [value]).
+# usage: make set-ssm var=RESEND_API_KEY value=re_xxx_your_real_key
+# usage: make set-ssm var=RESEND_SENDER value=noreply@x.com type=String
+set-ssm:
+	@test -n "$(var)" || { echo "Usage: make set-ssm var=NAME value=VALUE [type=String|SecureString]"; exit 1; }
+	@test -n "$(value)" || { echo "Usage: make set-ssm var=NAME value=VALUE [type=String|SecureString]"; exit 1; }
+	aws ssm put-parameter \
+		--name "$(SSM_PREFIX)/$(var)" \
+		--value "$(value)" \
+		--type "$(type)" \
+		--overwrite \
+		--region ap-south-1
+	@echo "Set $(SSM_PREFIX)/$(var)"
+
 worker-dashboard:
 	@TASK=$$(aws ecs list-tasks --cluster abhiyan-prod --service-name abhiyan-worker --query 'taskArns[0]' --output text --region ap-south-1) && \
 	ENI=$$(aws ecs describe-tasks --cluster abhiyan-prod --tasks $$TASK --region ap-south-1 --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text) && \
 	IP=$$(aws ec2 describe-network-interfaces --network-interface-ids $$ENI --region ap-south-1 --query 'NetworkInterfaces[0].Association.PublicIp' --output text) && \
 	echo "http://$$IP:8081"
 
-.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql worker-dashboard worker-update
+.PHONY: build run migrate-create migrate-up migrate-down migrate-status sqlc dev-up dev-down analyse-sql worker-dashboard worker-update set-ssm unfuck-atlas verify-multi-org

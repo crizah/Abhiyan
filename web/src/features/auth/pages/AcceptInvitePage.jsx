@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Typography, Flex, Row, Col, message, theme } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
 import { authAPI } from '../api';
@@ -234,7 +234,6 @@ export default function AcceptInvitePage() {
                   </>
                 ) : preview?.is_existing_user ? (
                   <>
-                    <ApartmentOutlined style={{ fontSize: 28, color: themeToken.colorPrimary }} />
                     <Title level={3} style={{ margin: 0, color: themeToken.colorText, letterSpacing: '-0.02em' }}>
                       Join {preview.org_name}
                     </Title>

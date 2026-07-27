@@ -358,6 +358,20 @@ export default function TeamTasksPage() {
     } catch (err) { message.error("Failed to post update."); }
   };
 
+  const myParticipant = taskDetails?.participants?.find(p => p.id === user?.id);
+  const isAssignee = myParticipant?.role === 'ASSIGNEE';
+  const canSubmit = isAssignee && selectedTask?.status === 'OPEN' && selectedTask?.fulfillment_status !== 'COMPLETED';
+
+  const submitTaskForReview = async () => {
+    try {
+      await apiClient.put(`/employee/tasks/${selectedTask.id}/submit`);
+      message.success('Task submitted for review!');
+      setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, fulfillment_status: 'COMPLETED', review_status: 'PENDING' } : t));
+      setSelectedTask(prev => ({ ...prev, fulfillment_status: 'COMPLETED', review_status: 'PENDING' }));
+      window.dispatchEvent(new Event('refresh-notifications'));
+    } catch (err) { message.error("Submission failed."); }
+  };
+
   const handleApprove = async () => {
     try {
       await apiClient.put(`/admin/tasks/${selectedTask.id}/approve`);
@@ -564,6 +578,11 @@ export default function TeamTasksPage() {
                 </>
               ) : (
                 <>
+                  {canSubmit && (
+                    <Popconfirm title="Submit this task for review?" onConfirm={submitTaskForReview}>
+                      <Button type="primary" style={{ backgroundColor: '#B3455C', border: 'none' }}>Submit for Review</Button>
+                    </Popconfirm>
+                  )}
                   <Button
                     icon={<EditOutlined />}
                     onClick={openEditModal}

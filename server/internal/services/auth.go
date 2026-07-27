@@ -41,6 +41,14 @@ func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App
 	}
 }
 
+// RegisterOrganization supports two paths under multi-org membership:
+//   - a brand-new email registers a brand-new shared identity, becoming the
+//     new org's SUPER_ADMIN (today's behavior).
+//   - an email that already has an Abhiyan identity (from another org) can
+//     spin up an additional org self-serve, becoming ITS SUPER_ADMIN too —
+//     but only once their password is verified against the existing account,
+//     so this can't be used to attach an org to someone else's identity.
+//     Their existing shared profile/credentials are left untouched.
 func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.RegisterOrgRequest) error {
 	if !util.IsValidPhoneNumber(req.AdminPhone) {
 		return errors.New("phone number must be a 10-digit number without the country code")
@@ -50,23 +58,37 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 	// "Jane@co.com" and "jane@co.com" can't become two different accounts.
 	adminEmail := strings.ToLower(strings.TrimSpace(req.AdminEmail))
 
-	// 1. Hash the password before starting the transaction
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.AdminPassword), bcrypt.DefaultCost)
-	if err != nil {
+	// Checked up front, outside any transaction, so we only pay for the slow
+	// bcrypt hash when we actually need a brand-new credentials row.
+	existingUser, err := s.Queries.GetUserByEmail(ctx, adminEmail)
+	isExisting := err == nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 
-	// 2. Start Database Transaction
+	var hashedPassword string
+	if isExisting {
+		creds, credErr := s.Queries.GetUserCredentials(ctx, existingUser.ID)
+		if credErr != nil || !util.CheckPassword(req.AdminPassword, creds.PasswordHash) {
+			// Same non-committal message as Login — don't confirm whether the email exists.
+			return errors.New("invalid email or password")
+		}
+	} else {
+		hp, hashErr := bcrypt.GenerateFromPassword([]byte(req.AdminPassword), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return hashErr
+		}
+		hashedPassword = string(hp)
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() // Safe to call; does nothing if already committed
 
-	// Bind sqlc queries to this transaction
 	qtx := s.Queries.WithTx(tx)
 
-	// 3. Create Organization
 	org, err := qtx.CreateOrganizations(ctx, db.CreateOrganizationsParams{
 		Name: req.OrgName,
 		Domain: sql.NullString{
@@ -78,39 +100,44 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		return err
 	}
 
-	// 4. Create Super Admin User (Status ACTIVE, Role SUPERADMIN)
-	user, err := qtx.CreateUser(ctx, db.CreateUserParams{
-		OrgID:       org.ID,
-		FirstName:   sql.NullString{String: req.AdminFirstName, Valid: true},
-		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
-		EmailID:     adminEmail,
-		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+	var userID uuid.UUID
+	if isExisting {
+		userID = existingUser.ID
+	} else {
+		newUser, err := qtx.CreateUser(ctx, db.CreateUserParams{
+			FirstName:   sql.NullString{String: req.AdminFirstName, Valid: true},
+			LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
+			EmailID:     adminEmail,
+			PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := qtx.CreateUserCredentials(ctx, db.CreateUserCredentialsParams{
+			UserID:       newUser.ID,
+			PasswordHash: hashedPassword,
+		}); err != nil {
+			return err
+		}
+		userID = newUser.ID
+	}
 
-		Status: db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
-	})
-	if err != nil {
+	if _, err := qtx.CreateOrgMembership(ctx, db.CreateOrgMembershipParams{
+		UserID: userID,
+		OrgID:  org.ID,
+		Status: db.UserStatusACTIVE,
+	}); err != nil {
 		return err
 	}
 
-	// Grant SUPER_ADMIN system role
-	_, err = qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
-		UserID: user.ID,
+	if _, err := qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
+		UserID: userID,
+		OrgID:  uuid.NullUUID{UUID: org.ID, Valid: true},
 		Role:   db.SystemRoleSUPERADMIN,
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	// 5. Save Credentials
-	_, err = qtx.CreateUserCredentials(ctx, db.CreateUserCredentialsParams{
-		UserID:       user.ID,
-		PasswordHash: string(hashedPassword),
-	})
-	if err != nil {
-		return err
-	}
-
-	// 6. Commit transaction
 	return tx.Commit()
 }
 
@@ -124,16 +151,27 @@ func (s *AuthService) GetOrgInfo(ctx context.Context, orgID string) (db.GetOrgIn
 	return s.Queries.GetOrgInfo(ctx, parsedUUID)
 }
 
-func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {
+// LoginResult covers both outcomes of a successful credential check: a
+// single-org account gets a session token immediately; a multi-org account
+// gets a short-lived pending token and the list of orgs to choose from
+// instead (no session cookie yet — see AuthService.SelectOrg).
+type LoginResult struct {
+	Token                string
+	RequiresOrgSelection bool
+	PendingToken         string
+	Orgs                 []schemas.OrgOption
+}
+
+func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (*LoginResult, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 
 	// 1. Fetch User by Email
 	user, err := s.Queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", errors.New("invalid email or password")
+			return nil, errors.New("invalid email or password")
 		}
-		return "", err
+		return nil, err
 	}
 
 	// 2. Fetch User Credentials by User ID
@@ -141,23 +179,82 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// This happens if an INVITED user tries to log in before accepting the invite
-			return "", errors.New("account setup incomplete: please check your email for the invite link")
+			return nil, errors.New("account setup incomplete: please check your email for the invite link")
 		}
-		return "", err
+		return nil, err
 	}
 
 	// 3. Compare the provided password against the stored hash
 	isValid := util.CheckPassword(req.Password, creds.PasswordHash)
 	if !isValid {
-		return "", errors.New("invalid email or password")
+		return nil, errors.New("invalid email or password")
 	}
 
-	// 4. Generate and return the Access JWT
-	token, err := s.issueAccessToken(ctx, user, email)
+	// 4. Issue a session immediately (1 org) or ask which org to use (2+)
+	return s.completeLogin(ctx, user.ID, email)
+}
+
+// completeLogin is the shared tail of every login path (password, Google,
+// and the org-selection follow-up) — decides single-org-immediate vs
+// multi-org-picker and mints the appropriate result.
+func (s *AuthService) completeLogin(ctx context.Context, userID uuid.UUID, email string) (*LoginResult, error) {
+	memberships, err := s.Queries.GetUserOrgMemberships(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(memberships) == 0 {
+		return nil, errors.New("account setup incomplete: please check your email for the invite link")
+	}
+
+	if len(memberships) == 1 {
+		token, err := s.issueAccessToken(ctx, userID, memberships[0].OrgID, email)
+		if err != nil {
+			return nil, errors.New("failed to generate authentication token")
+		}
+		return &LoginResult{Token: token}, nil
+	}
+
+	pendingToken, err := util.GenerateOrgSelectionToken(userID.String(), s.JwtSecret, 5*time.Minute)
+	if err != nil {
+		return nil, errors.New("failed to generate authentication token")
+	}
+
+	orgs := make([]schemas.OrgOption, len(memberships))
+	for i, m := range memberships {
+		orgs[i] = schemas.OrgOption{OrgID: m.OrgID.String(), OrgName: m.OrgName, Roles: util.ParsePGTextArray(m.Roles)}
+	}
+
+	return &LoginResult{RequiresOrgSelection: true, PendingToken: pendingToken, Orgs: orgs}, nil
+}
+
+// SelectOrg completes a login that required org selection: verifies the
+// short-lived pending token and that the chosen org is one the person
+// actually belongs to, then mints the real session token.
+func (s *AuthService) SelectOrg(ctx context.Context, pendingToken string, orgID string) (string, error) {
+	claims, err := util.ParseOrgSelectionToken(pendingToken, s.JwtSecret)
+	if err != nil {
+		return "", errors.New("invalid or expired selection, please log in again")
+	}
+	userID := util.ParseUUID(claims.UserID)
+	targetOrgID := util.ParseUUID(orgID)
+
+	belongs, err := s.Queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: userID, OrgID: targetOrgID})
+	if err != nil {
+		return "", err
+	}
+	if !belongs {
+		return "", errors.New("you do not belong to this organization")
+	}
+
+	email, err := s.Queries.GetEmailByUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.issueAccessToken(ctx, userID, targetOrgID, email)
 	if err != nil {
 		return "", errors.New("failed to generate authentication token")
 	}
-
 	return token, nil
 }
 
@@ -166,7 +263,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 // Google directly. Instead it enqueues a verify_google_token job on the
 // dedicated auth queue, then polls Redis for the result written by the ECS
 // worker (which does have internet access).
-func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (string, error) {
+func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (*LoginResult, error) {
 	jobID := uuid.New().String()
 	resultKey := "google_auth:" + jobID
 
@@ -174,7 +271,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (s
 		"job_id":     jobID,
 		"credential": credential,
 	}); err != nil {
-		return "", fmt.Errorf("failed to queue google token verification: %w", err)
+		return nil, fmt.Errorf("failed to queue google token verification: %w", err)
 	}
 
 	// Poll Redis until the worker writes a result or we time out.
@@ -191,10 +288,10 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (s
 				Error string `json:"error"`
 			}
 			if jsonErr := json.Unmarshal([]byte(val), &result); jsonErr != nil {
-				return "", errors.New("invalid google credential")
+				return nil, errors.New("invalid google credential")
 			}
 			if result.Error != "" {
-				return "", errors.New(result.Error)
+				return nil, errors.New(result.Error)
 			}
 
 			result.Email = strings.ToLower(strings.TrimSpace(result.Email))
@@ -203,38 +300,37 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (s
 			user, dbErr := s.Queries.GetUserByEmail(ctx, result.Email)
 			if dbErr != nil {
 				if errors.Is(dbErr, sql.ErrNoRows) {
-					return "", errors.New("no account found for this email")
+					return nil, errors.New("no account found for this email")
 				}
-				return "", dbErr
+				return nil, dbErr
 			}
 
 			if _, credErr := s.Queries.GetUserCredentials(ctx, user.ID); credErr != nil {
 				if errors.Is(credErr, sql.ErrNoRows) {
-					return "", errors.New("account setup incomplete: please check your email for the invite link")
+					return nil, errors.New("account setup incomplete: please check your email for the invite link")
 				}
-				return "", credErr
+				return nil, credErr
 			}
 
-			token, tokenErr := s.issueAccessToken(ctx, user, result.Email)
-			if tokenErr != nil {
-				return "", errors.New("failed to generate authentication token")
-			}
-			return token, nil
+			return s.completeLogin(ctx, user.ID, result.Email)
 		}
 
 		time.Sleep(pollInterval)
 	}
 
 	log.Printf("google login timed out waiting for worker result (job_id=%s)", jobID)
-	return "", errors.New("google verification timed out, please try again")
+	return nil, errors.New("google verification timed out, please try again")
 }
 
 // issueAccessToken mints the session JWT shared by every login path
 // (password or Google), after that path has already proven identity.
-func (s *AuthService) issueAccessToken(ctx context.Context, user db.User, email string) (string, error) {
-	roles, err := s.Queries.GetUserSystemRoles(ctx, user.ID)
+func (s *AuthService) issueAccessToken(ctx context.Context, userID uuid.UUID, orgID uuid.UUID, email string) (string, error) {
+	roles, err := s.Queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
+		UserID: userID,
+		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+	})
 	if err != nil || len(roles) == 0 {
-		return "", errors.New("user has no assigned roles")
+		return "", errors.New("user has no assigned roles in this organization")
 	}
 
 	// Determine the highest priority role to act as their "Active" session role
@@ -251,8 +347,8 @@ func (s *AuthService) issueAccessToken(ctx context.Context, user db.User, email 
 	}
 
 	return util.GenerateAccessToken(
-		user.ID.String(),
-		user.OrgID.String(),
+		userID.String(),
+		orgID.String(),
 		activeRole,
 		email,
 		s.JwtSecret,
@@ -314,25 +410,48 @@ func (s *AuthService) issueAccessToken(ctx context.Context, user db.User, email 
 // 	return token, nil // Returning token for easy testing in Postman
 // }
 
-// --- Accept Invite (Public Link) ---
-func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
-	if !util.IsValidPhoneNumber(req.Phone) {
-		return errors.New("phone number must be a 10-digit number without the country code")
+// PreviewInvite lets the FE decide which accept-invite form to render before
+// anything is submitted: a brand-new identity needs the full name/phone/
+// password form; someone who already has an Abhiyan account (invited into a
+// 2nd+ org) just needs a lightweight confirm.
+func (s *AuthService) PreviewInvite(ctx context.Context, token string) (*schemas.InvitePreviewResponse, error) {
+	claims, err := util.ParseInviteToken(token, s.JwtSecret)
+	if err != nil {
+		return nil, errors.New("invalid or expired invite link")
 	}
 
+	orgName, err := s.Queries.GetOrganizationName(ctx, util.ParseUUID(claims.OrgID))
+	if err != nil {
+		return nil, errors.New("invalid or expired invite link")
+	}
+
+	isExistingUser := false
+	if user, err := s.Queries.GetUserByEmail(ctx, claims.Email); err == nil {
+		if _, credErr := s.Queries.GetUserCredentials(ctx, user.ID); credErr == nil {
+			isExistingUser = true
+		}
+	}
+
+	return &schemas.InvitePreviewResponse{
+		Email:          claims.Email,
+		OrgName:        orgName,
+		IsExistingUser: isExistingUser,
+	}, nil
+}
+
+// AcceptInvite activates the invited org membership. The identity/membership
+// row already exists (created at invite time by AdminService.InviteUser) —
+// this only sets a password/profile the FIRST time a person ever accepts any
+// invite; someone accepting a 2nd+ org's invite keeps their existing
+// credentials and profile untouched, only that new membership gets activated.
+func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
 	// 1. Parse and validate the JWT from the URL
 	claims, err := util.ParseInviteToken(req.Token, s.JwtSecret)
 	if err != nil {
 		return errors.New("invalid or expired invite link")
 	}
+	orgID := util.ParseUUID(claims.OrgID)
 
-	// 2. Hash the new password
-	hashedPassword, err := util.HashPassword(req.NewPassword)
-	if err != nil {
-		return err
-	}
-
-	// 3. Start Database Transaction
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -341,28 +460,49 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 
 	qtx := s.Queries.WithTx(tx)
 
-	// 4. Update the User profile and flip status to ACTIVE
-	user, err := qtx.UpdateUserOnboarding(ctx, db.UpdateUserOnboardingParams{
-		FirstName:   sql.NullString{String: req.FirstName, Valid: true},
-		LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
-		PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
-		// PhoneNumber: req.Phone,
-		EmailID: claims.Email, // Extracted safely from the signed JWT, not user input!
-		// status already active here
-	})
-	// if err != nil {
-	// 	return errors.New("failed to update user profile or invite already accepted")
-	// }
+	user, err := qtx.GetUserByEmail(ctx, claims.Email)
 	if err != nil {
-		return err
+		return errors.New("invalid or expired invite link")
 	}
 
-	// 5. Insert their new password into user_credentials
-	_, err = qtx.CreateUserCredentials(ctx, db.CreateUserCredentialsParams{
-		UserID:       user.ID,
-		PasswordHash: hashedPassword,
-	})
-	if err != nil {
+	_, credErr := qtx.GetUserCredentials(ctx, user.ID)
+	isNewIdentity := errors.Is(credErr, sql.ErrNoRows)
+
+	if isNewIdentity {
+		if !util.IsValidPhoneNumber(req.Phone) {
+			return errors.New("phone number must be a 10-digit number without the country code")
+		}
+		if req.FirstName == "" || len(req.NewPassword) < 8 {
+			return errors.New("first name and a password (min 8 characters) are required")
+		}
+
+		hashedPassword, err := util.HashPassword(req.NewPassword)
+		if err != nil {
+			return err
+		}
+
+		if _, err := qtx.UpdateUserOnboarding(ctx, db.UpdateUserOnboardingParams{
+			FirstName:   sql.NullString{String: req.FirstName, Valid: true},
+			LastName:    sql.NullString{String: req.LastName, Valid: req.LastName != ""},
+			PhoneNumber: sql.NullString{String: req.Phone, Valid: true},
+			EmailID:     claims.Email, // Extracted safely from the signed JWT, not user input!
+		}); err != nil {
+			return err
+		}
+
+		if _, err := qtx.CreateUserCredentials(ctx, db.CreateUserCredentialsParams{
+			UserID:       user.ID,
+			PasswordHash: hashedPassword,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if err := qtx.UpdateMembershipStatus(ctx, db.UpdateMembershipStatusParams{
+		Status: db.UserStatusACTIVE,
+		UserID: user.ID,
+		OrgID:  orgID,
+	}); err != nil {
 		return err
 	}
 
@@ -426,7 +566,7 @@ func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken strin
 		return errors.New("could not verify original invite record")
 	}
 
-	if user.Status.Valid && user.Status.UserStatus == db.UserStatusACTIVE {
+	if user.Status == db.UserStatusACTIVE {
 		return errors.New("this account is already active, please log in")
 	}
 
@@ -436,10 +576,15 @@ func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken strin
 		return err
 	}
 
+	orgName, err := s.Queries.GetOrganizationName(ctx, user.OrgID)
+	if err != nil {
+		return err
+	}
+
 	// 4. Enqueue the email
 	frontendURL := os.Getenv("FRONTEND_URL")
 	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, newToken)
-	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": user.EmailID, "link": link})
+	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": user.EmailID, "orgName": orgName, "link": link})
 
 	return err
 }

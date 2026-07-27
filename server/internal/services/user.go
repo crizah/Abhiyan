@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
+	"github.com/google/uuid"
 )
 
 type UserService struct {
@@ -23,17 +23,21 @@ func NewUserService(dbConn *sql.DB) *UserService {
 	}
 }
 
-func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schemas.UserProfileResponse, error) {
+func (s *UserService) GetUserProfile(ctx context.Context, userID string, orgID string) (*schemas.UserProfileResponse, error) {
 	uid := util.ParseUUID(userID)
+	oid := util.ParseUUID(orgID)
 
-	// 1. Fetch base profile
-	baseProfile, err := s.queries.GetFullUserProfile(ctx, uid)
+	// 1. Fetch base profile (org-scoped: status/org_name are per-membership)
+	baseProfile, err := s.queries.GetFullUserProfile(ctx, db.GetFullUserProfileParams{ID: uid, OrgID: oid})
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Fetch system roles
-	roles, err := s.queries.GetUserSystemRoles(ctx, uid)
+	// 2. Fetch system roles (this org only — a person can hold different roles elsewhere)
+	roles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
+		UserID: uid,
+		OrgID:  uuid.NullUUID{UUID: oid, Valid: true},
+	})
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -51,25 +55,10 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schem
 
 	var teams []schemas.TeamProfile
 	for _, t := range dbTeams {
-		// PostgreSQL array_agg over text usually returns a string like "{admin@test.com,admin2@test.com}"
-		// if not explicitly mapped by sqlc/pq. We clean it up here.
-		rawEmails := ""
-		if str, ok := t.TeamAdminEmails.(string); ok {
-			rawEmails = str
-		} else if b, ok := t.TeamAdminEmails.([]byte); ok {
-			rawEmails = string(b)
-		}
-
-		rawEmails = strings.Trim(rawEmails, "{}")
-		var emails []string
-		if rawEmails != "" {
-			emails = strings.Split(rawEmails, ",")
-		}
-
 		teams = append(teams, schemas.TeamProfile{
 			TeamName:        t.TeamName,
 			UserTeamRole:    string(t.UserTeamRole),
-			TeamAdminEmails: emails,
+			TeamAdminEmails: util.ParsePGTextArray(t.TeamAdminEmails),
 		})
 	}
 	return &schemas.UserProfileResponse{
@@ -81,7 +70,7 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schem
 		SourceFace: schemas.FacePayload{
 			FileURL: baseProfile.FaceS3Uri.String,
 		},
-		Status:      string(baseProfile.Status.UserStatus),
+		Status:      string(baseProfile.Status),
 		OrgName:     baseProfile.OrgName,
 		SystemRoles: systemRoles,
 		Teams:       teams,

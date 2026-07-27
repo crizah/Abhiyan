@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Typography, Flex, Row, Col, message, theme } from 'antd';
-import { LockOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
+import { LockOutlined, UserOutlined, PhoneOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../../config/axios';
+import { authAPI } from '../api';
 import PixelBlast from '../../../components/ui/PixelBlast';
 import Logo from '../../../components/Logo';
 
@@ -16,8 +17,31 @@ export default function AcceptInvitePage() {
   const [tokenExpired, setTokenExpired] = useState(false);
   const [resending, setResending] = useState(false);
 
+  // Which form to show — a brand-new identity needs the full signup form; an
+  // email that already has an Abhiyan account (invited into a 2nd+ org) just
+  // needs a lightweight confirm, no password/profile fields.
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+
   const navigate = useNavigate();
   const { token: themeToken } = theme.useToken();
+
+  useEffect(() => {
+    if (!token) {
+      setPreviewLoading(false);
+      return;
+    }
+    authAPI.invitePreview(token)
+      .then(setPreview)
+      .catch((error) => {
+        const errMsg = error.response?.data?.error || 'Invalid or expired invite link.';
+        if (errMsg.includes('expired') || errMsg.includes('invalid')) {
+          setTokenExpired(true);
+        }
+      })
+      .finally(() => setPreviewLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const onFinish = async (values) => {
     if (!token) {
@@ -48,6 +72,27 @@ export default function AcceptInvitePage() {
 
       // If the backend specifically kicks back an expiration/invalid error, flip the state
       if (errMsg.includes("expired") || errMsg.includes("invalid")) {
+        setTokenExpired(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Existing-identity path: the invite link itself (a signed, org-bound,
+  // time-limited token only ever emailed to this address) is the proof of
+  // identity here — same trust model as a password-reset link — so this is
+  // just a one-click confirm, no re-authentication needed.
+  const onConfirmExistingUser = async () => {
+    setLoading(true);
+    try {
+      await apiClient.post('/auth/accept-invite', { token });
+      message.success(`You've joined ${preview?.org_name || 'the organization'}. You may now log in.`);
+      navigate('/login');
+    } catch (error) {
+      const errMsg = error.response?.data?.error || 'Failed to accept invite.';
+      message.error(errMsg);
+      if (errMsg.includes('expired') || errMsg.includes('invalid')) {
         setTokenExpired(true);
       }
     } finally {
@@ -187,6 +232,16 @@ export default function AcceptInvitePage() {
                         : "For your security, invite links expire after 48 hours. Click below to email yourself a fresh link."}
                     </Text>
                   </>
+                ) : preview?.is_existing_user ? (
+                  <>
+                    <ApartmentOutlined style={{ fontSize: 28, color: themeToken.colorPrimary }} />
+                    <Title level={3} style={{ margin: 0, color: themeToken.colorText, letterSpacing: '-0.02em' }}>
+                      Join {preview.org_name}
+                    </Title>
+                    <Text style={{ color: themeToken.colorTextSecondary }}>
+                      You already have an account ({preview.email}) — confirm below to add this organization to it.
+                    </Text>
+                  </>
                 ) : (
                   <>
                     <Title level={3} style={{ margin: 0, color: themeToken.colorText, letterSpacing: '-0.02em' }}>
@@ -212,6 +267,10 @@ export default function AcceptInvitePage() {
                     </Link>
                   </Flex>
                 </>
+              ) : previewLoading ? null : preview?.is_existing_user ? (
+                <Button type="primary" size="large" block loading={loading} onClick={onConfirmExistingUser}>
+                  Confirm &amp; Join
+                </Button>
               ) : (
                 <Form layout="vertical" onFinish={onFinish} requiredMark="optional">
                   <Row gutter={[16, 0]}>

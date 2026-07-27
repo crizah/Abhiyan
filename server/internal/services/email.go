@@ -19,7 +19,7 @@ const (
 
 type EmailInterface interface {
 	SendReminderEmail(ctx context.Context, recipientEmail string, taskName string, taskDeadline string) error
-	SendInviteEmail(ctx context.Context, recipientEmail string, inviteLink string) error
+	SendInviteEmail(ctx context.Context, recipientEmail string, orgName string, inviteLink string) error
 	SendPasswordResetEmail(ctx context.Context, recipientEmail, resetLink string) error
 	getBaseParam(recipientEmail string, subject string, html string) any
 }
@@ -69,14 +69,14 @@ func (rs *EmailServiceResend) SendReminderEmail(ctx context.Context,
 
 }
 
-func (rs *EmailServiceResend) SendInviteEmail(ctx context.Context, recipientEmail string, inviteLink string) error {
+func (rs *EmailServiceResend) SendInviteEmail(ctx context.Context, recipientEmail string, orgName string, inviteLink string) error {
 	htmlBody := fmt.Sprintf(`
 		<h2>Welcome!</h2>
-		<p>An admin has invited you to join the team workspace.</p>
+		<p>An admin has invited you to join <strong>%s</strong>.</p>
 		<p>Click the link below to set up your account and password:</p>
 		<a href="%s" style="display:inline-block;padding:10px 20px;background-color:#1677ff;color:#ffffff;text-decoration:none;border-radius:5px;">Accept Invite</a>
 		<p>This link expires in 48 hours.</p>
-	`, inviteLink)
+	`, orgName, inviteLink)
 
 	params, ok := rs.getBaseParam(recipientEmail, Invitesubject, htmlBody).(*resend.SendEmailRequest)
 	if !ok {
@@ -156,15 +156,15 @@ func (es *EmailService) SendReminderEmail(ctx context.Context, recipientEmail st
 }
 
 // SendInviteEmail is the function Onion app worker will call
-func (es *EmailService) SendInviteEmail(ctx context.Context, recipientEmail, inviteLink string) error {
+func (es *EmailService) SendInviteEmail(ctx context.Context, recipientEmail string, orgName string, inviteLink string) error {
 
 	htmlBody := fmt.Sprintf(`
 		<h2>Welcome!</h2>
-		<p>An admin has invited you to join the team workspace.</p>
+		<p>An admin has invited you to join <strong>%s</strong>.</p>
 		<p>Click the link below to set up your account and password:</p>
 		<a href="%s" style="display:inline-block;padding:10px 20px;background-color:#1677ff;color:#ffffff;text-decoration:none;border-radius:5px;">Accept Invite</a>
 		<p>This link expires in 48 hours.</p>
-	`, inviteLink)
+	`, orgName, inviteLink)
 
 	input, ok := es.getBaseParam(recipientEmail, Invitesubject, htmlBody).(*ses.SendEmailInput)
 	if !ok {

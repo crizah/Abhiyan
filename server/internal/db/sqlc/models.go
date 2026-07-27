@@ -638,6 +638,14 @@ type Notification struct {
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
+type OrgMembership struct {
+	ID        uuid.UUID    `json:"id"`
+	UserID    uuid.UUID    `json:"user_id"`
+	OrgID     uuid.UUID    `json:"org_id"`
+	Status    UserStatus   `json:"status"`
+	CreatedAt sql.NullTime `json:"created_at"`
+}
+
 type Organization struct {
 	ID                uuid.UUID      `json:"id"`
 	Name              string         `json:"name"`
@@ -743,7 +751,8 @@ type UserCredential struct {
 }
 
 type UserSystemRole struct {
-	UserID    uuid.UUID    `json:"user_id"`
-	Role      SystemRole   `json:"role"`
-	GrantedAt sql.NullTime `json:"granted_at"`
+	UserID    uuid.UUID     `json:"user_id"`
+	OrgID     uuid.NullUUID `json:"org_id"`
+	Role      SystemRole    `json:"role"`
+	GrantedAt sql.NullTime  `json:"granted_at"`
 }

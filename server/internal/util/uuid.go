@@ -48,6 +48,23 @@ func ParsePhoneNumber(rawNumber string) string {
 	return "91" + cleanNumber
 }
 
+// ParsePGTextArray decodes a Postgres text[] returned via array_agg(...)::text[]
+// (lib/pq scans it back as either a string or []byte, not a native slice) into
+// a Go string slice, e.g. "{a,b,c}" -> ["a","b","c"]. Empty/nil input -> nil.
+func ParsePGTextArray(v interface{}) []string {
+	raw := ""
+	if str, ok := v.(string); ok {
+		raw = str
+	} else if b, ok := v.([]byte); ok {
+		raw = string(b)
+	}
+	raw = strings.Trim(raw, "{}")
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, ",")
+}
+
 func FormatDeadline(nt sql.NullTime) string {
 	if !nt.Valid {
 		return "No deadline set"

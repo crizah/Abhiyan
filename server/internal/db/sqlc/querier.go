@@ -15,30 +15,39 @@ type Querier interface {
 	AddTaskParticipant(ctx context.Context, arg AddTaskParticipantParams) error
 	AddTaskUpdate(ctx context.Context, arg AddTaskUpdateParams) (TaskUpdate, error)
 	AddUpdateComment(ctx context.Context, arg AddUpdateCommentParams) (uuid.UUID, error)
-	// NEW: Assigns a system role to a user
+	// Assigns a system role to a user, scoped to one org.
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
 	BatchInsertAbsentAttendance(ctx context.Context) error
 	CancelTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
+	// Multi-org: checks active org_membership, not the (deprecated) users.org_id
+	// column — a user's first org no longer implies which org a team belongs to.
 	CheckUserBelongsToTeamOrg(ctx context.Context, arg CheckUserBelongsToTeamOrgParams) (bool, error)
 	ClearNotifications(ctx context.Context, userID uuid.UUID) error
 	CompleteAudioTranscode(ctx context.Context, arg CompleteAudioTranscodeParams) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
 	CompleteTranscription(ctx context.Context, arg CompleteTranscriptionParams) error
-	CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (User, error)
+	// Shared identity only; the org_memberships row (status INVITED) is created
+	// separately by the caller in the same transaction.
+	CreateInvitedUser(ctx context.Context, emailID string) (User, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
+	CreateOrgMembership(ctx context.Context, arg CreateOrgMembershipParams) (OrgMembership, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
+	// Shared identity only — org_id/status live on org_memberships, written
+	// separately by the caller in the same transaction (multi-org membership).
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
-	DeleteUserSystemRoles(ctx context.Context, userID uuid.UUID) error
+	// Scoped to one org — must never wipe a person's roles in a different org
+	// they also belong to.
+	DeleteUserSystemRoles(ctx context.Context, arg DeleteUserSystemRolesParams) error
 	FailAudioTranscode(ctx context.Context, arg FailAudioTranscodeParams) error
 	FailTranscription(ctx context.Context, arg FailTranscriptionParams) error
 	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
@@ -55,9 +64,10 @@ type Querier interface {
 	GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error)
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
 	GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error)
-	GetFullUserProfile(ctx context.Context, id uuid.UUID) (GetFullUserProfileRow, error)
+	GetFullUserProfile(ctx context.Context, arg GetFullUserProfileParams) (GetFullUserProfileRow, error)
 	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
 	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
+	GetMembershipStatus(ctx context.Context, arg GetMembershipStatusParams) (UserStatus, error)
 	GetMissedDeadlineCandidates(ctx context.Context) ([]GetMissedDeadlineCandidatesRow, error)
 	GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendanceByDateParams) ([]GetOrgAttendanceByDateRow, error)
 	GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error)
@@ -105,13 +115,16 @@ type Querier interface {
 	GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error)
 	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
 	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
-	GetUserOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	// Every active org a person belongs to, with the role(s) they hold in each —
+	// powers the login org-picker and the org-switcher menu. One row per org
+	// (roles aggregated) since a person can hold more than one role per org.
+	GetUserOrgMemberships(ctx context.Context, userID uuid.UUID) ([]GetUserOrgMembershipsRow, error)
 	GetUserScoreBreakdown(ctx context.Context, arg GetUserScoreBreakdownParams) (GetUserScoreBreakdownRow, error)
 	GetUserScoreEvents(ctx context.Context, arg GetUserScoreEventsParams) ([]GetUserScoreEventsRow, error)
 	GetUserScoreReportData(ctx context.Context, userID uuid.UUID) ([]GetUserScoreReportDataRow, error)
-	GetUserStatus(ctx context.Context, id uuid.UUID) (NullUserStatus, error)
-	// NEW: Fetches all roles assigned to a user
-	GetUserSystemRoles(ctx context.Context, userID uuid.UUID) ([]SystemRole, error)
+	// Fetches the roles a user holds in one specific org (not global — a person
+	// can hold different roles in different orgs).
+	GetUserSystemRoles(ctx context.Context, arg GetUserSystemRolesParams) ([]SystemRole, error)
 	GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error)
 	GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)
@@ -122,6 +135,11 @@ type Querier interface {
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
+	// Multi-org membership check: replaces the old single-users.org_id lookup this
+	// was originally added as (this session's cross-org authorization fixes) — a
+	// person can now belong to several orgs, so "the user's org" isn't a single
+	// value anymore, only "is this user an active member of THIS org" is.
+	IsUserInOrg(ctx context.Context, arg IsUserInOrgParams) (bool, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
@@ -135,15 +153,18 @@ type Querier interface {
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	SupersedeScoreEvents(ctx context.Context, arg SupersedeScoreEventsParams) error
+	UpdateMembershipStatus(ctx context.Context, arg UpdateMembershipStatusParams) error
 	UpdateTaskDeadline(ctx context.Context, arg UpdateTaskDeadlineParams) error
 	UpdateTaskDetails(ctx context.Context, arg UpdateTaskDetailsParams) error
 	UpdateTaskFulfillment(ctx context.Context, arg UpdateTaskFulfillmentParams) error
 	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error
 	UpdateUserCredentials(ctx context.Context, arg UpdateUserCredentialsParams) error
 	UpdateUserFace(ctx context.Context, arg UpdateUserFaceParams) error
+	// Shared profile fields only. Flipping the invited org's membership to ACTIVE
+	// happens as a separate org-scoped call (a person may have other org
+	// memberships that must be left untouched).
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
-	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
 	UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error)
 	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error

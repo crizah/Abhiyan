@@ -155,11 +155,11 @@ func (s *TaskService) assertAttachmentInOrg(ctx context.Context, attachmentID uu
 // otherwise constrained to actual team members.
 func (s *TaskService) assertUsersInOrg(ctx context.Context, userIDs []string, callerOrgID uuid.UUID) error {
 	for _, idStr := range userIDs {
-		orgID, err := s.queries.GetUserOrgID(ctx, util.ParseUUID(idStr))
+		belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: util.ParseUUID(idStr), OrgID: callerOrgID})
 		if err != nil {
 			return fmt.Errorf("failed to verify participant organization: %w", err)
 		}
-		if orgID != callerOrgID {
+		if !belongs {
 			return errors.New("action blocked: assignees and subscribers must belong to your organization")
 		}
 	}

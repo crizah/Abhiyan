@@ -19,8 +19,9 @@ func NewUserHandler(svc *services.UserService) *UserHandler {
 func (h *UserHandler) GetMyProfile(c *gin.Context) {
 	// Securely extracted from the JWT context
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	profile, err := h.userService.GetUserProfile(c.Request.Context(), userID)
+	profile, err := h.userService.GetUserProfile(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profile data"})
 		return

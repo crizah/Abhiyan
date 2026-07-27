@@ -5,8 +5,10 @@ import (
 	"os"
 	"time"
 
+	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	"github.com/crizah/Abhiyan/server/internal/util"
+	"github.com/google/uuid"
 
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,15 @@ func cookieConfig() (domain string, secure bool, sameSite http.SameSite) {
 	}
 	// Local dev: SameSite=Lax works fine for same-origin requests
 	return d, false, http.SameSiteLaxMode
+}
+
+// setSessionCookie mints the one shared httpOnly session cookie — used by
+// every path that issues or re-issues a session (Login, GoogleLogin,
+// SelectOrg, SwitchRole) so they all agree on domain/secure/SameSite.
+func setSessionCookie(c *gin.Context, token string) {
+	cookieDomain, isSecure, sameSite := cookieConfig()
+	c.SetSameSite(sameSite)
+	c.SetCookie("access_token", token, 86400, "/", cookieDomain, isSecure, true)
 }
 
 type AuthHandler struct {
@@ -82,7 +93,20 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	user, err := h.authService.Queries.GetUserByEmail(c.Request.Context(), claims.Email)
 	faceRegistered := err == nil && user.FaceS3Uri.Valid && user.FaceS3Uri.String != ""
 
-	// 5. Send the combined data back to React
+	// 5. Every org this person belongs to, for the header's org-switcher menu
+	// — works unchanged for a single-org user, who just gets a 1-item list.
+	orgs := []schemas.OrgOption{}
+	if memberships, mErr := h.authService.Queries.GetUserOrgMemberships(c.Request.Context(), util.ParseUUID(claims.UserID)); mErr == nil {
+		for _, m := range memberships {
+			orgs = append(orgs, schemas.OrgOption{
+				OrgID:   m.OrgID.String(),
+				OrgName: m.OrgName,
+				Roles:   util.ParsePGTextArray(m.Roles),
+			})
+		}
+	}
+
+	// 6. Send the combined data back to React
 	c.JSON(http.StatusOK, gin.H{
 		"id":                 claims.UserID,
 		"org_id":             claims.OrgID,
@@ -91,6 +115,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"email":              claims.Email,
 		"attendance_enabled": attendanceEnabled,
 		"face_registered":    faceRegistered,
+		"available_orgs":     orgs,
 	})
 }
 
@@ -112,6 +137,23 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // 	})
 // }
 
+// respondToLoginResult handles both outcomes of a login attempt: a
+// single-org account gets its cookie set immediately; a multi-org account
+// gets the pending-token/org-list response instead, with no cookie yet.
+func respondToLoginResult(c *gin.Context, result *services.LoginResult) {
+	if result.RequiresOrgSelection {
+		c.JSON(http.StatusOK, schemas.LoginResponse{
+			RequiresOrgSelection: true,
+			PendingToken:         result.PendingToken,
+			Orgs:                 result.Orgs,
+		})
+		return
+	}
+
+	setSessionCookie(c, result.Token)
+	c.JSON(http.StatusOK, schemas.LoginResponse{Message: "Successfully logged in"})
+}
+
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req schemas.LoginRequest
 
@@ -120,19 +162,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.Login(c.Request.Context(), req)
+	result, err := h.authService.Login(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	cookieDomain, isSecure, sameSite := cookieConfig()
-
-	// 2. Set the dynamic httpOnly cookie
-	c.SetSameSite(sameSite)
-	c.SetCookie("access_token", token, 86400, "/", cookieDomain, isSecure, true)
-
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged in"})
+	respondToLoginResult(c, result)
 }
 
 func (h *AuthHandler) GoogleLogin(c *gin.Context) {
@@ -143,18 +179,33 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.LoginWithGoogle(c.Request.Context(), req.Credential)
+	result, err := h.authService.LoginWithGoogle(c.Request.Context(), req.Credential)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	cookieDomain, isSecure, sameSite := cookieConfig()
+	respondToLoginResult(c, result)
+}
 
-	c.SetSameSite(sameSite)
-	c.SetCookie("access_token", token, 86400, "/", cookieDomain, isSecure, true)
+// SelectOrg completes a login that came back with requires_org_selection —
+// verifies the short-lived pending token and chosen org, then mints the
+// real session cookie exactly like a single-org login would have.
+func (h *AuthHandler) SelectOrg(c *gin.Context) {
+	var req schemas.SelectOrgRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged in"})
+	token, err := h.authService.SelectOrg(c.Request.Context(), req.PendingToken, req.OrgID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	setSessionCookie(c, token)
+	c.JSON(http.StatusOK, schemas.LoginResponse{Message: "Successfully logged in"})
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
@@ -189,12 +240,14 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // 	})
 // }
 
+// SwitchRole re-mints the session with a different active role and/or a
+// different active org — either field may be omitted, in which case that
+// part of the session stays as it currently is. Switching org this way is
+// the multi-org "access another org without logging out" mechanism: it swaps
+// which org the current browser session is scoped to (matching how Notion/
+// Linear/Slack-web switch workspaces), not a second simultaneous session.
 func (h *AuthHandler) SwitchRole(c *gin.Context) {
-	type SwitchRoleRequest struct {
-		TargetRole string `json:"target_role" binding:"required,oneof=SUPER_ADMIN ADMIN EMPLOYEE"`
-	}
-
-	var req SwitchRoleRequest
+	var req schemas.SwitchContextRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -203,43 +256,71 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 	// Get the core account identity from the current context token
 	userIDStr := c.MustGet("user_id").(string)
 	userID := util.ParseUUID(userIDStr)
-	orgIDStr := c.MustGet("org_id").(string)
+	currentOrgIDStr := c.MustGet("org_id").(string)
 	emailStr := c.MustGet("email").(string)
 
-	// Query DB to check if they actually possess the role they want to swap to
-	roles, err := h.authService.Queries.GetUserSystemRoles(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify privileges"})
+	targetOrgIDStr := req.TargetOrgID
+	if targetOrgIDStr == "" {
+		targetOrgIDStr = currentOrgIDStr
+	}
+	targetOrgID := util.ParseUUID(targetOrgIDStr)
+
+	if targetOrgIDStr != currentOrgIDStr {
+		belongs, err := h.authService.Queries.IsUserInOrg(c.Request.Context(), db.IsUserInOrgParams{UserID: userID, OrgID: targetOrgID})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify organization"})
+			return
+		}
+		if !belongs {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not belong to this organization"})
+			return
+		}
+	}
+
+	// Query DB to check what roles they hold in the TARGET org
+	roles, err := h.authService.Queries.GetUserSystemRoles(c.Request.Context(), db.GetUserSystemRolesParams{
+		UserID: userID,
+		OrgID:  uuid.NullUUID{UUID: targetOrgID, Valid: true},
+	})
+	if err != nil || len(roles) == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You have no role in this organization"})
 		return
 	}
 
-	hasPrivilege := false
-	for _, r := range roles {
-		if string(r) == req.TargetRole {
-			hasPrivilege = true
-			break
+	targetRole := req.TargetRole
+	if targetRole == "" {
+		// No explicit role requested (a pure org switch) — default to the
+		// highest role held in the target org, same rule as first login.
+		targetRole = "EMPLOYEE"
+		for _, r := range roles {
+			if string(r) == "SUPER_ADMIN" {
+				targetRole = "SUPER_ADMIN"
+				break
+			} else if string(r) == "ADMIN" {
+				targetRole = "ADMIN"
+			}
 		}
-		// SUPER_ADMIN inherits ADMIN and EMPLOYEE; ADMIN inherits EMPLOYEE
-		if string(r) == "SUPER_ADMIN" {
-			hasPrivilege = true
-			break
+	} else {
+		hasPrivilege := false
+		for _, r := range roles {
+			roleStr := string(r)
+			// SUPER_ADMIN inherits ADMIN and EMPLOYEE; ADMIN inherits EMPLOYEE
+			if roleStr == targetRole || roleStr == "SUPER_ADMIN" || (roleStr == "ADMIN" && targetRole == "EMPLOYEE") {
+				hasPrivilege = true
+				break
+			}
 		}
-		if string(r) == "ADMIN" && req.TargetRole == "EMPLOYEE" {
-			hasPrivilege = true
-			break
+		if !hasPrivilege {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not possess this role option"})
+			return
 		}
 	}
 
-	if !hasPrivilege {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You do not possess this role option"})
-		return
-	}
-
-	// Mint a brand new token with the modified active role context
+	// Mint a brand new token with the modified active role/org context
 	newToken, err := util.GenerateAccessToken(
 		userIDStr,
-		orgIDStr,
-		req.TargetRole, // The context they elected to assume
+		targetOrgIDStr,
+		targetRole,
 		emailStr,
 		h.authService.JwtSecret,
 		24*time.Hour,
@@ -249,12 +330,27 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 		return
 	}
 
-	// Overwrite their existing access token cookie
-	cookieDomain, isSecure, sameSite := cookieConfig()
-
-	c.SetSameSite(sameSite)
-	c.SetCookie("access_token", newToken, 86400, "/", cookieDomain, isSecure, true)
+	setSessionCookie(c, newToken)
 	c.JSON(http.StatusOK, gin.H{"message": "Context switched successfully"})
+}
+
+// InvitePreview lets the FE decide which accept-invite form to render before
+// the user submits anything (full signup form vs a lightweight "Join Org"
+// confirmation for someone who already has an account elsewhere).
+func (h *AuthHandler) InvitePreview(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		return
+	}
+
+	preview, err := h.authService.PreviewInvite(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, preview)
 }
 
 func (h *AuthHandler) AcceptInvite(c *gin.Context) {

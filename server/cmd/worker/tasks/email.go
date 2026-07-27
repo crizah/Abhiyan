@@ -18,6 +18,10 @@ func NewSendInviteEmailTask(emailService services.EmailInterface) func(context.C
 		if !ok {
 			return nil, fmt.Errorf("missing or invalid 'email' argument")
 		}
+		orgName, ok := args["orgName"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'orgName' argument")
+		}
 		link, ok := args["link"].(string)
 		if !ok {
 			return nil, fmt.Errorf("missing or invalid 'link' argument")
@@ -26,7 +30,7 @@ func NewSendInviteEmailTask(emailService services.EmailInterface) func(context.C
 		fmt.Printf("Attempting to send invite email to %s...\n", email)
 
 		// 2. AWS SES
-		err := emailService.SendInviteEmail(ctx, email, link)
+		err := emailService.SendInviteEmail(ctx, email, orgName, link)
 		if err != nil {
 			fmt.Printf("Failed to send email to %s: %v\n", email, err)
 			return nil, err

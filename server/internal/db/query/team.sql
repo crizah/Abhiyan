@@ -16,20 +16,21 @@ WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
 ORDER BY t.name ASC;
 
 -- name: GetTeamEmployeesPaginated :many
-SELECT 
-    u.id, u.first_name, u.last_name, u.email_id, u.status,
+SELECT
+    u.id, u.first_name, u.last_name, u.email_id, om.status,
     t.name as team_name, tm_target.team_role::text as team_role,
     COUNT(*) OVER() AS total_count
 FROM team_members tm_admin
 JOIN teams t ON tm_admin.team_id = t.id
 JOIN team_members tm_target ON t.id = tm_target.team_id
 JOIN users u ON tm_target.user_id = u.id
-WHERE tm_admin.user_id = $1 
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = t.org_id
+WHERE tm_admin.user_id = $1
   AND tm_admin.team_role = 'TEAM_ADMIN'
   AND (sqlc.arg('search_term')::text = '' OR u.email_id ILIKE '%' || sqlc.arg('search_term') || '%' OR u.first_name ILIKE '%' || sqlc.arg('search_term') || '%' OR u.last_name ILIKE '%' || sqlc.arg('search_term') || '%')
   AND (sqlc.arg('team_filter')::text = '' OR t.name = sqlc.arg('team_filter'))
   AND (sqlc.arg('role_filter')::text = '' OR tm_target.team_role::text = sqlc.arg('role_filter'))
-  AND (sqlc.arg('status_filter')::text = '' OR u.status::text = sqlc.arg('status_filter'))
+  AND (sqlc.arg('status_filter')::text = '' OR om.status::text = sqlc.arg('status_filter'))
 ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3;
 
@@ -103,10 +104,12 @@ SELECT EXISTS (
 SELECT org_id FROM teams WHERE id = $1;
 
 -- name: CheckUserBelongsToTeamOrg :one
+-- Multi-org: checks active org_membership, not the (deprecated) users.org_id
+-- column — a user's first org no longer implies which org a team belongs to.
 SELECT EXISTS (
     SELECT 1 FROM teams t
-    JOIN users u ON u.org_id = t.org_id
-    WHERE t.id = $1 AND u.id = $2
+    JOIN org_memberships om ON om.org_id = t.org_id AND om.status = 'ACTIVE'
+    WHERE t.id = $1 AND om.user_id = $2
 );
 
 

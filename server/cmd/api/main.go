@@ -117,8 +117,10 @@ func main() {
 			// Public
 			auth.POST("/register-org", authLimiter, authHandler.RegisterOrg)
 			auth.POST("/login", authLimiter, authHandler.Login)
+			auth.POST("/select-org", authLimiter, authHandler.SelectOrg)
 			auth.POST("/google-login", authLimiter, authHandler.GoogleLogin)
 			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/invite-preview", authHandler.InvitePreview)
 			auth.POST("/accept-invite", authLimiter, authHandler.AcceptInvite)
 			auth.POST("/resend-invite", authLimiter, authHandler.ResendPublicInvite)
 			auth.POST("/forgot-password", authLimiter, authHandler.ForgotPassword)

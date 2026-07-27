@@ -34,6 +34,7 @@ func NewAdminService(dbConn *sql.DB, s []byte, oa *app.App) *AdminService {
 
 func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
+	orgID := util.ParseUUID(adminOrgID)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -43,17 +44,35 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 
 	qtx := s.queries.WithTx(tx)
 
-	user, err := qtx.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
-		OrgID:   util.ParseUUID(adminOrgID),
-		EmailID: email,
-		// status already invited
-	})
-	if err != nil {
-		return "", errors.New("user with this email may already exist")
+	// Multi-org: an invite either creates a brand-new shared identity, or —
+	// if this email already has one from another org — just attaches a new
+	// org membership to it. Either way the person's password/profile is
+	// untouched here; that only happens once (at their very first accept).
+	var userID uuid.UUID
+	existing, err := qtx.GetUserByEmail(ctx, email)
+	if err == nil {
+		userID = existing.ID
+	} else if errors.Is(err, sql.ErrNoRows) {
+		newUser, err := qtx.CreateInvitedUser(ctx, email)
+		if err != nil {
+			return "", errors.New("user with this email may already exist")
+		}
+		userID = newUser.ID
+	} else {
+		return "", err
+	}
+
+	if _, err := qtx.CreateOrgMembership(ctx, db.CreateOrgMembershipParams{
+		UserID: userID,
+		OrgID:  orgID,
+		Status: db.UserStatusINVITED,
+	}); err != nil {
+		return "", errors.New("user is already invited to or a member of this organization")
 	}
 
 	_, err = qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
-		UserID: user.ID,
+		UserID: userID,
+		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
 		Role:   db.SystemRole(req.Role),
 	})
 	if err != nil {
@@ -64,14 +83,19 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 		return "", err
 	}
 
-	token, err := util.GenerateInviteToken(user.EmailID, adminOrgID, req.Role, s.JwtSecret, 48*time.Hour)
+	token, err := util.GenerateInviteToken(email, adminOrgID, req.Role, s.JwtSecret, 48*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	orgName, err := s.queries.GetOrganizationName(ctx, orgID)
 	if err != nil {
 		return "", err
 	}
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
-	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": email, "link": link})
+	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": email, "orgName": orgName, "link": link})
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +201,7 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 			ID:       u.ID.String(),
 			FullName: fullName,
 			EmailID:  u.EmailID,
-			Status:   string(u.Status.UserStatus),
+			Status:   string(u.Status),
 			Roles:    roles,
 		})
 	}
@@ -238,7 +262,7 @@ func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limi
 			ID:       u.ID.String(),
 			FullName: fullName,
 			EmailID:  u.EmailID,
-			Status:   string(u.Status.UserStatus),
+			Status:   string(u.Status),
 			TeamName: u.TeamName,
 			TeamRole: u.TeamRole,
 		})
@@ -291,7 +315,7 @@ func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string, 
 			ID:       u.ID.String(),
 			FullName: fullName,
 			EmailID:  u.EmailID,
-			Status:   string(u.Status.UserStatus),
+			Status:   string(u.Status),
 		})
 	}
 
@@ -367,7 +391,7 @@ func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string, userID
 	// SECURITY GUARD: this is reachable by any authenticated user (not just
 	// admins), so the only thing that matters is org membership — verify the
 	// requester actually belongs to this team's organization.
-	belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: uID})
+	belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, UserID: uID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify organization: %w", err)
 	}
@@ -412,10 +436,15 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	uID := util.ParseUUID(userID)
 	reqUID := util.ParseUUID(reqUserID)
 
+	teamOrgID, err := s.queries.GetTeamOrgID(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to verify team's organization: %w", err)
+	}
+
 	// 0. Cross-org guard: neither the requester nor the target may act on a team
 	// outside their own organization, regardless of role — a SUPER_ADMIN is only
 	// super over their own org, not every org in the system.
-	reqBelongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: reqUID})
+	reqBelongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, UserID: reqUID})
 	if err != nil {
 		return fmt.Errorf("failed to verify requester's organization: %w", err)
 	}
@@ -424,7 +453,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	}
 
 	if !isRemoval {
-		belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: uID})
+		belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, UserID: uID})
 		if err != nil {
 			return fmt.Errorf("failed to verify user's organization: %w", err)
 		}
@@ -433,8 +462,11 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 		}
 	}
 
-	// 1. Authorization Check: Get the requester's system roles
-	reqSysRoles, err := s.queries.GetUserSystemRoles(ctx, reqUID)
+	// 1. Authorization Check: Get the requester's system roles, scoped to this team's org
+	reqSysRoles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
+		UserID: reqUID,
+		OrgID:  uuid.NullUUID{UUID: teamOrgID, Valid: true},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to check requester roles: %w", err)
 	}
@@ -470,7 +502,10 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 
 	// 3. Role Validation: Only System Admins/Super Admins can be made TEAM_ADMINs
 	if !isRemoval && role == "TEAM_ADMIN" {
-		sysRoles, err := s.queries.GetUserSystemRoles(ctx, uID)
+		sysRoles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
+			UserID: uID,
+			OrgID:  uuid.NullUUID{UUID: teamOrgID, Valid: true},
+		})
 		if err != nil {
 			return fmt.Errorf("failed to fetch target user roles: %w", err)
 		}
@@ -532,15 +567,15 @@ func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTea
 	// Cross-org guard: requester, target user, source team and destination team
 	// must all belong to the same organization — a SUPER_ADMIN's reach stops at
 	// their own org's boundary.
-	reqBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, ID_2: reqUID})
+	reqBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, UserID: reqUID})
 	if err != nil {
 		return fmt.Errorf("failed to verify organization: %w", err)
 	}
-	reqBelongsTo, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: reqUID})
+	reqBelongsTo, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, UserID: reqUID})
 	if err != nil {
 		return fmt.Errorf("failed to verify organization: %w", err)
 	}
-	targetBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, ID_2: uID})
+	targetBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, UserID: uID})
 	if err != nil {
 		return fmt.Errorf("failed to verify organization: %w", err)
 	}
@@ -606,7 +641,7 @@ func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, li
 			ID:       u.ID.String(),
 			FullName: fullName,
 			EmailID:  u.EmailID,
-			Status:   string(u.Status.UserStatus),
+			Status:   string(u.Status),
 		})
 	}
 
@@ -623,11 +658,11 @@ func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, li
 func (s *AdminService) GetUserTeams(ctx context.Context, userID string, callerOrgID string) ([]schemas.UserTeamResponse, error) {
 	uID := util.ParseUUID(userID)
 
-	targetOrgID, err := s.queries.GetUserOrgID(ctx, uID)
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: util.ParseUUID(callerOrgID)})
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify user's organization: %w", err)
 	}
-	if targetOrgID != util.ParseUUID(callerOrgID) {
+	if !belongs {
 		return nil, errors.New("unauthorized: user does not belong to your organization")
 	}
 
@@ -655,33 +690,38 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 		return errors.New("invalid operation: cannot manually revert a user's status to INVITED")
 	}
 	uID := util.ParseUUID(userID)
+	orgID := util.ParseUUID(callerOrgID)
 
-	targetOrgID, err := s.queries.GetUserOrgID(ctx, uID)
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: orgID})
 	if err != nil {
 		return fmt.Errorf("failed to verify user's organization: %w", err)
 	}
-	if targetOrgID != util.ParseUUID(callerOrgID) {
+	if !belongs {
 		return errors.New("unauthorized: user does not belong to your organization")
 	}
 
-	if err := s.queries.UpdateUserStatus(ctx, db.UpdateUserStatusParams{
-		Status: db.NullUserStatus{
-			UserStatus: db.UserStatus(status),
-			Valid:      true, // <-- THIS FIXES THE BUG
-		},
-		ID: uID,
+	// 1. Update membership status (this org only)
+	if err := s.queries.UpdateMembershipStatus(ctx, db.UpdateMembershipStatusParams{
+		Status: db.UserStatus(status),
+		UserID: uID,
+		OrgID:  orgID,
 	}); err != nil {
 		return err
 	}
 
-	// 2. Wipe old system roles
-	if err := s.queries.DeleteUserSystemRoles(ctx, uID); err != nil {
+	// 2. Wipe old system roles (this org only — must not touch roles the
+	// person holds in any other org they belong to)
+	if err := s.queries.DeleteUserSystemRoles(ctx, db.DeleteUserSystemRolesParams{
+		UserID: uID,
+		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+	}); err != nil {
 		return err
 	}
 
 	// 3. Insert the new system role
 	if err := s.queries.InsertUserSystemRole(ctx, db.InsertUserSystemRoleParams{
 		UserID: uID,
+		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
 		Role:   db.SystemRole(role),
 	}); err != nil {
 		return err

@@ -34,18 +34,20 @@ func (q *Queries) CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminSt
 const checkUserBelongsToTeamOrg = `-- name: CheckUserBelongsToTeamOrg :one
 SELECT EXISTS (
     SELECT 1 FROM teams t
-    JOIN users u ON u.org_id = t.org_id
-    WHERE t.id = $1 AND u.id = $2
+    JOIN org_memberships om ON om.org_id = t.org_id AND om.status = 'ACTIVE'
+    WHERE t.id = $1 AND om.user_id = $2
 )
 `
 
 type CheckUserBelongsToTeamOrgParams struct {
-	ID   uuid.UUID `json:"id"`
-	ID_2 uuid.UUID `json:"id_2"`
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
+// Multi-org: checks active org_membership, not the (deprecated) users.org_id
+// column — a user's first org no longer implies which org a team belongs to.
 func (q *Queries) CheckUserBelongsToTeamOrg(ctx context.Context, arg CheckUserBelongsToTeamOrgParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, checkUserBelongsToTeamOrg, arg.ID, arg.ID_2)
+	row := q.db.QueryRowContext(ctx, checkUserBelongsToTeamOrg, arg.ID, arg.UserID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -310,20 +312,21 @@ func (q *Queries) GetTeamAdminsByTask(ctx context.Context, id uuid.UUID) ([]uuid
 }
 
 const getTeamEmployeesPaginated = `-- name: GetTeamEmployeesPaginated :many
-SELECT 
-    u.id, u.first_name, u.last_name, u.email_id, u.status,
+SELECT
+    u.id, u.first_name, u.last_name, u.email_id, om.status,
     t.name as team_name, tm_target.team_role::text as team_role,
     COUNT(*) OVER() AS total_count
 FROM team_members tm_admin
 JOIN teams t ON tm_admin.team_id = t.id
 JOIN team_members tm_target ON t.id = tm_target.team_id
 JOIN users u ON tm_target.user_id = u.id
-WHERE tm_admin.user_id = $1 
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = t.org_id
+WHERE tm_admin.user_id = $1
   AND tm_admin.team_role = 'TEAM_ADMIN'
   AND ($4::text = '' OR u.email_id ILIKE '%' || $4 || '%' OR u.first_name ILIKE '%' || $4 || '%' OR u.last_name ILIKE '%' || $4 || '%')
   AND ($5::text = '' OR t.name = $5)
   AND ($6::text = '' OR tm_target.team_role::text = $6)
-  AND ($7::text = '' OR u.status::text = $7)
+  AND ($7::text = '' OR om.status::text = $7)
 ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -343,7 +346,7 @@ type GetTeamEmployeesPaginatedRow struct {
 	FirstName  sql.NullString `json:"first_name"`
 	LastName   sql.NullString `json:"last_name"`
 	EmailID    string         `json:"email_id"`
-	Status     NullUserStatus `json:"status"`
+	Status     UserStatus     `json:"status"`
 	TeamName   string         `json:"team_name"`
 	TeamRole   string         `json:"team_role"`
 	TotalCount int64          `json:"total_count"`

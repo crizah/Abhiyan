@@ -25,11 +25,11 @@ func NewAttendanceService(dbConn *sql.DB) *AttendanceService {
 // assertUserInOrg guards attendance endpoints that take a target user_id
 // straight from the URL with no other scoping.
 func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, callerOrgID string) error {
-	orgID, err := s.queries.GetUserOrgID(ctx, util.ParseUUID(userID))
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: util.ParseUUID(userID), OrgID: util.ParseUUID(callerOrgID)})
 	if err != nil {
 		return fmt.Errorf("failed to verify user's organization: %w", err)
 	}
-	if orgID != util.ParseUUID(callerOrgID) {
+	if !belongs {
 		return errors.New("unauthorized: user does not belong to your organization")
 	}
 	return nil

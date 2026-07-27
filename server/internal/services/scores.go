@@ -20,11 +20,11 @@ import (
 // assertUserInOrg guards score/attendance endpoints that take a target user_id
 // straight from the URL/query with no other scoping.
 func (s *ScoreService) assertUserInOrg(ctx context.Context, userID uuid.UUID, callerOrgID uuid.UUID) error {
-	orgID, err := s.queries.GetUserOrgID(ctx, userID)
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: userID, OrgID: callerOrgID})
 	if err != nil {
 		return fmt.Errorf("failed to verify user's organization: %w", err)
 	}
-	if orgID != callerOrgID {
+	if !belongs {
 		return errors.New("unauthorized: user does not belong to your organization")
 	}
 	return nil

@@ -95,6 +95,7 @@ func main() {
 	onionApp.Register("send_reminder_email", tasks.NewSendReminderEmailTask(emailService))
 	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(dbConn, queries, onionApp))
 	onionApp.Register("send_reminder_whatsapp", tasks.NewSendReminderWhatsappTask(whatsappService))
+	onionApp.Register("send_task_status_whatsapp", tasks.NewSendTaskStatusWhatsappTask(whatsappService))
 
 	// register transcription
 	onionApp.Register("poll_pending_transcriptions", tasks.NewPollPendingTranscriptionsTask(queries, onionApp))
@@ -142,6 +143,7 @@ func main() {
 			"send_password_reset_email":     "critical",
 			"send_reminder_email":           "reminders",
 			"send_reminder_whatsapp":        "reminders",
+			"send_task_status_whatsapp":     "reminders",
 			"poll_due_reminders":            "polling",
 			"poll_pending_transcriptions":   "polling",
 			"transcribe_audio":              "default",

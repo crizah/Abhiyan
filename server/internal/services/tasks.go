@@ -1046,7 +1046,32 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 			UserID: p.ID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
 		})
 	}
-	return tx.Commit()
+
+	assigneePhones, _ := qtx.GetTaskAssigneePhones(ctx, tID)
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	s.notifyAssigneesWhatsapp(ctx, assigneePhones, taskTitle, "approved and closed")
+
+	return nil
+}
+
+// Best-effort WhatsApp fan-out to a task's assignees. Call only after the
+// state-changing transaction has committed — a failed send shouldn't roll back
+// an approval/rejection that already happened.
+func (s *TaskService) notifyAssigneesWhatsapp(ctx context.Context, phones []sql.NullString, taskTitle string, status string) {
+	for _, phone := range phones {
+		if !phone.Valid || phone.String == "" {
+			continue
+		}
+		_ = s.onionApp.Enqueue(ctx, "send_task_status_whatsapp", map[string]any{
+			"rPN":      phone.String,
+			"taskName": taskTitle,
+			"status":   status,
+		})
+	}
 }
 
 // Handles BOTH Reject and Reopen since the database logic/reminders are identical,
@@ -1116,11 +1141,20 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 		})
 	}
 
+	var assigneePhones []sql.NullString
+	if action == "REJECT" {
+		assigneePhones, _ = qtx.GetTaskAssigneePhones(ctx, tID)
+	}
+
 	// Diff Task Attachments instead of wiping
 	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
 
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+
+	if action == "REJECT" {
+		s.notifyAssigneesWhatsapp(ctx, assigneePhones, taskTitle, "rejected and reassigned")
 	}
 
 	if len(s3URLsToDelete) > 0 {

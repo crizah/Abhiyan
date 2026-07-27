@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -88,6 +89,10 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*schem
 }
 
 func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req schemas.UpdateProfileRequest) error {
+	if req.PhoneNumber != "" && !util.IsValidPhoneNumber(req.PhoneNumber) {
+		return errors.New("phone number must be a 10-digit number without the country code")
+	}
+
 	uid := util.ParseUUID(userID)
 
 	params := db.UpdateUserProfileParams{

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -41,6 +42,14 @@ func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App
 }
 
 func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.RegisterOrgRequest) error {
+	if !util.IsValidPhoneNumber(req.AdminPhone) {
+		return errors.New("phone number must be a 10-digit number without the country code")
+	}
+
+	// Emails are case-insensitive; normalize before it ever touches the DB so
+	// "Jane@co.com" and "jane@co.com" can't become two different accounts.
+	adminEmail := strings.ToLower(strings.TrimSpace(req.AdminEmail))
+
 	// 1. Hash the password before starting the transaction
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.AdminPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -74,7 +83,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 		OrgID:       org.ID,
 		FirstName:   sql.NullString{String: req.AdminFirstName, Valid: true},
 		LastName:    sql.NullString{String: req.AdminLastName, Valid: req.AdminLastName != ""},
-		EmailID:     req.AdminEmail,
+		EmailID:     adminEmail,
 		PhoneNumber: sql.NullString{String: req.AdminPhone, Valid: true},
 
 		Status: db.NullUserStatus{UserStatus: db.UserStatusACTIVE, Valid: true},
@@ -116,8 +125,10 @@ func (s *AuthService) GetOrgInfo(ctx context.Context, orgID string) (db.GetOrgIn
 }
 
 func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
 	// 1. Fetch User by Email
-	user, err := s.Queries.GetUserByEmail(ctx, req.Email)
+	user, err := s.Queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", errors.New("invalid email or password")
@@ -142,7 +153,7 @@ func (s *AuthService) Login(ctx context.Context, req schemas.LoginRequest) (stri
 	}
 
 	// 4. Generate and return the Access JWT
-	token, err := s.issueAccessToken(ctx, user, req.Email)
+	token, err := s.issueAccessToken(ctx, user, email)
 	if err != nil {
 		return "", errors.New("failed to generate authentication token")
 	}
@@ -185,6 +196,8 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (s
 			if result.Error != "" {
 				return "", errors.New(result.Error)
 			}
+
+			result.Email = strings.ToLower(strings.TrimSpace(result.Email))
 
 			// Token verified — now apply the same DB preconditions as password login.
 			user, dbErr := s.Queries.GetUserByEmail(ctx, result.Email)
@@ -303,6 +316,10 @@ func (s *AuthService) issueAccessToken(ctx context.Context, user db.User, email 
 
 // --- Accept Invite (Public Link) ---
 func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInviteRequest) error {
+	if !util.IsValidPhoneNumber(req.Phone) {
+		return errors.New("phone number must be a 10-digit number without the country code")
+	}
+
 	// 1. Parse and validate the JWT from the URL
 	claims, err := util.ParseInviteToken(req.Token, s.JwtSecret)
 	if err != nil {
@@ -353,6 +370,8 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 }
 
 func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+
 	user, err := s.Queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		// Return nil to avoid leaking whether the email exists

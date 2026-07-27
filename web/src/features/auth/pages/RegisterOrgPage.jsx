@@ -181,8 +181,15 @@ export default function RegisterOrgPage() {
 
                 <Row gutter={[16, 0]}>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="admin_phone" label="Phone Number" rules={[{ required: true }]}>
-                      <Input size="large" placeholder="+1 234 567 8900" />
+                    <Form.Item
+                      name="admin_phone"
+                      label="Phone Number"
+                      rules={[
+                        { required: true, message: 'Phone number is required' },
+                        { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit phone number (no country code)' },
+                      ]}
+                    >
+                      <Input size="large" placeholder="9876543210" maxLength={10} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>

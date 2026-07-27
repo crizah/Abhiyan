@@ -48,7 +48,7 @@ func (h *AuthHandler) RegisterOrg(c *gin.Context) {
 	err := h.authService.RegisterOrganization(c.Request.Context(), req)
 	if err != nil {
 		// In production, check for duplicate key errors (like email already exists)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register organization"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

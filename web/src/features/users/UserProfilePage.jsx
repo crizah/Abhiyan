@@ -72,8 +72,12 @@ export default function UserProfilePage() {
                 <Input size="large" />
               </Form.Item>
 
-              <Form.Item label="Phone Number" name="phone">
-                <Input size="large" />
+              <Form.Item
+                label="Phone Number"
+                name="phone"
+                rules={[{ pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit phone number (no country code)' }]}
+              >
+                <Input size="large" placeholder="9876543210" maxLength={10} />
               </Form.Item>
 
               <Button type="primary" htmlType="submit" loading={saving} size="large">

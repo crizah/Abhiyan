@@ -32,6 +32,8 @@ func NewAdminService(dbConn *sql.DB, s []byte, oa *app.App) *AdminService {
 }
 
 func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -42,7 +44,7 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 
 	user, err := qtx.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
 		OrgID:   util.ParseUUID(adminOrgID),
-		EmailID: req.Email,
+		EmailID: email,
 		// status already invited
 	})
 	if err != nil {
@@ -68,7 +70,7 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
-	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": req.Email, "link": link})
+	err = s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": email, "link": link})
 	if err != nil {
 		return "", err
 	}

@@ -40,7 +40,7 @@ func (h *UserHandler) UpdateMyProfile(c *gin.Context) {
 
 	err := h.userService.UpdateUserProfile(c.Request.Context(), userID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

@@ -2,11 +2,21 @@ package util
 
 import (
 	"database/sql"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// Indian mobile numbers: 10 digits, no country code, first digit 6-9.
+var indianPhoneRegex = regexp.MustCompile(`^[6-9]\d{9}$`)
+
+// IsValidPhoneNumber checks a phone number is a bare 10-digit Indian mobile
+// number (no country code) — the format ParsePhoneNumber expects to prepend "91" to.
+func IsValidPhoneNumber(phone string) bool {
+	return indianPhoneRegex.MatchString(strings.TrimSpace(phone))
+}
 
 // IST is the business timezone all human-facing dates/times are displayed in,
 // regardless of what timezone the DB connection or host happens to report

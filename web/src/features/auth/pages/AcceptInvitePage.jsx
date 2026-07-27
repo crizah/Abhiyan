@@ -238,9 +238,12 @@ export default function AcceptInvitePage() {
                   <Form.Item
                     name="phone"
                     label="Phone Number"
-                    rules={[{ required: true, message: 'Phone number is required' }]}
+                    rules={[
+                      { required: true, message: 'Phone number is required' },
+                      { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit phone number (no country code)' },
+                    ]}
                   >
-                    <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" />
+                    <Input prefix={<PhoneOutlined style={{ color: themeToken.colorTextQuaternary }} />} size="large" placeholder="9876543210" maxLength={10} />
                   </Form.Item>
 
                   <Form.Item

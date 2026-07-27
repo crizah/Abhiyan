@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api';
 import PixelBlast from '../../../components/ui/PixelBlast';
 import Logo from '../../../components/Logo';
+import InfoCard from '../../../components/InfoCard';
 
 const { Title, Text } = Typography;
 
@@ -139,6 +140,15 @@ export default function RegisterOrgPage() {
                   Set up your MNC workspace and Super Admin account.
                 </Text>
               </Flex>
+
+              <InfoCard>
+                Already have an account with us? You can still create a new organization and become its
+                Super Admin — just enter your existing password below; your name, phone, and other profile
+                details won't be changed. Forgot your password?{' '}
+                <Link to="/forgot-password" style={{ color: '#B3455C', fontWeight: 600 }}>
+                  Reset it here
+                </Link>.
+              </InfoCard>
 
               <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
                 <Title level={5} style={{ marginTop: 0, marginBottom: token.marginMD, color: token.colorPrimary }}>

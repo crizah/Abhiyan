@@ -132,7 +132,7 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 
 	if _, err := qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
 		UserID: userID,
-		OrgID:  uuid.NullUUID{UUID: org.ID, Valid: true},
+		OrgID:  org.ID,
 		Role:   db.SystemRoleSUPERADMIN,
 	}); err != nil {
 		return err
@@ -327,7 +327,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (*
 func (s *AuthService) issueAccessToken(ctx context.Context, userID uuid.UUID, orgID uuid.UUID, email string) (string, error) {
 	roles, err := s.Queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
 		UserID: userID,
-		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+		OrgID:  orgID,
 	})
 	if err != nil || len(roles) == 0 {
 		return "", errors.New("user has no assigned roles in this organization")

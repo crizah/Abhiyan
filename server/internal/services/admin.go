@@ -72,7 +72,7 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 
 	_, err = qtx.AddUserSystemRole(ctx, db.AddUserSystemRoleParams{
 		UserID: userID,
-		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+		OrgID:  orgID,
 		Role:   db.SystemRole(req.Role),
 	})
 	if err != nil {
@@ -465,7 +465,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	// 1. Authorization Check: Get the requester's system roles, scoped to this team's org
 	reqSysRoles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
 		UserID: reqUID,
-		OrgID:  uuid.NullUUID{UUID: teamOrgID, Valid: true},
+		OrgID:  teamOrgID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to check requester roles: %w", err)
@@ -504,7 +504,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	if !isRemoval && role == "TEAM_ADMIN" {
 		sysRoles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
 			UserID: uID,
-			OrgID:  uuid.NullUUID{UUID: teamOrgID, Valid: true},
+			OrgID:  teamOrgID,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to fetch target user roles: %w", err)
@@ -713,7 +713,7 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	// person holds in any other org they belong to)
 	if err := s.queries.DeleteUserSystemRoles(ctx, db.DeleteUserSystemRolesParams{
 		UserID: uID,
-		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+		OrgID:  orgID,
 	}); err != nil {
 		return err
 	}
@@ -721,7 +721,7 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	// 3. Insert the new system role
 	if err := s.queries.InsertUserSystemRole(ctx, db.InsertUserSystemRoleParams{
 		UserID: uID,
-		OrgID:  uuid.NullUUID{UUID: orgID, Valid: true},
+		OrgID:  orgID,
 		Role:   db.SystemRole(role),
 	}); err != nil {
 		return err

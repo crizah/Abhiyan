@@ -751,8 +751,8 @@ type UserCredential struct {
 }
 
 type UserSystemRole struct {
-	UserID    uuid.UUID     `json:"user_id"`
-	OrgID     uuid.NullUUID `json:"org_id"`
-	Role      SystemRole    `json:"role"`
-	GrantedAt sql.NullTime  `json:"granted_at"`
+	UserID    uuid.UUID    `json:"user_id"`
+	OrgID     uuid.UUID    `json:"org_id"`
+	Role      SystemRole   `json:"role"`
+	GrantedAt sql.NullTime `json:"granted_at"`
 }

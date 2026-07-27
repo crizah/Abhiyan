@@ -8,7 +8,6 @@ import (
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	"github.com/crizah/Abhiyan/server/internal/util"
-	"github.com/google/uuid"
 
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/gin-gonic/gin"
@@ -280,7 +279,7 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 	// Query DB to check what roles they hold in the TARGET org
 	roles, err := h.authService.Queries.GetUserSystemRoles(c.Request.Context(), db.GetUserSystemRolesParams{
 		UserID: userID,
-		OrgID:  uuid.NullUUID{UUID: targetOrgID, Valid: true},
+		OrgID:  targetOrgID,
 	})
 	if err != nil || len(roles) == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You have no role in this organization"})

@@ -8,7 +8,6 @@ import (
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
-	"github.com/google/uuid"
 )
 
 type UserService struct {
@@ -36,7 +35,7 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string, orgID s
 	// 2. Fetch system roles (this org only — a person can hold different roles elsewhere)
 	roles, err := s.queries.GetUserSystemRoles(ctx, db.GetUserSystemRolesParams{
 		UserID: uid,
-		OrgID:  uuid.NullUUID{UUID: oid, Valid: true},
+		OrgID:  oid,
 	})
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err

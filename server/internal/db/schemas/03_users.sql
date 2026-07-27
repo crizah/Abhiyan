@@ -23,17 +23,14 @@ CREATE TABLE IF NOT EXISTS user_credentials (
 -- 3. NEW: System Roles Junction Table (Multi-role support)
 -- This allows user X to be BOTH a Super Admin and an Admin
 --
--- MULTI-ORG MIGRATION (step 1 of 2): org_id below is nullable for now so this
--- can be added to an already-populated table without a default. Once deployed,
--- backfill it (org_id = the owning user's current users.org_id) and only then
--- follow up with a second migration that sets it NOT NULL and changes the
--- primary key to (user_id, org_id, role) — see org_memberships below for why.
+-- Role is scoped per-org (multi-org membership) — a person can hold a
+-- different role in each org they belong to, so org_id is part of the key.
 CREATE TABLE IF NOT EXISTS user_system_roles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     role system_role NOT NULL,
     granted_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (user_id, role)
+    PRIMARY KEY (user_id, org_id, role)
 );
 
 -- Multi-org membership: a person (one shared identity/credentials/profile in

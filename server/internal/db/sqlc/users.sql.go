@@ -21,9 +21,9 @@ INSERT INTO user_system_roles (
 `
 
 type AddUserSystemRoleParams struct {
-	UserID uuid.UUID     `json:"user_id"`
-	OrgID  uuid.NullUUID `json:"org_id"`
-	Role   SystemRole    `json:"role"`
+	UserID uuid.UUID  `json:"user_id"`
+	OrgID  uuid.UUID  `json:"org_id"`
+	Role   SystemRole `json:"role"`
 }
 
 // Assigns a system role to a user, scoped to one org.
@@ -160,8 +160,8 @@ DELETE FROM user_system_roles WHERE user_id = $1 AND org_id = $2
 `
 
 type DeleteUserSystemRolesParams struct {
-	UserID uuid.UUID     `json:"user_id"`
-	OrgID  uuid.NullUUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
 }
 
 // Scoped to one org — must never wipe a person's roles in a different org
@@ -528,8 +528,8 @@ WHERE user_id = $1 AND org_id = $2
 `
 
 type GetUserSystemRolesParams struct {
-	UserID uuid.UUID     `json:"user_id"`
-	OrgID  uuid.NullUUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
 }
 
 // Fetches the roles a user holds in one specific org (not global — a person
@@ -738,9 +738,9 @@ INSERT INTO user_system_roles (user_id, org_id, role) VALUES ($1, $2, $3)
 `
 
 type InsertUserSystemRoleParams struct {
-	UserID uuid.UUID     `json:"user_id"`
-	OrgID  uuid.NullUUID `json:"org_id"`
-	Role   SystemRole    `json:"role"`
+	UserID uuid.UUID  `json:"user_id"`
+	OrgID  uuid.UUID  `json:"org_id"`
+	Role   SystemRole `json:"role"`
 }
 
 func (q *Queries) InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error {

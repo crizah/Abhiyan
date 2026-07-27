@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -15,6 +16,19 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/google/uuid"
 )
+
+// assertUserInOrg guards score/attendance endpoints that take a target user_id
+// straight from the URL/query with no other scoping.
+func (s *ScoreService) assertUserInOrg(ctx context.Context, userID uuid.UUID, callerOrgID uuid.UUID) error {
+	orgID, err := s.queries.GetUserOrgID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to verify user's organization: %w", err)
+	}
+	if orgID != callerOrgID {
+		return errors.New("unauthorized: user does not belong to your organization")
+	}
+	return nil
+}
 
 type ScoreService struct {
 	db      *sql.DB
@@ -147,8 +161,11 @@ func (s *ScoreService) RecordReopenTx(ctx context.Context, qtx *db.Queries, task
 	return nil
 }
 
-func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, teamFilter string, limit, offset int32) (*schemas.ScoreBreakdownResponse, error) {
+func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, teamFilter string, limit, offset int32, callerOrgID string) (*schemas.ScoreBreakdownResponse, error) {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
@@ -279,9 +296,18 @@ func (s *ScoreService) GetAdminLeaderboard(ctx context.Context, teamIDs []uuid.U
 	return resp, nil
 }
 
-func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID string, visible bool, adminID string) error {
+func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID string, visible bool, adminID string, callerOrgID string) error {
+	tID := util.ParseUUID(teamID)
+	teamOrgID, err := s.queries.GetTeamOrgID(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to verify team's organization: %w", err)
+	}
+	if teamOrgID != util.ParseUUID(callerOrgID) {
+		return errors.New("unauthorized: team does not belong to your organization")
+	}
+
 	return s.queries.UpsertLeaderboardVisibility(ctx, db.UpsertLeaderboardVisibilityParams{
-		TeamID:             util.ParseUUID(teamID),
+		TeamID:             tID,
 		LeaderboardVisible: visible,
 		UpdatedBy:          uuid.NullUUID{UUID: util.ParseUUID(adminID), Valid: true},
 	})
@@ -374,8 +400,12 @@ type UserNameResult struct {
 	Email    string
 }
 
-func (s *ScoreService) GetUserName(ctx context.Context, userID string) (*UserNameResult, error) {
+func (s *ScoreService) GetUserName(ctx context.Context, userID string, callerOrgID string) (*UserNameResult, error) {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
 	user, err := s.queries.GetUserNameByID(ctx, uID)
 	if err != nil {
 		return nil, err
@@ -388,8 +418,11 @@ func (s *ScoreService) GetUserName(ctx context.Context, userID string) (*UserNam
 	return &UserNameResult{FullName: fullName, Email: email}, nil
 }
 
-func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, userName string, email string, w io.Writer) error {
+func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, userName string, email string, w io.Writer, callerOrgID string) error {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return err
+	}
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,

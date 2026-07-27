@@ -25,10 +25,11 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	task, err := h.taskService.CreateTask(c.Request.Context(), adminID, req)
+	task, err := h.taskService.CreateTask(c.Request.Context(), adminID, req, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -37,6 +38,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 
 func (h *TaskHandler) GetTeamTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
+	orgID := c.MustGet("org_id").(string)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -51,9 +53,9 @@ func (h *TaskHandler) GetTeamTasks(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	result, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID, int32(limit), int32(offset))
+	result, err := h.taskService.GetTeamTasks(c.Request.Context(), teamID, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -62,6 +64,7 @@ func (h *TaskHandler) GetTeamTasks(c *gin.Context) {
 
 func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 	taskID := c.Param("task_id")
+	orgID := c.MustGet("org_id").(string)
 	var req schemas.UpdateTaskStatusRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,8 +72,8 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 		return
 	}
 
-	if err := h.taskService.UpdateTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task status"})
+	if err := h.taskService.UpdateTaskStatus(c.Request.Context(), taskID, req.Status, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -79,6 +82,7 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 
 func (h *TaskHandler) GetTaskUpdates(c *gin.Context) {
 	taskID := c.Param("task_id")
+	orgID := c.MustGet("org_id").(string)
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if limit < 1 {
@@ -92,9 +96,9 @@ func (h *TaskHandler) GetTaskUpdates(c *gin.Context) {
 		offset = 0
 	}
 
-	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID, int32(limit), int32(offset))
+	updates, err := h.taskService.GetTaskUpdates(c.Request.Context(), taskID, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updates"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -103,6 +107,7 @@ func (h *TaskHandler) GetTaskUpdates(c *gin.Context) {
 
 func (h *TaskHandler) GetUpdateComments(c *gin.Context) {
 	updateID := c.Param("update_id")
+	orgID := c.MustGet("org_id").(string)
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if limit < 1 {
@@ -116,9 +121,9 @@ func (h *TaskHandler) GetUpdateComments(c *gin.Context) {
 		offset = 0
 	}
 
-	comments, err := h.taskService.GetUpdateComments(c.Request.Context(), updateID, int32(limit), int32(offset))
+	comments, err := h.taskService.GetUpdateComments(c.Request.Context(), updateID, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -128,6 +133,7 @@ func (h *TaskHandler) GetUpdateComments(c *gin.Context) {
 func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	var req schemas.AddTaskUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -135,9 +141,9 @@ func (h *TaskHandler) PostTaskUpdate(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req) // Pass entire req
+	err := h.taskService.PostTaskUpdate(c.Request.Context(), taskID, userID, req, orgID) // Pass entire req
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post update"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -148,6 +154,7 @@ func (h *TaskHandler) PostUpdateComment(c *gin.Context) {
 	taskID := c.Param("task_id")
 	updateID := c.Param("update_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	var req schemas.AddCommentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -155,9 +162,9 @@ func (h *TaskHandler) PostUpdateComment(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.PostUpdateComment(c.Request.Context(), taskID, updateID, userID, req)
+	err := h.taskService.PostUpdateComment(c.Request.Context(), taskID, updateID, userID, req, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -166,9 +173,10 @@ func (h *TaskHandler) PostUpdateComment(c *gin.Context) {
 
 func (h *TaskHandler) GetFullTaskDetails(c *gin.Context) {
 	taskID := c.Param("task_id")
-	details, err := h.taskService.GetFullTaskDetails(c.Request.Context(), taskID)
+	orgID := c.MustGet("org_id").(string)
+	details, err := h.taskService.GetFullTaskDetails(c.Request.Context(), taskID, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch details"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, details)
@@ -177,14 +185,15 @@ func (h *TaskHandler) GetFullTaskDetails(c *gin.Context) {
 func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 	var req schemas.UpdateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+	if err := h.taskService.UpdateTaskDetails(c.Request.Context(), taskID, req, userID, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task updated"})
@@ -236,9 +245,10 @@ func (h *TaskHandler) ReopenTask(c *gin.Context) {
 func (h *TaskHandler) ApproveTask(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	if err := h.taskService.ApproveTask(c.Request.Context(), taskID, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to approve task"})
+	if err := h.taskService.ApproveTask(c.Request.Context(), taskID, userID, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task approved"})
@@ -247,6 +257,7 @@ func (h *TaskHandler) ApproveTask(c *gin.Context) {
 func (h *TaskHandler) ActionTask(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 	action := c.Param("action") // "REJECT" or "REOPEN"
 
 	var req schemas.ActionTaskRequest
@@ -255,8 +266,8 @@ func (h *TaskHandler) ActionTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.taskService.ActionTask(c.Request.Context(), action, taskID, userID, req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to action task"})
+	if err := h.taskService.ActionTask(c.Request.Context(), action, taskID, userID, req, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Task actioned successfully"})
@@ -275,6 +286,7 @@ func (h *TaskHandler) GetEmployeeTeams(c *gin.Context) {
 func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
 	teamID := c.Param("team_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	// 1. Parse pagination params
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -294,9 +306,9 @@ func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	// 3. Call service
-	paginatedResponse, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID, int32(limit), int32(offset))
+	paginatedResponse, err := h.taskService.GetEmployeeTasks(c.Request.Context(), teamID, userID, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -317,7 +329,8 @@ func (h *TaskHandler) SubmitTask(c *gin.Context) {
 
 func (h *TaskHandler) GetTranscription(c *gin.Context) {
 	attachmentID := c.Param("attachment_id")
-	result, err := h.taskService.GetTranscription(c.Request.Context(), attachmentID)
+	orgID := c.MustGet("org_id").(string)
+	result, err := h.taskService.GetTranscription(c.Request.Context(), attachmentID, orgID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Transcription not found"})
 		return

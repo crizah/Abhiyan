@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -19,6 +20,19 @@ type AttendanceService struct {
 
 func NewAttendanceService(dbConn *sql.DB) *AttendanceService {
 	return &AttendanceService{queries: db.New(dbConn)}
+}
+
+// assertUserInOrg guards attendance endpoints that take a target user_id
+// straight from the URL with no other scoping.
+func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, callerOrgID string) error {
+	orgID, err := s.queries.GetUserOrgID(ctx, util.ParseUUID(userID))
+	if err != nil {
+		return fmt.Errorf("failed to verify user's organization: %w", err)
+	}
+	if orgID != util.ParseUUID(callerOrgID) {
+		return errors.New("unauthorized: user does not belong to your organization")
+	}
+	return nil
 }
 
 func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, targetKey string) (string, error) {
@@ -137,7 +151,10 @@ type UserAttendanceHistory struct {
 	Present bool   `json:"present"`
 }
 
-func (s *AttendanceService) GetUserSummary(ctx context.Context, userID string) (*UserAttendanceSummary, error) {
+func (s *AttendanceService) GetUserSummary(ctx context.Context, userID string, callerOrgID string) (*UserAttendanceSummary, error) {
+	if err := s.assertUserInOrg(ctx, userID, callerOrgID); err != nil {
+		return nil, err
+	}
 	uid := util.ParseUUID(userID)
 
 	counts, err := s.queries.GetUserAttendanceSummary(ctx, uid)
@@ -193,8 +210,8 @@ func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, 
 	return nil
 }
 
-func (s *AttendanceService) WriteUserReport(ctx context.Context, userID string, w io.Writer) error {
-	summary, err := s.GetUserSummary(ctx, userID)
+func (s *AttendanceService) WriteUserReport(ctx context.Context, userID string, w io.Writer, callerOrgID string) error {
+	summary, err := s.GetUserSummary(ctx, userID, callerOrgID)
 	if err != nil {
 		return err
 	}

@@ -412,6 +412,17 @@ func (q *Queries) GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNam
 	return i, err
 }
 
+const getUserOrgID = `-- name: GetUserOrgID :one
+SELECT org_id FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getUserOrgID, id)
+	var org_id uuid.UUID
+	err := row.Scan(&org_id)
+	return org_id, err
+}
+
 const getUserStatus = `-- name: GetUserStatus :one
 SELECT status FROM users WHERE id = $1
 `

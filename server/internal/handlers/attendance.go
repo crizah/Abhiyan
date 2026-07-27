@@ -107,10 +107,11 @@ func (h *AttendanceHandler) DownloadOrgReport(c *gin.Context) {
 
 func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
 	userID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
 
-	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID)
+	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user attendance"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -119,11 +120,12 @@ func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
 
 func (h *AttendanceHandler) DownloadUserReport(c *gin.Context) {
 	userID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
 
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_user_%s.csv", userID[:8]))
 
-	if err := h.attendanceService.WriteUserReport(c.Request.Context(), userID, c.Writer); err != nil {
+	if err := h.attendanceService.WriteUserReport(c.Request.Context(), userID, c.Writer, orgID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 	}
 }

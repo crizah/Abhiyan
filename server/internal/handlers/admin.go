@@ -238,7 +238,9 @@ func (h *AdminHandler) TransferTeamMember(c *gin.Context) {
 		return
 	}
 
-	err := h.adminService.TransferTeamMember(c.Request.Context(), req.FromTeamID, req.ToTeamID, req.UserID)
+	reqUserID := c.MustGet("user_id").(string)
+
+	err := h.adminService.TransferTeamMember(c.Request.Context(), req.FromTeamID, req.ToTeamID, req.UserID, reqUserID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -272,9 +274,10 @@ func (h *AdminHandler) GetAssignedUsers(c *gin.Context) {
 
 func (h *AdminHandler) GetUserTeams(c *gin.Context) {
 	userID := c.Param("user_id")
-	teams, err := h.adminService.GetUserTeams(c.Request.Context(), userID)
+	orgID := c.MustGet("org_id").(string)
+	teams, err := h.adminService.GetUserTeams(c.Request.Context(), userID, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user teams"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, teams)
@@ -292,9 +295,11 @@ func (h *AdminHandler) UpdateUserSystemProfile(c *gin.Context) {
 		return
 	}
 
-	err := h.adminService.UpdateUserSystemProfile(c.Request.Context(), userID, payload.Role, payload.Status)
+	orgID := c.MustGet("org_id").(string)
+
+	err := h.adminService.UpdateUserSystemProfile(c.Request.Context(), userID, payload.Role, payload.Status, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user profile"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 

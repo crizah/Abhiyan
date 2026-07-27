@@ -14,7 +14,7 @@ import (
 
 const checkTeamAdminStatus = `-- name: CheckTeamAdminStatus :one
 SELECT EXISTS (
-    SELECT 1 FROM team_members 
+    SELECT 1 FROM team_members
     WHERE team_id = $1 AND user_id = $2 AND team_role = 'TEAM_ADMIN'
 )
 `
@@ -26,6 +26,26 @@ type CheckTeamAdminStatusParams struct {
 
 func (q *Queries) CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error) {
 	row := q.db.QueryRowContext(ctx, checkTeamAdminStatus, arg.TeamID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkUserBelongsToTeamOrg = `-- name: CheckUserBelongsToTeamOrg :one
+SELECT EXISTS (
+    SELECT 1 FROM teams t
+    JOIN users u ON u.org_id = t.org_id
+    WHERE t.id = $1 AND u.id = $2
+)
+`
+
+type CheckUserBelongsToTeamOrgParams struct {
+	ID   uuid.UUID `json:"id"`
+	ID_2 uuid.UUID `json:"id_2"`
+}
+
+func (q *Queries) CheckUserBelongsToTeamOrg(ctx context.Context, arg CheckUserBelongsToTeamOrgParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkUserBelongsToTeamOrg, arg.ID, arg.ID_2)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -412,6 +432,17 @@ func (q *Queries) GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTeamOrgID = `-- name: GetTeamOrgID :one
+SELECT org_id FROM teams WHERE id = $1
+`
+
+func (q *Queries) GetTeamOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getTeamOrgID, id)
+	var org_id uuid.UUID
+	err := row.Scan(&org_id)
+	return org_id, err
 }
 
 const getTotalUsersInAdminTeams = `-- name: GetTotalUsersInAdminTeams :one

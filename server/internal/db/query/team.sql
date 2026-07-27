@@ -95,8 +95,18 @@ ORDER BY t.name ASC;
 
 -- name: CheckTeamAdminStatus :one
 SELECT EXISTS (
-    SELECT 1 FROM team_members 
+    SELECT 1 FROM team_members
     WHERE team_id = $1 AND user_id = $2 AND team_role = 'TEAM_ADMIN'
+);
+
+-- name: GetTeamOrgID :one
+SELECT org_id FROM teams WHERE id = $1;
+
+-- name: CheckUserBelongsToTeamOrg :one
+SELECT EXISTS (
+    SELECT 1 FROM teams t
+    JOIN users u ON u.org_id = t.org_id
+    WHERE t.id = $1 AND u.id = $2
 );
 
 

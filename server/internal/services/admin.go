@@ -13,6 +13,7 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/schemas"
 	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/crizah/Onion/app"
+	"github.com/google/uuid"
 )
 
 type AdminService struct {
@@ -360,21 +361,28 @@ func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]sche
 }
 
 func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string, userID string, role string) ([]schemas.TeamMemberResponse, error) {
-	// tID := util.ParseUUID(teamID)
-	// uID := util.ParseUUID(userID)
+	tID := util.ParseUUID(teamID)
+	uID := util.ParseUUID(userID)
 
-	// // SECURITY GUARD: If they are not a SUPER_ADMIN, verify they actually manage this team
-	// if role != "SUPER_ADMIN" {
-	// 	isAdmin, err := s.queries.CheckTeamAdminStatus(ctx, db.CheckTeamAdminStatusParams{
-	// 		TeamID: tID,
-	// 		UserID: uID,
-	// 	})
-	// 	if err != nil || !isAdmin {
-	// 		return nil, errors.New("unauthorized: you do not manage this team")
-	// 	}
-	// }
+	// SECURITY GUARD: this is reachable by any authenticated user (not just
+	// admins), so the only thing that matters is org membership — verify the
+	// requester actually belongs to this team's organization.
+	belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: uID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify organization: %w", err)
+	}
+	if !belongs {
+		return nil, errors.New("unauthorized: this team does not belong to your organization")
+	}
 
-	dbMembers, err := s.queries.GetTeamMembersDetails(ctx, util.ParseUUID(teamID))
+	return s.fetchTeamMembers(ctx, tID)
+}
+
+// fetchTeamMembers is the unguarded core of GetTeamMembers, for internal callers
+// that have already established the caller is authorized (e.g. ManageTeamMember's
+// own last-admin check) and don't have a real "requester" to run the org check against.
+func (s *AdminService) fetchTeamMembers(ctx context.Context, tID uuid.UUID) ([]schemas.TeamMemberResponse, error) {
+	dbMembers, err := s.queries.GetTeamMembersDetails(ctx, tID)
 	if err != nil {
 		return nil, err
 	}
@@ -403,6 +411,27 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	tID := util.ParseUUID(teamID)
 	uID := util.ParseUUID(userID)
 	reqUID := util.ParseUUID(reqUserID)
+
+	// 0. Cross-org guard: neither the requester nor the target may act on a team
+	// outside their own organization, regardless of role — a SUPER_ADMIN is only
+	// super over their own org, not every org in the system.
+	reqBelongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: reqUID})
+	if err != nil {
+		return fmt.Errorf("failed to verify requester's organization: %w", err)
+	}
+	if !reqBelongs {
+		return errors.New("action blocked: you do not belong to this team's organization")
+	}
+
+	if !isRemoval {
+		belongs, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: uID})
+		if err != nil {
+			return fmt.Errorf("failed to verify user's organization: %w", err)
+		}
+		if !belongs {
+			return errors.New("action blocked: user does not belong to this team's organization")
+		}
+	}
 
 	// 1. Authorization Check: Get the requester's system roles
 	reqSysRoles, err := s.queries.GetUserSystemRoles(ctx, reqUID)
@@ -468,7 +497,7 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 
 		if adminCount <= 1 {
 			// Using your existing GetTeamMembers function to check the target's current role
-			members, err := s.GetTeamMembers(ctx, teamID, "", "SUPER_ADMIN")
+			members, err := s.fetchTeamMembers(ctx, tID)
 			if err == nil {
 				for _, m := range members {
 					if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
@@ -494,10 +523,30 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 	})
 }
 
-func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTeamID, userID string) error {
+func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTeamID, userID, reqUserID string) error {
 	fID := util.ParseUUID(fromTeamID)
 	tID := util.ParseUUID(toTeamID)
 	uID := util.ParseUUID(userID)
+	reqUID := util.ParseUUID(reqUserID)
+
+	// Cross-org guard: requester, target user, source team and destination team
+	// must all belong to the same organization — a SUPER_ADMIN's reach stops at
+	// their own org's boundary.
+	reqBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, ID_2: reqUID})
+	if err != nil {
+		return fmt.Errorf("failed to verify organization: %w", err)
+	}
+	reqBelongsTo, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: tID, ID_2: reqUID})
+	if err != nil {
+		return fmt.Errorf("failed to verify organization: %w", err)
+	}
+	targetBelongsFrom, err := s.queries.CheckUserBelongsToTeamOrg(ctx, db.CheckUserBelongsToTeamOrgParams{ID: fID, ID_2: uID})
+	if err != nil {
+		return fmt.Errorf("failed to verify organization: %w", err)
+	}
+	if !reqBelongsFrom || !reqBelongsTo || !targetBelongsFrom {
+		return errors.New("action blocked: teams or user are outside your organization")
+	}
 
 	// Enforce safety rule: Prevent moving the last admin out of the current team
 	adminCount, err := s.queries.GetTeamAdminCount(ctx, fID)
@@ -506,7 +555,7 @@ func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTea
 	}
 
 	if adminCount <= 1 {
-		members, _ := s.GetTeamMembers(ctx, fromTeamID, "", "SUPER_ADMIN")
+		members, _ := s.fetchTeamMembers(ctx, fID)
 		for _, m := range members {
 			if m.ID == userID && m.TeamRole == "TEAM_ADMIN" {
 				return errors.New("cannot transfer the last Team Admin. Promote someone else on this team first")
@@ -571,8 +620,18 @@ func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, li
 	}, nil
 }
 
-func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schemas.UserTeamResponse, error) {
-	dbTeams, err := s.queries.GetUserTeams(ctx, util.ParseUUID(userID))
+func (s *AdminService) GetUserTeams(ctx context.Context, userID string, callerOrgID string) ([]schemas.UserTeamResponse, error) {
+	uID := util.ParseUUID(userID)
+
+	targetOrgID, err := s.queries.GetUserOrgID(ctx, uID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify user's organization: %w", err)
+	}
+	if targetOrgID != util.ParseUUID(callerOrgID) {
+		return nil, errors.New("unauthorized: user does not belong to your organization")
+	}
+
+	dbTeams, err := s.queries.GetUserTeams(ctx, uID)
 	if err != nil {
 		return nil, err
 	}
@@ -591,11 +650,19 @@ func (s *AdminService) GetUserTeams(ctx context.Context, userID string) ([]schem
 	return teams, nil
 }
 
-func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID string, role string, status string) error {
+func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID string, role string, status string, callerOrgID string) error {
 	if status == "INVITED" {
 		return errors.New("invalid operation: cannot manually revert a user's status to INVITED")
 	}
 	uID := util.ParseUUID(userID)
+
+	targetOrgID, err := s.queries.GetUserOrgID(ctx, uID)
+	if err != nil {
+		return fmt.Errorf("failed to verify user's organization: %w", err)
+	}
+	if targetOrgID != util.ParseUUID(callerOrgID) {
+		return errors.New("unauthorized: user does not belong to your organization")
+	}
 
 	if err := s.queries.UpdateUserStatus(ctx, db.UpdateUserStatusParams{
 		Status: db.NullUserStatus{

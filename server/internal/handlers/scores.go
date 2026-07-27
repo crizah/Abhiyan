@@ -23,6 +23,7 @@ func NewScoreHandler(sc *services.ScoreService, as *services.AdminService) *Scor
 
 func (h *ScoreHandler) GetUserScoreBreakdown(c *gin.Context) {
 	targetUserID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
 	teamFilter := c.Query("team")
 	if teamFilter == "ALL" {
 		teamFilter = ""
@@ -37,9 +38,9 @@ func (h *ScoreHandler) GetUserScoreBreakdown(c *gin.Context) {
 	}
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	result, err := h.scoreService.GetUserBreakdown(c.Request.Context(), targetUserID, teamFilter, int32(limit), int32(offset))
+	result, err := h.scoreService.GetUserBreakdown(c.Request.Context(), targetUserID, teamFilter, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch score breakdown"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -120,8 +121,9 @@ func (h *ScoreHandler) ToggleLeaderboardVisibility(c *gin.Context) {
 		return
 	}
 
-	if err := h.scoreService.ToggleLeaderboardVisibility(c.Request.Context(), teamID, req.Visible, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update visibility"})
+	orgID := c.MustGet("org_id").(string)
+	if err := h.scoreService.ToggleLeaderboardVisibility(c.Request.Context(), teamID, req.Visible, userID, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -151,16 +153,16 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 	teamFilter := c.Query("team")
 
 	if targetUserID != "" {
-		userName, err := h.scoreService.GetUserName(c.Request.Context(), targetUserID)
+		userName, err := h.scoreService.GetUserName(c.Request.Context(), targetUserID, orgID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=score_report_%s.csv", targetUserID[:8]))
 
-		err = h.scoreService.WriteUserScoreReport(c.Request.Context(), targetUserID, userName.FullName, userName.Email, c.Writer)
+		err = h.scoreService.WriteUserScoreReport(c.Request.Context(), targetUserID, userName.FullName, userName.Email, c.Writer, orgID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 		}

@@ -3,6 +3,41 @@
 SELECT * FROM tasks
 WHERE id = $1 LIMIT 1;
 
+-- name: GetTaskOrgID :one
+SELECT t.org_id
+FROM tasks tk
+JOIN teams t ON tk.team_id = t.id
+WHERE tk.id = $1;
+
+-- name: GetTaskUpdateOrgID :one
+SELECT t.org_id
+FROM task_updates tu
+JOIN tasks tk ON tu.task_id = tk.id
+JOIN teams t ON tk.team_id = t.id
+WHERE tu.id = $1;
+
+-- name: GetTaskUpdateCommentOrgID :one
+SELECT t.org_id
+FROM task_update_comments c
+JOIN task_updates tu ON c.task_update_id = tu.id
+JOIN tasks tk ON tu.task_id = tk.id
+JOIN teams t ON tk.team_id = t.id
+WHERE c.id = $1;
+
+-- name: GetAttachmentOrgID :one
+SELECT COALESCE(t1.org_id, t2.org_id, t3.org_id) AS org_id
+FROM attachments a
+LEFT JOIN tasks tk1 ON a.task_id = tk1.id
+LEFT JOIN teams t1 ON tk1.team_id = t1.id
+LEFT JOIN task_updates tu ON a.task_update_id = tu.id
+LEFT JOIN tasks tk2 ON tu.task_id = tk2.id
+LEFT JOIN teams t2 ON tk2.team_id = t2.id
+LEFT JOIN task_update_comments tc ON a.task_comment_id = tc.id
+LEFT JOIN task_updates tu2 ON tc.task_update_id = tu2.id
+LEFT JOIN tasks tk3 ON tu2.task_id = tk3.id
+LEFT JOIN teams t3 ON tk3.team_id = t3.id
+WHERE a.id = $1;
+
 -- name: ListTasksByTeam :many
 SELECT * FROM tasks
 WHERE team_id = $1

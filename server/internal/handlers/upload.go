@@ -25,13 +25,14 @@ func NewUploadHandler(s3Service *services.S3Service, faceValidation *services.Fa
 func (h *UploadHandler) GetPresignedUploadsURL(c *gin.Context) {
 	fileName := c.Query("file_name")
 	folderType := c.Query("type")
+	orgID := c.MustGet("org_id").(string)
 
 	if fileName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file_name is required"})
 		return
 	}
 
-	uploadURL, finalURL, objectKey, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName, folderType)
+	uploadURL, finalURL, objectKey, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName, folderType, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate upload URL"})
 		return
@@ -50,6 +51,12 @@ func (h *UploadHandler) DeleteS3Object(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file_url is required"})
+		return
+	}
+
+	orgID := c.MustGet("org_id").(string)
+	if !h.s3Service.KeyBelongsToOrg(req.FileURL, orgID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: file does not belong to your organization"})
 		return
 	}
 

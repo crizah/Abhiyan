@@ -40,21 +40,23 @@ func NewS3Service(ctx context.Context) (*S3Service, error) {
 	}, nil
 }
 
-// GeneratePresignedURL returns the URL to upload to, and the final public URL
-func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename string, fileType string) (string, string, string, error) {
+// GeneratePresignedURL returns the URL to upload to, and the final public URL.
+// The key is scoped under the uploading org (<folder>/<org_id>/<uuid>-<filename>)
+// so ownership can be checked later by prefix alone, with no DB lookup and no
+// dependency on an attachments row existing yet.
+func (s *S3Service) GeneratePresignedURL(ctx context.Context, originalFilename string, fileType string, orgID string) (string, string, string, error) {
 	// 1. Create a unique key so files with the same name don't overwrite each other
 	uniqueID := uuid.New().String()
-	var objectKey string
+	var folder string
 	if fileType == "targets" {
-
 		// if attendance record, target bucket
-		objectKey = fmt.Sprintf("targets/%s-%s", uniqueID, originalFilename)
-
+		folder = "targets"
 	} else if fileType == "sources" {
-		objectKey = fmt.Sprintf("sources/%s-%s", uniqueID, originalFilename)
+		folder = "sources"
 	} else {
-		objectKey = fmt.Sprintf("uploads/%s-%s", uniqueID, originalFilename)
+		folder = "uploads"
 	}
+	objectKey := fmt.Sprintf("%s/%s/%s-%s", folder, orgID, uniqueID, originalFilename)
 
 	// 2. Ask AWS for the temporary upload URL (valid for 15 minutes)
 	request, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
@@ -174,4 +176,18 @@ func (s *S3Service) extractKeyFromURL(fileURL string) string {
 		return ""
 	}
 	return strings.TrimPrefix(parsed.Path, "/")
+}
+
+// KeyBelongsToOrg checks that a stored file URL's key was minted for orgID —
+// i.e. its <folder>/<org_id>/... prefix matches. Keys from before this scoping
+// existed have no org segment and always fail this check (by design: there's
+// no way to attribute them to an org, so they're treated as undeletable via
+// this path rather than guessed at).
+func (s *S3Service) KeyBelongsToOrg(fileURL string, orgID string) bool {
+	key := s.extractKeyFromURL(fileURL)
+	parts := strings.SplitN(key, "/", 3)
+	if len(parts) < 3 {
+		return false
+	}
+	return parts[1] == orgID
 }

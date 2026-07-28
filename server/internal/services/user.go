@@ -46,8 +46,11 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string, orgID s
 		systemRoles[i] = string(r)
 	}
 
-	// 3. Fetch team associations
-	dbTeams, err := s.queries.GetUserTeamsWithAdmins(ctx, uid)
+	// 3. Fetch team associations (this org only)
+	dbTeams, err := s.queries.GetUserTeamsWithAdmins(ctx, db.GetUserTeamsWithAdminsParams{
+		UserID: uid,
+		OrgID:  oid,
+	})
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}

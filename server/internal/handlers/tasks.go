@@ -201,6 +201,7 @@ func (h *TaskHandler) UpdateTaskDetails(c *gin.Context) {
 
 func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -215,7 +216,7 @@ func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	result, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID, int32(limit), int32(offset))
+	result, err := h.taskService.GetAdminAllTasks(c.Request.Context(), userID, int32(limit), int32(offset), orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
@@ -227,6 +228,7 @@ func (h *TaskHandler) GetAdminAllTasks(c *gin.Context) {
 func (h *TaskHandler) ReopenTask(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	var req schemas.ActionTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -234,7 +236,7 @@ func (h *TaskHandler) ReopenTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.taskService.ReopenTask(c.Request.Context(), taskID, userID, req); err != nil {
+	if err := h.taskService.ReopenTask(c.Request.Context(), taskID, userID, req, orgID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reopen task"})
 		return
 	}
@@ -275,7 +277,8 @@ func (h *TaskHandler) ActionTask(c *gin.Context) {
 
 func (h *TaskHandler) GetEmployeeTeams(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
-	teams, err := h.taskService.GetEmployeeTeams(c.Request.Context(), userID)
+	orgID := c.MustGet("org_id").(string)
+	teams, err := h.taskService.GetEmployeeTeams(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
 		return
@@ -318,8 +321,9 @@ func (h *TaskHandler) GetEmployeeTasks(c *gin.Context) {
 func (h *TaskHandler) SubmitTask(c *gin.Context) {
 	taskID := c.Param("task_id")
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	err := h.taskService.SubmitTaskForReview(c.Request.Context(), taskID, userID)
+	err := h.taskService.SubmitTaskForReview(c.Request.Context(), taskID, userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

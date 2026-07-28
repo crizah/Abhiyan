@@ -246,16 +246,17 @@ WITH base AS (
     JOIN users u ON t.created_by = u.id
     JOIN teams tm ON t.team_id = tm.id
     JOIN team_members tmem ON tm.id = tmem.team_id
-    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN'
+    WHERE tmem.user_id = $1 AND tmem.team_role = 'TEAM_ADMIN' AND tm.org_id = $2
 )
 SELECT id, team_id, title, description, status, fulfillment_status, review_status, created_by, due_date, created_at, first_name, last_name, team_name, COUNT(*) OVER() AS total_count
 FROM base
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $3 OFFSET $4
 `
 
 type GetAdminAllTasksParams struct {
 	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
 	Limit  int32     `json:"limit"`
 	Offset int32     `json:"offset"`
 }
@@ -278,7 +279,12 @@ type GetAdminAllTasksRow struct {
 }
 
 func (q *Queries) GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminAllTasks, arg.UserID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, getAdminAllTasks,
+		arg.UserID,
+		arg.OrgID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

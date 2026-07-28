@@ -54,8 +54,9 @@ func (h *AdminHandler) GetDashboardStats(c *gin.Context) {
 
 func (h *AdminHandler) GetAdminTeamStats(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	stats, err := h.adminService.GetAdminDashboardStats(c.Request.Context(), userID)
+	stats, err := h.adminService.GetAdminDashboardStats(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch team statistics"})
 		return
@@ -89,6 +90,7 @@ func (h *AdminHandler) GetOrgUsers(c *gin.Context) {
 func (h *AdminHandler) GetTeamEmployees(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
@@ -100,7 +102,7 @@ func (h *AdminHandler) GetTeamEmployees(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 
-	response, err := h.adminService.GetTeamEmployees(c.Request.Context(), userID, int32(pageSize), int32(offset), search, team, role, status)
+	response, err := h.adminService.GetTeamEmployees(c.Request.Context(), userID, orgID, int32(pageSize), int32(offset), search, team, role, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch team employees"})
 		return
@@ -111,8 +113,9 @@ func (h *AdminHandler) GetTeamEmployees(c *gin.Context) {
 
 func (h *AdminHandler) GetAdminTeamOptions(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	teams, err := h.adminService.GetAdminTeamNames(c.Request.Context(), userID)
+	teams, err := h.adminService.GetAdminTeamNames(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
 		return
@@ -326,7 +329,7 @@ func (h *AdminHandler) GetAdminManagedTeams(c *gin.Context) {
 		teams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
 	} else {
 		// Normal Admin: Fetch only teams they manage
-		teams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+		teams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
 	}
 
 	if err != nil {

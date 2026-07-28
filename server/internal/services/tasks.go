@@ -597,9 +597,10 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	return nil
 }
 
-func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32, callerOrgID string) (*schemas.PaginatedTaskResponse, error) {
 	dbTasks, err := s.queries.GetAdminAllTasks(ctx, db.GetAdminAllTasksParams{
 		UserID: util.ParseUUID(adminID),
+		OrgID:  util.ParseUUID(callerOrgID),
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -650,7 +651,12 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limi
 	}, nil
 }
 
-func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest) error {
+func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	if err := s.assertTaskInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -658,7 +664,6 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
 
 	// 1. Change Status back to OPEN
@@ -1090,9 +1095,13 @@ func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userI
 	}, nil
 }
 
-func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
+func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string, callerOrgID string) error {
 	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
+
+	if err := s.assertTaskInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return err
+	}
 
 	isAssignee, err := s.queries.IsTaskAssignee(ctx, db.IsTaskAssigneeParams{TaskID: tID, UserID: uID})
 	if err != nil || !isAssignee {
@@ -1287,8 +1296,11 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	return nil
 }
 
-func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
-	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
+func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string, callerOrgID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetEmployeeTeams(ctx, db.GetEmployeeTeamsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(callerOrgID),
+	})
 	if err != nil {
 		return nil, err
 	}

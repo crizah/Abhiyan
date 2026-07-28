@@ -98,7 +98,7 @@ SELECT
     ) as team_admin_emails
 FROM team_members tm
 JOIN teams t ON tm.team_id = t.id
-WHERE tm.user_id = $1;
+WHERE tm.user_id = $1 AND t.org_id = $2;
 
 -- name: UpdateUserProfile :one
 UPDATE users 

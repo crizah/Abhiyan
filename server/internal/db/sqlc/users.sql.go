@@ -570,8 +570,13 @@ SELECT
     ) as team_admin_emails
 FROM team_members tm
 JOIN teams t ON tm.team_id = t.id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.org_id = $2
 `
+
+type GetUserTeamsWithAdminsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetUserTeamsWithAdminsRow struct {
 	TeamName        string       `json:"team_name"`
@@ -579,8 +584,8 @@ type GetUserTeamsWithAdminsRow struct {
 	TeamAdminEmails interface{}  `json:"team_admin_emails"`
 }
 
-func (q *Queries) GetUserTeamsWithAdmins(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsWithAdminsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserTeamsWithAdmins, userID)
+func (q *Queries) GetUserTeamsWithAdmins(ctx context.Context, arg GetUserTeamsWithAdminsParams) ([]GetUserTeamsWithAdminsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTeamsWithAdmins, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

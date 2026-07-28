@@ -107,21 +107,25 @@ func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, 
 	return s.queries.GetTotalUsersByOrg(ctx, util.ParseUUID(orgID))
 }
 
-func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string) (int64, error) {
-	return s.queries.GetTotalUsersInAdminTeams(ctx, util.ParseUUID(userID))
+func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string, orgID string) (int64, error) {
+	return s.queries.GetTotalUsersInAdminTeams(ctx, db.GetTotalUsersInAdminTeamsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 }
 
-func (s *AdminService) GetAdminDashboardStats(ctx context.Context, userID string) (*schemas.AdminDashboardStatsResponse, error) {
+func (s *AdminService) GetAdminDashboardStats(ctx context.Context, userID string, orgID string) (*schemas.AdminDashboardStatsResponse, error) {
 	uID := util.ParseUUID(userID)
+	oID := util.ParseUUID(orgID)
 
 	// 1. Get overarching total distinct users
-	totalUsers, err := s.queries.GetTotalUsersInAdminTeams(ctx, uID)
+	totalUsers, err := s.queries.GetTotalUsersInAdminTeams(ctx, db.GetTotalUsersInAdminTeamsParams{UserID: uID, OrgID: oID})
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. Get breakdown per team
-	dbTeams, err := s.queries.GetAdminTeamWiseStats(ctx, uID)
+	dbTeams, err := s.queries.GetAdminTeamWiseStats(ctx, db.GetAdminTeamWiseStatsParams{UserID: uID, OrgID: oID})
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +220,7 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 	}, nil
 }
 
-func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limit, offset int32, search string, teamFilter string, roleFilter string, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
+func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, orgID string, limit, offset int32, search string, teamFilter string, roleFilter string, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
 	parsedUserID := util.ParseUUID(userID)
 
 	// Convert "ALL" filter strings from React to empty strings for SQLC
@@ -234,6 +238,7 @@ func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limi
 		UserID:       parsedUserID,
 		Limit:        limit,
 		Offset:       offset,
+		CallerOrgID:  util.ParseUUID(orgID),
 		SearchTerm:   search,
 		TeamFilter:   teamFilter,
 		RoleFilter:   roleFilter,
@@ -278,8 +283,11 @@ func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, limi
 	}, nil
 }
 
-func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string) ([]string, error) {
-	names, err := s.queries.GetAdminTeamNames(ctx, util.ParseUUID(userID))
+func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string, orgID string) ([]string, error) {
+	names, err := s.queries.GetAdminTeamNames(ctx, db.GetAdminTeamNamesParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +490,10 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 
 	// 2. Authorization Check: If NOT a Super Admin, verify they manage this specific team
 	if !isSuperAdmin {
-		teamIds, err := s.queries.GetAdminManagedTeams(ctx, reqUID)
+		teamIds, err := s.queries.GetAdminManagedTeams(ctx, db.GetAdminManagedTeamsParams{
+			UserID: reqUID,
+			OrgID:  teamOrgID,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to verify managed teams: %w", err)
 		}
@@ -666,7 +677,10 @@ func (s *AdminService) GetUserTeams(ctx context.Context, userID string, callerOr
 		return nil, errors.New("unauthorized: user does not belong to your organization")
 	}
 
-	dbTeams, err := s.queries.GetUserTeams(ctx, uID)
+	dbTeams, err := s.queries.GetUserTeams(ctx, db.GetUserTeamsParams{
+		UserID: uID,
+		OrgID:  util.ParseUUID(callerOrgID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -730,8 +744,11 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	return nil
 }
 
-func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
-	dbTeams, err := s.queries.GetAdminManagedTeams(ctx, util.ParseUUID(userID))
+func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string, orgID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetAdminManagedTeams(ctx, db.GetAdminManagedTeamsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err != nil {
 		return nil, err
 	}

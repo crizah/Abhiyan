@@ -61,7 +61,7 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 	if role == "SUPER_ADMIN" {
 		allTeams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
 	} else {
-		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
@@ -132,9 +132,10 @@ func (h *ScoreHandler) ToggleLeaderboardVisibility(c *gin.Context) {
 
 func (h *ScoreHandler) GetEmployeeLeaderboard(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 	teamFilter := c.Query("team")
 
-	result, err := h.scoreService.GetEmployeeLeaderboard(c.Request.Context(), userID, teamFilter)
+	result, err := h.scoreService.GetEmployeeLeaderboard(c.Request.Context(), userID, teamFilter, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
 		return
@@ -183,7 +184,7 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
 		}
 	} else {
-		teams, err := h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+		teams, err := h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
 			return

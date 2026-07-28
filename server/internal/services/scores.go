@@ -167,8 +167,11 @@ func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, team
 		return nil, err
 	}
 
+	oID := util.ParseUUID(callerOrgID)
+
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
+		OrgID:      oID,
 		TeamFilter: teamFilter,
 	})
 	if err != nil {
@@ -177,6 +180,7 @@ func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, team
 
 	events, err := s.queries.GetUserScoreEvents(ctx, db.GetUserScoreEventsParams{
 		UserID:     uID,
+		OrgID:      oID,
 		Limit:      limit,
 		Offset:     offset,
 		TeamFilter: teamFilter,
@@ -313,10 +317,13 @@ func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID s
 	})
 }
 
-func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string, teamFilter string) (*schemas.LeaderboardResponse, error) {
+func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string, teamFilter string, callerOrgID string) (*schemas.LeaderboardResponse, error) {
 	uID := util.ParseUUID(userID)
 
-	userTeams, err := s.queries.GetEmployeeTeams(ctx, uID)
+	userTeams, err := s.queries.GetEmployeeTeams(ctx, db.GetEmployeeTeamsParams{
+		UserID: uID,
+		OrgID:  util.ParseUUID(callerOrgID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -424,15 +431,21 @@ func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, 
 		return err
 	}
 
+	oID := util.ParseUUID(callerOrgID)
+
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
+		OrgID:      oID,
 		TeamFilter: "",
 	})
 	if err != nil {
 		return err
 	}
 
-	events, err := s.queries.GetUserScoreReportData(ctx, uID)
+	events, err := s.queries.GetUserScoreReportData(ctx, db.GetUserScoreReportDataParams{
+		UserID: uID,
+		OrgID:  oID,
+	})
 	if err != nil {
 		return err
 	}

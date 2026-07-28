@@ -73,7 +73,9 @@ func (h *UploadHandler) ValidateFace(c *gin.Context) {
 		return
 	}
 
-	jobID, err := h.faceValidation.InsertJob(c.Request.Context(), req.ObjectKey)
+	userID := c.MustGet("user_id").(string)
+
+	jobID, err := h.faceValidation.InsertJob(c.Request.Context(), userID, req.ObjectKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create validation job"})
 		return
@@ -89,8 +91,9 @@ func (h *UploadHandler) ValidateFace(c *gin.Context) {
 
 func (h *UploadHandler) GetValidationStatus(c *gin.Context) {
 	jobID := c.Param("job_id")
+	userID := c.MustGet("user_id").(string)
 
-	status, reason, err := h.faceValidation.GetJob(c.Request.Context(), jobID)
+	status, reason, err := h.faceValidation.GetJob(c.Request.Context(), jobID, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return

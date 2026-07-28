@@ -70,17 +70,22 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UU
 }
 
 const getAdminManagedTeams = `-- name: GetAdminManagedTeams :many
-SELECT 
-    t.id, 
+SELECT
+    t.id,
     t.name,
     COUNT(all_members.user_id) AS member_count
 FROM teams t
 JOIN team_members managers ON t.id = managers.team_id
 LEFT JOIN team_members all_members ON t.id = all_members.team_id
-WHERE managers.user_id = $1 AND managers.team_role = 'TEAM_ADMIN'
+WHERE managers.user_id = $1 AND managers.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 GROUP BY t.id, t.name
 ORDER BY t.name ASC
 `
+
+type GetAdminManagedTeamsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetAdminManagedTeamsRow struct {
 	ID          uuid.UUID `json:"id"`
@@ -90,8 +95,8 @@ type GetAdminManagedTeamsRow struct {
 
 // 1. Identify teams where this user is an admin
 // 2. Fetch all members attached to those specific teams for aggregate counting
-func (q *Queries) GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([]GetAdminManagedTeamsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminManagedTeams, userID)
+func (q *Queries) GetAdminManagedTeams(ctx context.Context, arg GetAdminManagedTeamsParams) ([]GetAdminManagedTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminManagedTeams, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,15 +119,20 @@ func (q *Queries) GetAdminManagedTeams(ctx context.Context, userID uuid.UUID) ([
 }
 
 const getAdminTeamNames = `-- name: GetAdminTeamNames :many
-SELECT t.name 
+SELECT t.name
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 ORDER BY t.name
 `
 
-func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminTeamNames, userID)
+type GetAdminTeamNamesParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) GetAdminTeamNames(ctx context.Context, arg GetAdminTeamNamesParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminTeamNames, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +155,20 @@ func (q *Queries) GetAdminTeamNames(ctx context.Context, userID uuid.UUID) ([]st
 }
 
 const getAdminTeamWiseStats = `-- name: GetAdminTeamWiseStats :many
-SELECT 
-    t.id, 
-    t.name, 
+SELECT
+    t.id,
+    t.name,
     (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 ORDER BY t.name ASC
 `
+
+type GetAdminTeamWiseStatsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetAdminTeamWiseStatsRow struct {
 	ID          uuid.UUID `json:"id"`
@@ -161,8 +176,8 @@ type GetAdminTeamWiseStatsRow struct {
 	MemberCount int64     `json:"member_count"`
 }
 
-func (q *Queries) GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) ([]GetAdminTeamWiseStatsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAdminTeamWiseStats, userID)
+func (q *Queries) GetAdminTeamWiseStats(ctx context.Context, arg GetAdminTeamWiseStatsParams) ([]GetAdminTeamWiseStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAdminTeamWiseStats, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -185,16 +200,21 @@ func (q *Queries) GetAdminTeamWiseStats(ctx context.Context, userID uuid.UUID) (
 }
 
 const getEmployeeTeams = `-- name: GetEmployeeTeams :many
-SELECT 
-    t.id, 
-    t.name, 
+SELECT
+    t.id,
+    t.name,
     tm.team_role,
     (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) AS member_count
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.org_id = $2
 ORDER BY t.name ASC
 `
+
+type GetEmployeeTeamsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetEmployeeTeamsRow struct {
 	ID          uuid.UUID    `json:"id"`
@@ -203,8 +223,8 @@ type GetEmployeeTeamsRow struct {
 	MemberCount int64        `json:"member_count"`
 }
 
-func (q *Queries) GetEmployeeTeams(ctx context.Context, userID uuid.UUID) ([]GetEmployeeTeamsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getEmployeeTeams, userID)
+func (q *Queries) GetEmployeeTeams(ctx context.Context, arg GetEmployeeTeamsParams) ([]GetEmployeeTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getEmployeeTeams, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -323,10 +343,11 @@ JOIN users u ON tm_target.user_id = u.id
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = t.org_id
 WHERE tm_admin.user_id = $1
   AND tm_admin.team_role = 'TEAM_ADMIN'
-  AND ($4::text = '' OR u.email_id ILIKE '%' || $4 || '%' OR u.first_name ILIKE '%' || $4 || '%' OR u.last_name ILIKE '%' || $4 || '%')
-  AND ($5::text = '' OR t.name = $5)
-  AND ($6::text = '' OR tm_target.team_role::text = $6)
-  AND ($7::text = '' OR om.status::text = $7)
+  AND t.org_id = $4
+  AND ($5::text = '' OR u.email_id ILIKE '%' || $5 || '%' OR u.first_name ILIKE '%' || $5 || '%' OR u.last_name ILIKE '%' || $5 || '%')
+  AND ($6::text = '' OR t.name = $6)
+  AND ($7::text = '' OR tm_target.team_role::text = $7)
+  AND ($8::text = '' OR om.status::text = $8)
 ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -335,6 +356,7 @@ type GetTeamEmployeesPaginatedParams struct {
 	UserID       uuid.UUID `json:"user_id"`
 	Limit        int32     `json:"limit"`
 	Offset       int32     `json:"offset"`
+	CallerOrgID  uuid.UUID `json:"caller_org_id"`
 	SearchTerm   string    `json:"search_term"`
 	TeamFilter   string    `json:"team_filter"`
 	RoleFilter   string    `json:"role_filter"`
@@ -357,6 +379,7 @@ func (q *Queries) GetTeamEmployeesPaginated(ctx context.Context, arg GetTeamEmpl
 		arg.UserID,
 		arg.Limit,
 		arg.Offset,
+		arg.CallerOrgID,
 		arg.SearchTerm,
 		arg.TeamFilter,
 		arg.RoleFilter,
@@ -451,12 +474,18 @@ func (q *Queries) GetTeamOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 const getTotalUsersInAdminTeams = `-- name: GetTotalUsersInAdminTeams :one
 SELECT COUNT(DISTINCT tm2.user_id)
 FROM team_members tm1
+JOIN teams t ON tm1.team_id = t.id
 JOIN team_members tm2 ON tm1.team_id = tm2.team_id
-WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN'
+WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 `
 
-func (q *Queries) GetTotalUsersInAdminTeams(ctx context.Context, userID uuid.UUID) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getTotalUsersInAdminTeams, userID)
+type GetTotalUsersInAdminTeamsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) GetTotalUsersInAdminTeams(ctx context.Context, arg GetTotalUsersInAdminTeamsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalUsersInAdminTeams, arg.UserID, arg.OrgID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -466,9 +495,14 @@ const getUserTeams = `-- name: GetUserTeams :many
 SELECT t.id, t.name, tm.team_role::text
 FROM team_members tm
 JOIN teams t ON tm.team_id = t.id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.org_id = $2
 ORDER BY t.name ASC
 `
+
+type GetUserTeamsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetUserTeamsRow struct {
 	ID         uuid.UUID `json:"id"`
@@ -476,8 +510,8 @@ type GetUserTeamsRow struct {
 	TmTeamRole string    `json:"tm_team_role"`
 }
 
-func (q *Queries) GetUserTeams(ctx context.Context, userID uuid.UUID) ([]GetUserTeamsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserTeams, userID)
+func (q *Queries) GetUserTeams(ctx context.Context, arg GetUserTeamsParams) ([]GetUserTeamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTeams, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

@@ -2,8 +2,9 @@
 -- name: GetTotalUsersInAdminTeams :one
 SELECT COUNT(DISTINCT tm2.user_id)
 FROM team_members tm1
+JOIN teams t ON tm1.team_id = t.id
 JOIN team_members tm2 ON tm1.team_id = tm2.team_id
-WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN';
+WHERE tm1.user_id = $1 AND tm1.team_role = 'TEAM_ADMIN' AND t.org_id = $2;
 
 -- name: GetAdminTeamWiseStats :many
 SELECT
@@ -12,7 +13,7 @@ SELECT
     (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) as member_count
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 ORDER BY t.name ASC;
 
 -- name: GetTeamEmployeesPaginated :many
@@ -27,6 +28,7 @@ JOIN users u ON tm_target.user_id = u.id
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = t.org_id
 WHERE tm_admin.user_id = $1
   AND tm_admin.team_role = 'TEAM_ADMIN'
+  AND t.org_id = sqlc.arg('caller_org_id')
   AND (sqlc.arg('search_term')::text = '' OR u.email_id ILIKE '%' || sqlc.arg('search_term') || '%' OR u.first_name ILIKE '%' || sqlc.arg('search_term') || '%' OR u.last_name ILIKE '%' || sqlc.arg('search_term') || '%')
   AND (sqlc.arg('team_filter')::text = '' OR t.name = sqlc.arg('team_filter'))
   AND (sqlc.arg('role_filter')::text = '' OR tm_target.team_role::text = sqlc.arg('role_filter'))
@@ -35,10 +37,10 @@ ORDER BY t.name ASC, u.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: GetAdminTeamNames :many
-SELECT t.name 
+SELECT t.name
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN'
+WHERE tm.user_id = $1 AND tm.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 ORDER BY t.name;
 
 -- name: GetOrgTeams :many
@@ -77,12 +79,12 @@ DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;
 SELECT t.id, t.name, tm.team_role::text
 FROM team_members tm
 JOIN teams t ON tm.team_id = t.id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.org_id = $2
 ORDER BY t.name ASC;
 
 -- name: GetAdminManagedTeams :many
-SELECT 
-    t.id, 
+SELECT
+    t.id,
     t.name,
     COUNT(all_members.user_id) AS member_count
 FROM teams t
@@ -90,7 +92,7 @@ FROM teams t
 JOIN team_members managers ON t.id = managers.team_id
 -- 2. Fetch all members attached to those specific teams for aggregate counting
 LEFT JOIN team_members all_members ON t.id = all_members.team_id
-WHERE managers.user_id = $1 AND managers.team_role = 'TEAM_ADMIN'
+WHERE managers.user_id = $1 AND managers.team_role = 'TEAM_ADMIN' AND t.org_id = $2
 GROUP BY t.id, t.name
 ORDER BY t.name ASC;
 
@@ -122,13 +124,13 @@ WHERE t.id = $1 AND tm.team_role = 'TEAM_ADMIN';
 
 
 -- name: GetEmployeeTeams :many
-SELECT 
-    t.id, 
-    t.name, 
+SELECT
+    t.id,
+    t.name,
     tm.team_role,
     (SELECT COUNT(user_id) FROM team_members WHERE team_id = t.id) AS member_count
 FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.org_id = $2
 ORDER BY t.name ASC;
 

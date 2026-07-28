@@ -20,7 +20,11 @@ FROM org_memberships om
 JOIN organizations o ON om.org_id = o.id
 WHERE om.status = 'ACTIVE'
   AND o.attendance_enabled = true
-  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = om.user_id)
+  AND EXISTS (
+      SELECT 1 FROM team_members tm
+      JOIN teams t ON tm.team_id = t.id
+      WHERE tm.user_id = om.user_id AND t.org_id = om.org_id
+  )
 ON CONFLICT (user_id, org_id, attendance_date) DO NOTHING
 `
 
@@ -46,7 +50,11 @@ JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
 LEFT JOIN team_members tm ON u.id = tm.user_id
 LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = $2
-WHERE EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm2
+    JOIN teams t2 ON tm2.team_id = t2.id
+    WHERE tm2.user_id = u.id AND t2.org_id = $2
+)
 ORDER BY u.id, u.first_name
 `
 
@@ -178,7 +186,11 @@ CROSS JOIN generate_series($2::date, $3::date, interval '1 day') AS d(day)
 LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = $1 AND a.attendance_date = d.day
 LEFT JOIN team_members tm ON u.id = tm.user_id
 LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = $1
-WHERE EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm2
+    JOIN teams t2 ON tm2.team_id = t2.id
+    WHERE tm2.user_id = u.id AND t2.org_id = $1
+)
 ORDER BY u.first_name, u.last_name, d.day
 `
 

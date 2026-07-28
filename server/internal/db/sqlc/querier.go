@@ -24,7 +24,7 @@ type Querier interface {
 	// Multi-org: checks active org_membership, not the (deprecated) users.org_id
 	// column — a user's first org no longer implies which org a team belongs to.
 	CheckUserBelongsToTeamOrg(ctx context.Context, arg CheckUserBelongsToTeamOrgParams) (bool, error)
-	ClearNotifications(ctx context.Context, userID uuid.UUID) error
+	ClearNotifications(ctx context.Context, arg ClearNotificationsParams) error
 	CompleteAudioTranscode(ctx context.Context, arg CompleteAudioTranscodeParams) error
 	CompleteReminder(ctx context.Context, id uuid.UUID) error
 	CompleteTranscription(ctx context.Context, arg CompleteTranscriptionParams) error
@@ -116,7 +116,7 @@ type Querier interface {
 	GetUserCredentials(ctx context.Context, userID uuid.UUID) (UserCredential, error)
 	GetUserFaceURI(ctx context.Context, id uuid.UUID) (sql.NullString, error)
 	GetUserNameByID(ctx context.Context, id uuid.UUID) (GetUserNameByIDRow, error)
-	GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error)
+	GetUserNotifications(ctx context.Context, arg GetUserNotificationsParams) ([]GetUserNotificationsRow, error)
 	// Every active org a person belongs to, with the role(s) they hold in each —
 	// powers the login org-picker and the org-switcher menu. One row per org
 	// (roles aggregated) since a person can hold more than one role per org.
@@ -143,7 +143,7 @@ type Querier interface {
 	// value anymore, only "is this user an active member of THIS org" is.
 	IsUserInOrg(ctx context.Context, arg IsUserInOrgParams) (bool, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
-	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
+	MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
 	RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error

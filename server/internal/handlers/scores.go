@@ -78,7 +78,19 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 	// teamIDs is used for leaderboard entries only (respects filter); visibility always shows all teams
 	var teamIDs []uuid.UUID
 	if teamFilter != "" && teamFilter != "ALL" {
-		teamIDs = []uuid.UUID{util.ParseUUID(teamFilter)}
+		filterID := util.ParseUUID(teamFilter)
+		found := false
+		for _, id := range allTeamIDs {
+			if id == filterID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: team not in your organization"})
+			return
+		}
+		teamIDs = []uuid.UUID{filterID}
 	} else {
 		teamIDs = allTeamIDs
 	}
@@ -170,28 +182,43 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 		return
 	}
 
-	var teamIDs []uuid.UUID
-
-	if teamFilter != "" && teamFilter != "ALL" {
-		teamIDs = []uuid.UUID{util.ParseUUID(teamFilter)}
-	} else if role == "SUPER_ADMIN" {
-		teams, err := h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
-			return
-		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
+	// Always resolve the caller's actual allowed team set first — a raw
+	// ?team= filter must be validated against it, never trusted directly
+	// (that's exactly how a cross-org team ID could be requested otherwise).
+	var allTeams []schemas.TeamResponse
+	var err error
+	if role == "SUPER_ADMIN" {
+		allTeams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
 	} else {
-		teams, err := h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+
+	var allTeamIDs []uuid.UUID
+	for _, t := range allTeams {
+		allTeamIDs = append(allTeamIDs, util.ParseUUID(t.ID))
+	}
+
+	var teamIDs []uuid.UUID
+	if teamFilter != "" && teamFilter != "ALL" {
+		filterID := util.ParseUUID(teamFilter)
+		found := false
+		for _, id := range allTeamIDs {
+			if id == filterID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: team not in your organization"})
 			return
 		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
+		teamIDs = []uuid.UUID{filterID}
+	} else {
+		teamIDs = allTeamIDs
 	}
 
 	if len(teamIDs) == 0 {
@@ -202,7 +229,7 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=performance_report.csv")
 
-	err := h.scoreService.WriteBulkScoreReport(c.Request.Context(), teamIDs, c.Writer)
+	err = h.scoreService.WriteBulkScoreReport(c.Request.Context(), teamIDs, c.Writer)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 	}

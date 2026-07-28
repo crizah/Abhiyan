@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table, Select, DatePicker, Button, Tag, Flex, Typography,
-  message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented
+  message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented, ConfigProvider
 } from 'antd';
 import {
   DownloadOutlined, UserOutlined, CalendarOutlined,
@@ -10,6 +10,7 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveCont
 import dayjs from 'dayjs';
 import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import InfoTooltip from '../../components/InfoTooltip';
 import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
 
 const { Title, Text } = Typography;
@@ -27,6 +28,7 @@ const STATUS_TAG = {
 
 const DEFAULT_DRAWER_RANGE = [dayjs().subtract(29, 'day'), dayjs()];
 const disableFutureDate = (d) => d.isAfter(dayjs(), 'day');
+const COMPACT_DATE_FORMAT = 'DD/MM/YY';
 
 
 export default function AttendancePage() {
@@ -51,6 +53,13 @@ export default function AttendancePage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
   const [drawerRange, setDrawerRange] = useState(DEFAULT_DRAWER_RANGE);
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     apiClient.get('/admin/teams').then(res => setTeams(res.data || [])).catch(() => {});
@@ -204,34 +213,49 @@ export default function AttendancePage() {
 
   return (
     <Flex vertical gap={token.marginLG}>
-      <Flex justify="space-between" align="center" wrap="wrap" gap={token.marginSM}>
+      <Flex justify="space-between" align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap" gap={token.marginSM}>
         <Title level={4} style={{ margin: 0 }}>Attendance</Title>
-        <Flex gap={token.marginSM} align="center" wrap="wrap">
+        <Flex gap={token.marginSM} align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap">
           <DatePicker
             value={date}
             onChange={setDate}
             allowClear={false}
             disabledDate={d => d.isAfter(dayjs())}
             suffixIcon={<CalendarOutlined />}
+            size={isMobile ? 'small' : 'middle'}
+            format={isMobile ? COMPACT_DATE_FORMAT : undefined}
+            style={isMobile ? { width: '100%' } : undefined}
           />
           <Select
             value={teamFilter}
             onChange={setTeamFilter}
             options={teamOptions}
-            style={{ minWidth: 160 }}
+            size={isMobile ? 'small' : 'middle'}
+            style={{ minWidth: isMobile ? undefined : 160, width: isMobile ? '100%' : undefined }}
           />
-          <Segmented
-            value={reportMode}
-            onChange={setReportMode}
-            options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
-          />
+          <Flex align="center" gap={6}>
+            <ConfigProvider theme={{ components: { Segmented: { itemSelectedBg: '#B3455C', itemSelectedColor: '#FFFFFF' } } }}>
+              <Segmented
+                value={reportMode}
+                onChange={setReportMode}
+                options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
+                size={isMobile ? 'small' : 'middle'}
+                block={isMobile}
+                style={isMobile ? { flex: 1 } : undefined}
+              />
+            </ConfigProvider>
+            <InfoTooltip title="Day generates the report for a single date. Range generates one combined report across a span of dates instead." />
+          </Flex>
           {reportMode === 'range' && (
             <RangePicker
               value={reportRange}
               onChange={setReportRange}
               allowClear={false}
               disabledDate={disableFutureDate}
-              suffixIcon={<CalendarOutlined />}
+              suffixIcon={isMobile ? undefined : <CalendarOutlined />}
+              size={isMobile ? 'small' : 'middle'}
+              format={isMobile ? COMPACT_DATE_FORMAT : undefined}
+              style={isMobile ? { width: '100%' } : undefined}
             />
           )}
           <AntTooltip title={reportMode === 'range'
@@ -243,6 +267,8 @@ export default function AttendancePage() {
               loading={downloadingReport}
               disabled={reportMode === 'range' && !(reportRange?.[0] && reportRange?.[1])}
               onClick={handleDownloadReport}
+              block={isMobile}
+              size={isMobile ? 'small' : 'middle'}
               style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
             >
               Generate Report
@@ -258,6 +284,7 @@ export default function AttendancePage() {
         loading={loading}
         pagination={{ pageSize: 15 }}
         size="middle"
+        scroll={isMobile ? { x: 'max-content' } : undefined}
       />
 
       <SlidingCardModal
@@ -267,13 +294,16 @@ export default function AttendancePage() {
         resetKey={selectedUser?.id}
         defaultWidth={640}
         extra={
-          <Flex align="center" gap={8}>
+          <Flex align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap" gap={8}>
             <RangePicker
               size="small"
               value={drawerRange}
               onChange={(v) => v && setDrawerRange(v)}
               allowClear={false}
               disabledDate={disableFutureDate}
+              suffixIcon={isMobile ? undefined : <CalendarOutlined />}
+              format={isMobile ? COMPACT_DATE_FORMAT : undefined}
+              style={isMobile ? { width: '100%' } : undefined}
             />
             <AntTooltip title="Download this user's attendance report as a CSV file for the selected range">
               <Button
@@ -281,6 +311,7 @@ export default function AttendancePage() {
                 loading={downloadingUserReport}
                 onClick={handleDownloadUserReport}
                 size="small"
+                block={isMobile}
                 style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
               >
                 Download Report

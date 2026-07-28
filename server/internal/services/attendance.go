@@ -18,6 +18,21 @@ type AttendanceService struct {
 	queries *db.Queries
 }
 
+// maxAttendanceRangeDays bounds date-range queries so a mistyped or malicious
+// range can't blow up the generate_series cross-join or produce an
+// unbounded CSV.
+const maxAttendanceRangeDays = 366
+
+func validateDateRange(from, to time.Time) error {
+	if to.Before(from) {
+		return errors.New("to date must not be before from date")
+	}
+	if to.Sub(from) > maxAttendanceRangeDays*24*time.Hour {
+		return fmt.Errorf("date range must not exceed %d days", maxAttendanceRangeDays)
+	}
+	return nil
+}
+
 func NewAttendanceService(dbConn *sql.DB) *AttendanceService {
 	return &AttendanceService{queries: db.New(dbConn)}
 }
@@ -92,12 +107,35 @@ type AttendanceRow struct {
 	Email            string `json:"email"`
 	TeamName         string `json:"team_name"`
 	AttendanceStatus string `json:"attendance_status"`
+	AttendanceDate   string `json:"attendance_date,omitempty"`
+}
+
+// resolveStatus turns the SQL-level 'no_record' placeholder into a status the
+// UI can render. Orgs that never turned attendance on never get batch-inserted
+// absent rows (see BatchInsertAbsentAttendance), so every user there is a
+// permanent 'no_record' — that must read as "not applicable", not "absent".
+// For attendance-enabled orgs, no_record only happens in the brief window
+// before the nightly batch job runs, and falling back to 'absent' matches the
+// existing "no check-in = absent" behavior.
+func resolveStatus(rawStatus string, attendanceEnabled bool) string {
+	if rawStatus != "no_record" {
+		return rawStatus
+	}
+	if !attendanceEnabled {
+		return "not_applicable"
+	}
+	return "absent"
 }
 
 func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr, teamID string) ([]AttendanceRow, error) {
 	date, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid date: %w", err)
+	}
+
+	enabled, err := s.IsAttendanceEnabled(ctx, orgID)
+	if err != nil {
+		return nil, err
 	}
 
 	if teamID != "" && teamID != "ALL" {
@@ -117,7 +155,7 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 				LastName:         r.LastName,
 				Email:            r.EmailID,
 				TeamName:         r.TeamName,
-				AttendanceStatus: r.AttendanceStatus,
+				AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
 			}
 		}
 		return out, nil
@@ -138,16 +176,86 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 			LastName:         r.LastName,
 			Email:            r.EmailID,
 			TeamName:         r.TeamName,
-			AttendanceStatus: r.AttendanceStatus,
+			AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+		}
+	}
+	return out, nil
+}
+
+// GetOrgAttendanceRange powers the batch CSV export over a date span: one row
+// per user per day in [from, to], scoped to the caller's org and optionally a
+// single team.
+func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fromStr, toStr, teamID string) ([]AttendanceRow, error) {
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from date: %w", err)
+	}
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid to date: %w", err)
+	}
+	if err := validateDateRange(from, to); err != nil {
+		return nil, err
+	}
+
+	enabled, err := s.IsAttendanceEnabled(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if teamID != "" && teamID != "ALL" {
+		rows, err := s.queries.GetOrgAttendanceRangeByTeam(ctx, db.GetOrgAttendanceRangeByTeamParams{
+			OrgID:    util.ParseUUID(orgID),
+			FromDate: from,
+			ToDate:   to,
+			TeamID:   util.ParseUUID(teamID),
+		})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]AttendanceRow, len(rows))
+		for i, r := range rows {
+			out[i] = AttendanceRow{
+				ID:               r.ID.String(),
+				FirstName:        r.FirstName,
+				LastName:         r.LastName,
+				Email:            r.EmailID,
+				TeamName:         r.TeamName,
+				AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+				AttendanceDate:   r.AttendanceDate.Format("2006-01-02"),
+			}
+		}
+		return out, nil
+	}
+
+	rows, err := s.queries.GetOrgAttendanceRange(ctx, db.GetOrgAttendanceRangeParams{
+		OrgID:    util.ParseUUID(orgID),
+		FromDate: from,
+		ToDate:   to,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AttendanceRow, len(rows))
+	for i, r := range rows {
+		out[i] = AttendanceRow{
+			ID:               r.ID.String(),
+			FirstName:        r.FirstName,
+			LastName:         r.LastName,
+			Email:            r.EmailID,
+			TeamName:         r.TeamName,
+			AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+			AttendanceDate:   r.AttendanceDate.Format("2006-01-02"),
 		}
 	}
 	return out, nil
 }
 
 type UserAttendanceSummary struct {
-	PresentCount int32                   `json:"present_count"`
-	AbsentCount  int32                   `json:"absent_count"`
-	History      []UserAttendanceHistory `json:"history"`
+	PresentCount      int32                   `json:"present_count"`
+	AbsentCount       int32                   `json:"absent_count"`
+	AttendanceEnabled bool                    `json:"attendance_enabled"`
+	History           []UserAttendanceHistory `json:"history"`
 }
 
 type UserAttendanceHistory struct {
@@ -155,20 +263,46 @@ type UserAttendanceHistory struct {
 	Present bool   `json:"present"`
 }
 
-func (s *AttendanceService) GetUserSummary(ctx context.Context, userID string, callerOrgID string) (*UserAttendanceSummary, error) {
+// GetUserSummary reports a user's present/absent counts and daily history
+// within [from, to]. Counts come straight from actual attendance_record rows
+// (never fabricated), so they're accurate regardless of the org's current
+// attendance_enabled flag; AttendanceEnabled is surfaced so the UI can explain
+// an all-zero summary instead of implying the user was never checked.
+func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOrgID, fromStr, toStr string) (*UserAttendanceSummary, error) {
 	if err := s.assertUserInOrg(ctx, userID, callerOrgID); err != nil {
 		return nil, err
 	}
-	uid := util.ParseUUID(userID)
 
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from date: %w", err)
+	}
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid to date: %w", err)
+	}
+	if err := validateDateRange(from, to); err != nil {
+		return nil, err
+	}
+
+	uid := util.ParseUUID(userID)
 	oid := util.ParseUUID(callerOrgID)
 
-	counts, err := s.queries.GetUserAttendanceSummary(ctx, db.GetUserAttendanceSummaryParams{UserID: uid, OrgID: oid})
+	enabled, err := s.IsAttendanceEnabled(ctx, callerOrgID)
 	if err != nil {
 		return nil, err
 	}
 
-	history, err := s.queries.GetUserAttendanceHistory(ctx, db.GetUserAttendanceHistoryParams{UserID: uid, OrgID: oid})
+	counts, err := s.queries.GetUserAttendanceSummaryRange(ctx, db.GetUserAttendanceSummaryRangeParams{
+		UserID: uid, OrgID: oid, FromDate: from, ToDate: to,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	history, err := s.queries.GetUserAttendanceHistoryRange(ctx, db.GetUserAttendanceHistoryRangeParams{
+		UserID: uid, OrgID: oid, FromDate: from, ToDate: to,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +316,21 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID string, c
 	}
 
 	return &UserAttendanceSummary{
-		PresentCount: counts.PresentCount,
-		AbsentCount:  counts.AbsentCount,
-		History:      h,
+		PresentCount:      counts.PresentCount,
+		AbsentCount:       counts.AbsentCount,
+		AttendanceEnabled: enabled,
+		History:           h,
 	}, nil
+}
+
+// csvStatusLabel renders the internal status vocabulary for CSV output.
+// 'not_applicable' means the org has attendance tracking turned off, so there
+// was never a real "absent" to report — that should read as N/A, not absent.
+func csvStatusLabel(status string) string {
+	if status == "not_applicable" {
+		return "N/A"
+	}
+	return status
 }
 
 func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, teamID string, w io.Writer) error {
@@ -202,22 +347,21 @@ func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, 
 	cw.Write([]string{"Name", "Email", "Team", "Status"})
 
 	for _, r := range rows {
-		status := r.AttendanceStatus
-		if status == "no_record" {
-			status = "absent"
-		}
 		cw.Write([]string{
 			strings.TrimSpace(r.FirstName + " " + r.LastName),
 			r.Email,
 			r.TeamName,
-			status,
+			csvStatusLabel(r.AttendanceStatus),
 		})
 	}
 	return nil
 }
 
-func (s *AttendanceService) WriteUserReport(ctx context.Context, userID string, w io.Writer, callerOrgID string) error {
-	summary, err := s.GetUserSummary(ctx, userID, callerOrgID)
+// WriteOrgReportRange is the date-range counterpart used by the batch report
+// download when a from/to span is selected instead of a single day: one row
+// per user per day in the span.
+func (s *AttendanceService) WriteOrgReportRange(ctx context.Context, orgID, fromStr, toStr, teamID string, w io.Writer) error {
+	rows, err := s.GetOrgAttendanceRange(ctx, orgID, fromStr, toStr, teamID)
 	if err != nil {
 		return err
 	}
@@ -225,8 +369,37 @@ func (s *AttendanceService) WriteUserReport(ctx context.Context, userID string, 
 	cw := csv.NewWriter(w)
 	defer cw.Flush()
 
-	cw.Write([]string{fmt.Sprintf("User Attendance Report - Generated: %s", time.Now().Format(time.RFC3339))})
+	cw.Write([]string{fmt.Sprintf("Attendance Report - %s to %s - Generated: %s", fromStr, toStr, time.Now().Format(time.RFC3339))})
 	cw.Write([]string{})
+	cw.Write([]string{"Name", "Email", "Team", "Date", "Status"})
+
+	for _, r := range rows {
+		cw.Write([]string{
+			strings.TrimSpace(r.FirstName + " " + r.LastName),
+			r.Email,
+			r.TeamName,
+			r.AttendanceDate,
+			csvStatusLabel(r.AttendanceStatus),
+		})
+	}
+	return nil
+}
+
+func (s *AttendanceService) WriteUserReport(ctx context.Context, userID, callerOrgID, fromStr, toStr string, w io.Writer) error {
+	summary, err := s.GetUserSummary(ctx, userID, callerOrgID, fromStr, toStr)
+	if err != nil {
+		return err
+	}
+
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	cw.Write([]string{fmt.Sprintf("User Attendance Report - %s to %s - Generated: %s", fromStr, toStr, time.Now().Format(time.RFC3339))})
+	cw.Write([]string{})
+	if !summary.AttendanceEnabled {
+		cw.Write([]string{"Note: attendance tracking is not enabled for this organization"})
+		cw.Write([]string{})
+	}
 	cw.Write([]string{"Present", "Absent"})
 	cw.Write([]string{fmt.Sprintf("%d", summary.PresentCount), fmt.Sprintf("%d", summary.AbsentCount)})
 	cw.Write([]string{})

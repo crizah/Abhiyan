@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table, Select, DatePicker, Button, Tag, Flex, Typography,
-  message, theme, Avatar, Card, Tooltip as AntTooltip
+  message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented
 } from 'antd';
 import {
   DownloadOutlined, UserOutlined, CalendarOutlined,
@@ -13,14 +13,20 @@ import { SlidingCardModal } from '../../components/SlidingCardModal';
 import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
 
 const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
 const PRESENT_COLOR = fulfillmentColor('COMPLETED');
 const ABSENT_COLOR = reviewStatusColor('REJECTED');
+const NA_COLOR = '#bfbfbf';
 
 const STATUS_TAG = {
   present: <Tag color={PRESENT_COLOR}>Present</Tag>,
   absent:  <Tag color={ABSENT_COLOR}>Absent</Tag>,
+  not_applicable: <Tag color={NA_COLOR}>N/A</Tag>,
 };
+
+const DEFAULT_DRAWER_RANGE = [dayjs().subtract(29, 'day'), dayjs()];
+const disableFutureDate = (d) => d.isAfter(dayjs(), 'day');
 
 
 export default function AttendancePage() {
@@ -33,12 +39,18 @@ export default function AttendancePage() {
   const [date, setDate] = useState(dayjs());
   const [downloadingReport, setDownloadingReport] = useState(false);
 
+  // Batch report generation: day (mirrors the list's selected date) or a
+  // custom range, independent of the list view above.
+  const [reportMode, setReportMode] = useState('day');
+  const [reportRange, setReportRange] = useState(DEFAULT_DRAWER_RANGE);
+
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userSummary, setUserSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
+  const [drawerRange, setDrawerRange] = useState(DEFAULT_DRAWER_RANGE);
 
   useEffect(() => {
     apiClient.get('/admin/teams').then(res => setTeams(res.data || [])).catch(() => {});
@@ -47,6 +59,11 @@ export default function AttendancePage() {
   useEffect(() => {
     fetchAttendance();
   }, [date, teamFilter]);
+
+  useEffect(() => {
+    if (drawerOpen && selectedUser) fetchUserSummary(selectedUser, drawerRange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerRange]);
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -65,13 +82,22 @@ export default function AttendancePage() {
   const handleDownloadReport = async () => {
     setDownloadingReport(true);
     try {
-      const params = { date: date.format('YYYY-MM-DD') };
+      const params = {};
       if (teamFilter !== 'ALL') params.team = teamFilter;
+      let filenameSuffix;
+      if (reportMode === 'range' && reportRange?.[0] && reportRange?.[1]) {
+        params.from = reportRange[0].format('YYYY-MM-DD');
+        params.to = reportRange[1].format('YYYY-MM-DD');
+        filenameSuffix = `${params.from}_to_${params.to}`;
+      } else {
+        params.date = date.format('YYYY-MM-DD');
+        filenameSuffix = params.date;
+      }
       const res = await apiClient.get('/admin/attendance/report', { params, responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `attendance_${date.format('YYYY-MM-DD')}.csv`;
+      a.download = `attendance_${filenameSuffix}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch {
@@ -81,12 +107,14 @@ export default function AttendancePage() {
     }
   };
 
-  const openUserDrawer = async (user) => {
-    setSelectedUser(user);
-    setDrawerOpen(true);
+  const fetchUserSummary = async (user, range) => {
     setSummaryLoading(true);
     try {
-      const res = await apiClient.get(`/admin/attendance/users/${user.id}/summary`);
+      const params = {
+        from: range[0].format('YYYY-MM-DD'),
+        to: range[1].format('YYYY-MM-DD'),
+      };
+      const res = await apiClient.get(`/admin/attendance/users/${user.id}/summary`, { params });
       setUserSummary(res.data);
     } catch {
       message.error('Failed to load user summary');
@@ -95,14 +123,25 @@ export default function AttendancePage() {
     }
   };
 
+  const openUserDrawer = async (user) => {
+    setSelectedUser(user);
+    setDrawerOpen(true);
+    setDrawerRange(DEFAULT_DRAWER_RANGE);
+    await fetchUserSummary(user, DEFAULT_DRAWER_RANGE);
+  };
+
   const handleDownloadUserReport = async () => {
     setDownloadingUserReport(true);
     try {
-      const res = await apiClient.get(`/admin/attendance/users/${selectedUser.id}/report`, { responseType: 'blob' });
+      const params = {
+        from: drawerRange[0].format('YYYY-MM-DD'),
+        to: drawerRange[1].format('YYYY-MM-DD'),
+      };
+      const res = await apiClient.get(`/admin/attendance/users/${selectedUser.id}/report`, { params, responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `attendance_${selectedUser.email}.csv`;
+      a.download = `attendance_${selectedUser.email}_${params.from}_to_${params.to}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch {
@@ -142,6 +181,7 @@ export default function AttendancePage() {
       filters: [
         { text: 'Present', value: 'present' },
         { text: 'Absent', value: 'absent' },
+        { text: 'N/A', value: 'not_applicable' },
       ],
       onFilter: (value, record) => record.attendance_status === value,
     },
@@ -180,10 +220,28 @@ export default function AttendancePage() {
             options={teamOptions}
             style={{ minWidth: 160 }}
           />
-          <AntTooltip title="Generates the attendance report for the selected date and team filter">
+          <Segmented
+            value={reportMode}
+            onChange={setReportMode}
+            options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
+          />
+          {reportMode === 'range' && (
+            <RangePicker
+              value={reportRange}
+              onChange={setReportRange}
+              allowClear={false}
+              disabledDate={disableFutureDate}
+              suffixIcon={<CalendarOutlined />}
+            />
+          )}
+          <AntTooltip title={reportMode === 'range'
+            ? 'Generates the attendance report across the selected date range and team filter'
+            : 'Generates the attendance report for the selected date and team filter'}
+          >
             <Button
               icon={<DownloadOutlined />}
               loading={downloadingReport}
+              disabled={reportMode === 'range' && !(reportRange?.[0] && reportRange?.[1])}
               onClick={handleDownloadReport}
               style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
             >
@@ -209,17 +267,26 @@ export default function AttendancePage() {
         resetKey={selectedUser?.id}
         defaultWidth={640}
         extra={
-          <AntTooltip title="Download this user's attendance report as a CSV file">
-            <Button
-              icon={<DownloadOutlined />}
-              loading={downloadingUserReport}
-              onClick={handleDownloadUserReport}
+          <Flex align="center" gap={8}>
+            <RangePicker
               size="small"
-              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
-            >
-              Download Report
-            </Button>
-          </AntTooltip>
+              value={drawerRange}
+              onChange={(v) => v && setDrawerRange(v)}
+              allowClear={false}
+              disabledDate={disableFutureDate}
+            />
+            <AntTooltip title="Download this user's attendance report as a CSV file for the selected range">
+              <Button
+                icon={<DownloadOutlined />}
+                loading={downloadingUserReport}
+                onClick={handleDownloadUserReport}
+                size="small"
+                style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+              >
+                Download Report
+              </Button>
+            </AntTooltip>
+          </Flex>
         }
         tabs={[
           {
@@ -231,6 +298,13 @@ export default function AttendancePage() {
 
                 {userSummary && !summaryLoading && (
                   <Flex vertical gap={20}>
+                    {!userSummary.attendance_enabled && (
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        Attendance tracking is not enabled for this organization — counts below reflect any
+                        historical records only.
+                      </Text>
+                    )}
+
                     <Flex gap={12}>
                       <div style={{
                         flex: 1, padding: '16px 20px',

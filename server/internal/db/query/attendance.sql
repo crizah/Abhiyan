@@ -36,7 +36,7 @@ SELECT DISTINCT ON (u.id)
     CASE
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
-        ELSE 'absent'
+        ELSE 'no_record'
     END AS attendance_status
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
@@ -56,7 +56,7 @@ SELECT
     CASE
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
-        ELSE 'absent'
+        ELSE 'no_record'
     END AS attendance_status
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
@@ -65,16 +65,60 @@ JOIN team_members tm ON u.id = tm.user_id AND tm.team_id = $3
 JOIN teams t ON tm.team_id = t.id AND t.org_id = $2
 ORDER BY u.first_name;
 
--- name: GetUserAttendanceSummary :one
+-- name: GetOrgAttendanceRange :many
+SELECT
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    COALESCE(t.name, 'Unassigned') AS team_name,
+    d.day::date AS attendance_date,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'no_record'
+    END AS attendance_status
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = sqlc.arg('org_id') AND om.status = 'ACTIVE'
+CROSS JOIN generate_series(sqlc.arg('from_date')::date, sqlc.arg('to_date')::date, interval '1 day') AS d(day)
+LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = sqlc.arg('org_id') AND a.attendance_date = d.day
+LEFT JOIN team_members tm ON u.id = tm.user_id
+LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = sqlc.arg('org_id')
+WHERE EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+ORDER BY u.first_name, u.last_name, d.day;
+
+-- name: GetOrgAttendanceRangeByTeam :many
+SELECT
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    t.name AS team_name,
+    d.day::date AS attendance_date,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'no_record'
+    END AS attendance_status
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = sqlc.arg('org_id') AND om.status = 'ACTIVE'
+CROSS JOIN generate_series(sqlc.arg('from_date')::date, sqlc.arg('to_date')::date, interval '1 day') AS d(day)
+LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = sqlc.arg('org_id') AND a.attendance_date = d.day
+JOIN team_members tm ON u.id = tm.user_id AND tm.team_id = sqlc.arg('team_id')
+JOIN teams t ON tm.team_id = t.id AND t.org_id = sqlc.arg('org_id')
+ORDER BY u.first_name, u.last_name, d.day;
+
+-- name: GetUserAttendanceSummaryRange :one
 SELECT
     COUNT(*) FILTER (WHERE present = true)::int AS present_count,
     COUNT(*) FILTER (WHERE present = false)::int AS absent_count
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2;
+WHERE user_id = $1 AND org_id = $2
+  AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date;
 
--- name: GetUserAttendanceHistory :many
+-- name: GetUserAttendanceHistoryRange :many
 SELECT attendance_date, present
 FROM attendance_record
 WHERE user_id = $1 AND org_id = $2
-ORDER BY attendance_date DESC
-LIMIT 60;
+  AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date
+ORDER BY attendance_date DESC;

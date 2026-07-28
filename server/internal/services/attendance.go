@@ -35,9 +35,10 @@ func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, 
 	return nil
 }
 
-func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, targetKey string) (string, error) {
+func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, targetKey string) (string, error) {
 	id, err := s.queries.UpsertAttendanceRecord(ctx, db.UpsertAttendanceRecordParams{
 		UserID:        util.ParseUUID(userID),
+		OrgID:         util.ParseUUID(orgID),
 		TargetFileUri: sql.NullString{String: targetKey, Valid: true},
 	})
 	if err != nil {
@@ -46,8 +47,11 @@ func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, targetKey 
 	return id.String(), nil
 }
 
-func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID string) (string, error) {
-	row, err := s.queries.GetTodayAttendance(ctx, util.ParseUUID(userID))
+func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID string) (string, error) {
+	row, err := s.queries.GetTodayAttendance(ctx, db.GetTodayAttendanceParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err == sql.ErrNoRows {
 		return "none", nil
 	}
@@ -157,12 +161,14 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID string, c
 	}
 	uid := util.ParseUUID(userID)
 
-	counts, err := s.queries.GetUserAttendanceSummary(ctx, uid)
+	oid := util.ParseUUID(callerOrgID)
+
+	counts, err := s.queries.GetUserAttendanceSummary(ctx, db.GetUserAttendanceSummaryParams{UserID: uid, OrgID: oid})
 	if err != nil {
 		return nil, err
 	}
 
-	history, err := s.queries.GetUserAttendanceHistory(ctx, uid)
+	history, err := s.queries.GetUserAttendanceHistory(ctx, db.GetUserAttendanceHistoryParams{UserID: uid, OrgID: oid})
 	if err != nil {
 		return nil, err
 	}

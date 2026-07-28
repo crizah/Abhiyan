@@ -49,7 +49,7 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 		return
 	}
 
-	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, req.TargetObjectKey)
+	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, orgID, req.TargetObjectKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create attendance record"})
 		return
@@ -66,8 +66,9 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 
 func (h *AttendanceHandler) GetTodayAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	status, err := h.attendanceService.GetTodayStatus(c.Request.Context(), userID)
+	status, err := h.attendanceService.GetTodayStatus(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch attendance"})
 		return

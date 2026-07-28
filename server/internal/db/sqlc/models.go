@@ -589,6 +589,7 @@ type Attachment struct {
 type AttendanceRecord struct {
 	ID             uuid.UUID      `json:"id"`
 	UserID         uuid.UUID      `json:"user_id"`
+	OrgID          uuid.UUID      `json:"org_id"`
 	TargetFileUri  sql.NullString `json:"target_file_uri"`
 	Present        sql.NullBool   `json:"present"`
 	Status         string         `json:"status"`

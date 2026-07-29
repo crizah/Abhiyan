@@ -6,6 +6,7 @@ import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
 import InfoTooltip from '../../components/InfoTooltip';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
 
 const { Title, Text } = Typography;
 
@@ -51,12 +52,16 @@ export default function TeamEmployeesPage() {
     fetchTeamOptions();
   }, []);
 
+  useRefetchOnResume('team-employees-team-options', () => fetchTeamOptions(), { minIntervalMs: 60000 });
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchEmployees();
     }, 300);
     return () => clearTimeout(timer);
   }, [currentPage, pageSize, searchText, teamFilter, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useRefetchOnResume('team-employees-list', () => fetchEmployees(), { minIntervalMs: 60000 });
 
   const fetchTeamOptions = async () => {
     try {
@@ -65,6 +70,8 @@ export default function TeamEmployeesPage() {
       setTeamOptions([{ value: 'ALL', label: 'All My Teams' }, ...dynamicOptions]);
     } catch (error) {
       console.error("Failed to load team options");
+    } finally {
+      markFetched('team-employees-team-options');
     }
   };
 
@@ -87,6 +94,7 @@ export default function TeamEmployeesPage() {
       message.error("Failed to load employees.");
     } finally {
       setLoading(false);
+      markFetched('team-employees-list');
     }
   };
 

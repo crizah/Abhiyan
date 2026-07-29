@@ -6,6 +6,7 @@ import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
 import InfoTooltip from '../../components/InfoTooltip';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
 
 const { Title, Text } = Typography;
 
@@ -47,6 +48,8 @@ export default function UsersPage() {
     fetchTeams();
   }, []);
 
+  useRefetchOnResume('admin-users-teams-options', () => fetchTeams(), { minIntervalMs: 60000 });
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchUsers();
@@ -54,12 +57,20 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
   }, [currentPage, pageSize, searchText, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useRefetchOnResume(
+    'admin-users-list',
+    () => fetchUsers(),
+    { minIntervalMs: 60000 }
+  );
+
   const fetchTeams = async () => {
     try {
       const res = await apiClient.get('/admin/teams');
       setTeams(res.data || []);
     } catch (err) {
       message.error("Failed to load organization teams.");
+    } finally {
+      markFetched('admin-users-teams-options');
     }
   };
 
@@ -75,8 +86,15 @@ export default function UsersPage() {
       message.error("Failed to load users data.");
     } finally {
       setLoading(false);
+      markFetched('admin-users-list');
     }
   };
+
+  useRefetchOnResume(
+    `user-teams-${selectedUser?.id}`,
+    () => fetchUserTeams(selectedUser.id),
+    { minIntervalMs: 60000, enabled: isManageOpen && !!selectedUser }
+  );
 
   const openUserDrawer = (user) => {
     setSelectedUser(user);
@@ -116,6 +134,8 @@ export default function UsersPage() {
       setUserTeams(res.data || []);
     } catch (err) {
       message.error("Failed to load user teams");
+    } finally {
+      markFetched(`user-teams-${userId}`);
     }
   };
 

@@ -6,6 +6,7 @@ import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
 import InfoTooltip from '../../../components/InfoTooltip';
 import { attendanceAPI } from '../../auth/api';
+import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -20,43 +21,56 @@ export default function SuperAdminDashboard() {
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
   const [attendanceToggling, setAttendanceToggling] = useState(false);
 
-  useEffect(() => {
-    const fetchDashboardStats = async () => {
-      try {
-        const response = await apiClient.get('/admin/stats');
-        setTotalEmployees(response.data.total_users);
-      } catch (error) {
-        message.error("Failed to load employee count");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await apiClient.get('/admin/stats');
+      setTotalEmployees(response.data.total_users);
+    } catch (error) {
+      message.error("Failed to load employee count");
+    } finally {
+      setLoading(false);
+      markFetched('superadmin-stats');
+    }
+  };
 
+  useEffect(() => {
     fetchDashboardStats();
   }, []);
 
+  useRefetchOnResume('superadmin-stats', fetchDashboardStats, { minIntervalMs: 60000 });
+
+  const fetchTeams = async () => {
+    try {
+      const res = await apiClient.get('/admin/teams');
+      setOrgTeams(res.data || []);
+    } catch { /* silent */ }
+    finally { markFetched('superadmin-teams'); }
+  };
+
   useEffect(() => {
-    const fetchTeams = async () => {
-      try {
-        const res = await apiClient.get('/admin/teams');
-        setOrgTeams(res.data || []);
-      } catch { /* silent */ }
-    };
     fetchTeams();
   }, []);
 
+  useRefetchOnResume('superadmin-teams', fetchTeams, { minIntervalMs: 60000 });
+
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
+      const res = await apiClient.get('/admin/leaderboard', { params });
+      setLeaderboardData(res.data.entries || []);
+    } catch { /* silent */ }
+    finally {
+      setLeaderboardLoading(false);
+      markFetched('superadmin-leaderboard');
+    }
+  };
+
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLeaderboardLoading(true);
-      try {
-        const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
-        const res = await apiClient.get('/admin/leaderboard', { params });
-        setLeaderboardData(res.data.entries || []);
-      } catch { /* silent */ }
-      finally { setLeaderboardLoading(false); }
-    };
     fetchLeaderboard();
   }, [leaderboardTeamFilter]);
+
+  useRefetchOnResume('superadmin-leaderboard', fetchLeaderboard, { minIntervalMs: 60000 });
 
   const handleAttendanceToggle = async (enabled) => {
     setAttendanceToggling(true);

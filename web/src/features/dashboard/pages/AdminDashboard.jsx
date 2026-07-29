@@ -4,6 +4,7 @@ import { TeamOutlined, UserOutlined, ApartmentOutlined } from '@ant-design/icons
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
+import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -17,43 +18,50 @@ export default function AdminDashboard() {
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
   const [teamVisibility, setTeamVisibility] = useState([]);
 
-useEffect(() => {
-    const fetchDashboardStats = async () => {
-      try {
-        const response = await apiClient.get('/admin/team-stats');
-        const data = response.data || {};
-        
-        // Explicitly map the properties so teams is guaranteed to be an array
-        setStats({
-          total_users: data.total_users || 0,
-          teams: data.teams || []
-        });
-      } catch (error) {
-        message.error("Failed to load team statistics");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await apiClient.get('/admin/team-stats');
+      const data = response.data || {};
 
+      // Explicitly map the properties so teams is guaranteed to be an array
+      setStats({
+        total_users: data.total_users || 0,
+        teams: data.teams || []
+      });
+    } catch (error) {
+      message.error("Failed to load team statistics");
+    } finally {
+      setLoading(false);
+      markFetched('admin-team-stats');
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardStats();
   }, []);
 
+  useRefetchOnResume('admin-team-stats', fetchDashboardStats, { minIntervalMs: 60000 });
+
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
+      const res = await apiClient.get('/admin/leaderboard', { params });
+      setLeaderboardData(res.data.entries || []);
+      setTeamVisibility(res.data.teams || []);
+    } catch {
+      // silent
+    } finally {
+      setLeaderboardLoading(false);
+      markFetched('admin-dashboard-leaderboard');
+    }
+  };
+
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLeaderboardLoading(true);
-      try {
-        const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
-        const res = await apiClient.get('/admin/leaderboard', { params });
-        setLeaderboardData(res.data.entries || []);
-        setTeamVisibility(res.data.teams || []);
-      } catch {
-        // silent
-      } finally {
-        setLeaderboardLoading(false);
-      }
-    };
     fetchLeaderboard();
   }, [leaderboardTeamFilter]);
+
+  useRefetchOnResume('admin-dashboard-leaderboard', fetchLeaderboard, { minIntervalMs: 60000 });
 
   const handleToggleVisibility = async (teamId, visible) => {
     try {

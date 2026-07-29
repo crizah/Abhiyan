@@ -12,6 +12,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
+import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
 
 // eslint-disable-next-line no-unused-vars -- kept for the commented-out sidebar block below, don't delete
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
@@ -61,28 +62,30 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
   const [notifications, setNotifications] = useState([]);
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  useEffect(() => {
-    fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 60000);
-    
-    // Listen for the custom real-time event from the task updates
-    const handleForceRefresh = () => fetchNotifications();
-    window.addEventListener('refresh-notifications', handleForceRefresh);
-    
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('refresh-notifications', handleForceRefresh);
-    };
-  }, []);
-
   const fetchNotifications = async () => {
     try {
       const res = await apiClient.get('/notifications');
       setNotifications(res.data || []);
     } catch (e) {
       console.error("Failed to load notifications", e);
+    } finally {
+      markFetched('notifications');
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+
+    // Listen for the custom real-time event from the task updates
+    const handleForceRefresh = () => fetchNotifications();
+    window.addEventListener('refresh-notifications', handleForceRefresh);
+
+    return () => {
+      window.removeEventListener('refresh-notifications', handleForceRefresh);
+    };
+  }, []);
+
+  useRefetchOnResume('notifications', fetchNotifications, { minIntervalMs: 60000 });
 
   const markAllRead = async () => {
     try {

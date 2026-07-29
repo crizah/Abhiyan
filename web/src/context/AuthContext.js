@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '../features/auth/api'; 
+import { authAPI } from '../features/auth/api';
+import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,7 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
+        markFetched('me');
       }
     };
 
@@ -37,8 +39,12 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
     } catch (error) {
         console.error("Failed to fetch user after login");
+    } finally {
+        markFetched('me');
     }
   };
+
+  useRefetchOnResume('me', login, { minIntervalMs: 60000, enabled: isAuthenticated });
 
   const logout = async () => {
     try {

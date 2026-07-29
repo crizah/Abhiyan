@@ -5,6 +5,7 @@ import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
 import PillTabPanel from '../../components/PillTabPanel';
 import InfoCard from '../../components/InfoCard';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
 
 const { Title, Text } = Typography;
 
@@ -62,36 +63,57 @@ export default function TeamsPage() {
     fetchAllData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fetchTeams = async () => {
+    const res = await apiClient.get('/admin/teams');
+    setTeams(res.data || []);
+    markFetched('teams-page-teams');
+  };
+
   const fetchAssignedUsers = async (page, limit) => {
     const res = await apiClient.get('/admin/users/assigned', { params: { page, limit } });
     setAssignedUsers(res.data.users || []);
     setAssignedTotal(res.data.total_count || 0);
+    markFetched('teams-page-assigned-users');
   };
 
   const fetchUnassignedUsers = async (page, limit) => {
     const res = await apiClient.get('/admin/users/unassigned', { params: { page, limit } });
     setUnassignedUsers(res.data.users || []);
     setUnassignedTotal(res.data.total_count || 0);
+    markFetched('teams-page-unassigned-users');
   };
 
-  // Called on mount and after any mutation — always resets both user lists to page 1
+  // Called on mount and after any mutation — always resets both user lists to page 1.
+  // Resume-refetch deliberately does NOT call this — it would silently reset whatever
+  // page the user is currently on (see fetchAssignedUsers/fetchUnassignedUsers below).
   const fetchAllData = async () => {
     setLoading(true);
     setAssignedPage(1);
     setUnassignedPage(1);
     try {
-      const [teamsRes] = await Promise.all([
-        apiClient.get('/admin/teams'),
+      await Promise.all([
+        fetchTeams(),
         fetchAssignedUsers(1, assignedPageSize),
         fetchUnassignedUsers(1, unassignedPageSize),
       ]);
-      setTeams(teamsRes.data || []);
     } catch (err) {
       message.error('Failed to load data.');
     } finally {
       setLoading(false);
     }
   };
+
+  useRefetchOnResume('teams-page-teams', () => fetchTeams(), { minIntervalMs: 60000 });
+  useRefetchOnResume(
+    'teams-page-assigned-users',
+    () => fetchAssignedUsers(assignedPage, assignedPageSize),
+    { minIntervalMs: 60000 }
+  );
+  useRefetchOnResume(
+    'teams-page-unassigned-users',
+    () => fetchUnassignedUsers(unassignedPage, unassignedPageSize),
+    { minIntervalMs: 60000 }
+  );
 
   // --- TEAM CREATION ---
   const handleCreateTeam = async () => {
@@ -120,8 +142,16 @@ export default function TeamsPage() {
       setTeamMembers(res.data || []);
     } catch (err) {
       message.error('Failed to load team members');
+    } finally {
+      markFetched(`team-members-${teamId}`);
     }
   };
+
+  useRefetchOnResume(
+    `team-members-${selectedTeam?.id}`,
+    () => fetchTeamMembers(selectedTeam.id),
+    { minIntervalMs: 60000, enabled: isTeamDrawerOpen && !!selectedTeam }
+  );
 
   const updateMemberRole = async (userId, teamId, newRole, refreshType) => {
     try {
@@ -159,8 +189,16 @@ export default function TeamsPage() {
       setUserTeams(res.data || []);
     } catch (err) {
       message.error('Failed to load user teams');
+    } finally {
+      markFetched(`user-teams-${userId}`);
     }
   };
+
+  useRefetchOnResume(
+    `user-teams-${selectedUser?.id}`,
+    () => fetchUserTeams(selectedUser.id),
+    { minIntervalMs: 60000, enabled: isUserDrawerOpen && !!selectedUser }
+  );
 
   const handleAssignToAdditionalTeam = async () => {
     if (!teamToAssign) return;

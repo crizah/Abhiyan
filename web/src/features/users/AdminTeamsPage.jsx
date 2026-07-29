@@ -5,6 +5,7 @@ import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
 import PillTabPanel from '../../components/PillTabPanel';
 import InfoCard from '../../components/InfoCard';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
 
 const { Title, Text } = Typography;
 
@@ -56,6 +57,8 @@ export default function TeamsPage() {
     fetchTeams();
   }, []);
 
+  useRefetchOnResume('admin-teams-page-teams', () => fetchTeams(), { minIntervalMs: 60000 });
+
   // Fetch employees list when tracking criteria or pages change
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,6 +66,8 @@ export default function TeamsPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [currentPage, pageSize, search, selectedTeamFilter, selectedRoleFilter]);
+
+  useRefetchOnResume('admin-teams-page-employees', () => fetchEmployees(), { minIntervalMs: 60000 });
 
   const fetchTeams = async () => {
     setLoadingTeams(true);
@@ -73,6 +78,7 @@ export default function TeamsPage() {
       message.error("Failed to load managed teams.");
     } finally {
       setLoadingTeams(false);
+      markFetched('admin-teams-page-teams');
     }
   };
 
@@ -111,6 +117,7 @@ export default function TeamsPage() {
       message.error("Failed to load member records.");
     } finally {
       setLoadingEmployees(false);
+      markFetched('admin-teams-page-employees');
     }
   };
 
@@ -127,8 +134,16 @@ export default function TeamsPage() {
       setTeamMembers(res.data || []);
     } catch (err) {
       message.error("Failed to load team members");
+    } finally {
+      markFetched(`team-members-${teamId}`);
     }
   };
+
+  useRefetchOnResume(
+    `team-members-${selectedTeam?.id}`,
+    () => fetchTeamMembers(selectedTeam.id),
+    { minIntervalMs: 60000, enabled: isTeamDrawerOpen && !!selectedTeam }
+  );
 
   const updateMemberRole = async (userId, teamId, newRole, refreshType) => {
     try {
@@ -168,8 +183,16 @@ export default function TeamsPage() {
       setUserTeams(res.data || []);
     } catch (err) {
       message.error("Failed to load user teams");
+    } finally {
+      markFetched(`user-teams-${userId}`);
     }
   };
+
+  useRefetchOnResume(
+    `user-teams-${selectedUser?.id}`,
+    () => fetchUserTeams(selectedUser.id),
+    { minIntervalMs: 60000, enabled: isUserDrawerOpen && !!selectedUser }
+  );
 
   const handleAssignToAdditionalTeam = async () => {
     if (!teamToAssign) return;

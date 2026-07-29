@@ -12,6 +12,7 @@ import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
 import InfoTooltip from '../../components/InfoTooltip';
 import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -61,18 +62,36 @@ export default function AttendancePage() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  const fetchTeams = async () => {
+    try {
+      const res = await apiClient.get('/admin/teams');
+      setTeams(res.data || []);
+    } catch { /* silent */ }
+    finally { markFetched('attendance-teams'); }
+  };
+
   useEffect(() => {
-    apiClient.get('/admin/teams').then(res => setTeams(res.data || [])).catch(() => {});
+    fetchTeams();
   }, []);
+
+  useRefetchOnResume('attendance-teams', () => fetchTeams(), { minIntervalMs: 60000 });
 
   useEffect(() => {
     fetchAttendance();
   }, [date, teamFilter]);
 
+  useRefetchOnResume('attendance-list', () => fetchAttendance(), { minIntervalMs: 60000 });
+
   useEffect(() => {
     if (drawerOpen && selectedUser) fetchUserSummary(selectedUser, drawerRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawerRange]);
+
+  useRefetchOnResume(
+    `attendance-user-summary-${selectedUser?.id}`,
+    () => fetchUserSummary(selectedUser, drawerRange),
+    { minIntervalMs: 60000, enabled: drawerOpen && !!selectedUser }
+  );
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -85,6 +104,7 @@ export default function AttendancePage() {
       message.error('Failed to load attendance records');
     } finally {
       setLoading(false);
+      markFetched('attendance-list');
     }
   };
 
@@ -129,6 +149,7 @@ export default function AttendancePage() {
       message.error('Failed to load user summary');
     } finally {
       setSummaryLoading(false);
+      markFetched(`attendance-user-summary-${user.id}`);
     }
   };
 

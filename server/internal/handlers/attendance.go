@@ -49,7 +49,7 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 		return
 	}
 
-	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, req.TargetObjectKey)
+	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, orgID, req.TargetObjectKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create attendance record"})
 		return
@@ -66,8 +66,9 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 
 func (h *AttendanceHandler) GetTodayAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	status, err := h.attendanceService.GetTodayStatus(c.Request.Context(), userID)
+	status, err := h.attendanceService.GetTodayStatus(c.Request.Context(), userID, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch attendance"})
 		return
@@ -92,25 +93,53 @@ func (h *AttendanceHandler) GetOrgAttendance(c *gin.Context) {
 	c.JSON(http.StatusOK, rows)
 }
 
+// DownloadOrgReport generates the batch CSV for the caller's org. Passing
+// both `from` and `to` switches to a date-range report (one row per user per
+// day); otherwise it falls back to the single `date` behavior.
 func (h *AttendanceHandler) DownloadOrgReport(c *gin.Context) {
 	orgID := c.MustGet("org_id").(string)
-	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	teamID := c.Query("team")
+	from := c.Query("from")
+	to := c.Query("to")
 
 	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_%s.csv", date))
 
+	if from != "" && to != "" {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_%s_to_%s.csv", from, to))
+		if err := h.attendanceService.WriteOrgReportRange(c.Request.Context(), orgID, from, to, teamID, c.Writer); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
+		}
+		return
+	}
+
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_%s.csv", date))
 	if err := h.attendanceService.WriteOrgReport(c.Request.Context(), orgID, date, teamID, c.Writer); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 	}
 }
 
+// defaultAttendanceRange fills in a trailing 30-day window (inclusive of
+// today) when the caller doesn't specify one, so existing clients that only
+// know about `date` keep working.
+func defaultAttendanceRange(c *gin.Context) (from, to string) {
+	from = c.Query("from")
+	to = c.Query("to")
+	if from != "" && to != "" {
+		return from, to
+	}
+	now := time.Now()
+	return now.AddDate(0, 0, -29).Format("2006-01-02"), now.Format("2006-01-02")
+}
+
 func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
 	userID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
+	from, to := defaultAttendanceRange(c)
 
-	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID)
+	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID, orgID, from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user attendance"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -119,11 +148,13 @@ func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
 
 func (h *AttendanceHandler) DownloadUserReport(c *gin.Context) {
 	userID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
+	from, to := defaultAttendanceRange(c)
 
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_user_%s.csv", userID[:8]))
 
-	if err := h.attendanceService.WriteUserReport(c.Request.Context(), userID, c.Writer); err != nil {
+	if err := h.attendanceService.WriteUserReport(c.Request.Context(), userID, orgID, from, to, c.Writer); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 	}
 }

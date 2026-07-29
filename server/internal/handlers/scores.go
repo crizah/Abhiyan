@@ -23,6 +23,7 @@ func NewScoreHandler(sc *services.ScoreService, as *services.AdminService) *Scor
 
 func (h *ScoreHandler) GetUserScoreBreakdown(c *gin.Context) {
 	targetUserID := c.Param("user_id")
+	orgID := c.MustGet("org_id").(string)
 	teamFilter := c.Query("team")
 	if teamFilter == "ALL" {
 		teamFilter = ""
@@ -37,9 +38,9 @@ func (h *ScoreHandler) GetUserScoreBreakdown(c *gin.Context) {
 	}
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	result, err := h.scoreService.GetUserBreakdown(c.Request.Context(), targetUserID, teamFilter, int32(limit), int32(offset))
+	result, err := h.scoreService.GetUserBreakdown(c.Request.Context(), targetUserID, teamFilter, int32(limit), int32(offset), orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch score breakdown"})
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -60,7 +61,7 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 	if role == "SUPER_ADMIN" {
 		allTeams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
 	} else {
-		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
+		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
@@ -77,7 +78,19 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 	// teamIDs is used for leaderboard entries only (respects filter); visibility always shows all teams
 	var teamIDs []uuid.UUID
 	if teamFilter != "" && teamFilter != "ALL" {
-		teamIDs = []uuid.UUID{util.ParseUUID(teamFilter)}
+		filterID := util.ParseUUID(teamFilter)
+		found := false
+		for _, id := range allTeamIDs {
+			if id == filterID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: team not in your organization"})
+			return
+		}
+		teamIDs = []uuid.UUID{filterID}
 	} else {
 		teamIDs = allTeamIDs
 	}
@@ -120,8 +133,9 @@ func (h *ScoreHandler) ToggleLeaderboardVisibility(c *gin.Context) {
 		return
 	}
 
-	if err := h.scoreService.ToggleLeaderboardVisibility(c.Request.Context(), teamID, req.Visible, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update visibility"})
+	orgID := c.MustGet("org_id").(string)
+	if err := h.scoreService.ToggleLeaderboardVisibility(c.Request.Context(), teamID, req.Visible, userID, orgID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -130,9 +144,10 @@ func (h *ScoreHandler) ToggleLeaderboardVisibility(c *gin.Context) {
 
 func (h *ScoreHandler) GetEmployeeLeaderboard(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 	teamFilter := c.Query("team")
 
-	result, err := h.scoreService.GetEmployeeLeaderboard(c.Request.Context(), userID, teamFilter)
+	result, err := h.scoreService.GetEmployeeLeaderboard(c.Request.Context(), userID, teamFilter, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
 		return
@@ -151,44 +166,59 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 	teamFilter := c.Query("team")
 
 	if targetUserID != "" {
-		userName, err := h.scoreService.GetUserName(c.Request.Context(), targetUserID)
+		userName, err := h.scoreService.GetUserName(c.Request.Context(), targetUserID, orgID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=score_report_%s.csv", targetUserID[:8]))
 
-		err = h.scoreService.WriteUserScoreReport(c.Request.Context(), targetUserID, userName.FullName, userName.Email, c.Writer)
+		err = h.scoreService.WriteUserScoreReport(c.Request.Context(), targetUserID, userName.FullName, userName.Email, c.Writer, orgID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 		}
 		return
 	}
 
-	var teamIDs []uuid.UUID
-
-	if teamFilter != "" && teamFilter != "ALL" {
-		teamIDs = []uuid.UUID{util.ParseUUID(teamFilter)}
-	} else if role == "SUPER_ADMIN" {
-		teams, err := h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
-			return
-		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
+	// Always resolve the caller's actual allowed team set first — a raw
+	// ?team= filter must be validated against it, never trusted directly
+	// (that's exactly how a cross-org team ID could be requested otherwise).
+	var allTeams []schemas.TeamResponse
+	var err error
+	if role == "SUPER_ADMIN" {
+		allTeams, err = h.adminService.GetAllOrgTeams(c.Request.Context(), orgID)
 	} else {
-		teams, err := h.adminService.GetAdminManagedTeams(c.Request.Context(), userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		allTeams, err = h.adminService.GetAdminManagedTeams(c.Request.Context(), userID, orgID)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+		return
+	}
+
+	var allTeamIDs []uuid.UUID
+	for _, t := range allTeams {
+		allTeamIDs = append(allTeamIDs, util.ParseUUID(t.ID))
+	}
+
+	var teamIDs []uuid.UUID
+	if teamFilter != "" && teamFilter != "ALL" {
+		filterID := util.ParseUUID(teamFilter)
+		found := false
+		for _, id := range allTeamIDs {
+			if id == filterID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: team not in your organization"})
 			return
 		}
-		for _, t := range teams {
-			teamIDs = append(teamIDs, util.ParseUUID(t.ID))
-		}
+		teamIDs = []uuid.UUID{filterID}
+	} else {
+		teamIDs = allTeamIDs
 	}
 
 	if len(teamIDs) == 0 {
@@ -199,7 +229,7 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=performance_report.csv")
 
-	err := h.scoreService.WriteBulkScoreReport(c.Request.Context(), teamIDs, c.Writer)
+	err = h.scoreService.WriteBulkScoreReport(c.Request.Context(), teamIDs, c.Writer)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate report"})
 	}

@@ -589,6 +589,7 @@ type Attachment struct {
 type AttendanceRecord struct {
 	ID             uuid.UUID      `json:"id"`
 	UserID         uuid.UUID      `json:"user_id"`
+	OrgID          uuid.UUID      `json:"org_id"`
 	TargetFileUri  sql.NullString `json:"target_file_uri"`
 	Present        sql.NullBool   `json:"present"`
 	Status         string         `json:"status"`
@@ -623,6 +624,7 @@ type EmployeeScore struct {
 
 type FaceValidationJob struct {
 	ID        uuid.UUID      `json:"id"`
+	UserID    uuid.UUID      `json:"user_id"`
 	ObjectKey string         `json:"object_key"`
 	Status    string         `json:"status"`
 	Reason    sql.NullString `json:"reason"`
@@ -632,9 +634,18 @@ type FaceValidationJob struct {
 type Notification struct {
 	ID        uuid.UUID    `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
+	OrgID     uuid.UUID    `json:"org_id"`
 	Title     string       `json:"title"`
 	Message   string       `json:"message"`
 	IsRead    sql.NullBool `json:"is_read"`
+	CreatedAt sql.NullTime `json:"created_at"`
+}
+
+type OrgMembership struct {
+	ID        uuid.UUID    `json:"id"`
+	UserID    uuid.UUID    `json:"user_id"`
+	OrgID     uuid.UUID    `json:"org_id"`
+	Status    UserStatus   `json:"status"`
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
@@ -744,6 +755,7 @@ type UserCredential struct {
 
 type UserSystemRole struct {
 	UserID    uuid.UUID    `json:"user_id"`
+	OrgID     uuid.UUID    `json:"org_id"`
 	Role      SystemRole   `json:"role"`
 	GrantedAt sql.NullTime `json:"granted_at"`
 }

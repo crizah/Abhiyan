@@ -102,7 +102,7 @@ func main() {
 
 	// Unauthenticated auth endpoints: no user identity yet, so key by IP.
 	// Tight limit - these are brute-force/credential-stuffing/email-bombing targets.
-	authLimiter := middleware.RateLimit(rdb, "auth", 5, 5*time.Minute, middleware.KeyByIP)
+	authLimiter := middleware.RateLimit(rdb, "auth", 20, 5*time.Minute, middleware.KeyByIP)
 
 	// Authenticated endpoints with real downstream cost (external API calls,
 	// message sends, S3 writes). Keyed by user so it can't be starved by shared IPs.
@@ -117,8 +117,10 @@ func main() {
 			// Public
 			auth.POST("/register-org", authLimiter, authHandler.RegisterOrg)
 			auth.POST("/login", authLimiter, authHandler.Login)
+			auth.POST("/select-org", authLimiter, authHandler.SelectOrg)
 			auth.POST("/google-login", authLimiter, authHandler.GoogleLogin)
 			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/invite-preview", authHandler.InvitePreview)
 			auth.POST("/accept-invite", authLimiter, authHandler.AcceptInvite)
 			auth.POST("/resend-invite", authLimiter, authHandler.ResendPublicInvite)
 			auth.POST("/forgot-password", authLimiter, authHandler.ForgotPassword)

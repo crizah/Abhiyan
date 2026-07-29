@@ -1,6 +1,7 @@
 // src/features/auth/pages/LoginPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Button, Divider, Flex, Form, Input, Typography, theme } from 'antd';
+import { App, Button, Divider, Flex, Form, Input, List, Typography, theme } from 'antd';
+import { ApartmentOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { authAPI } from '../api';
@@ -17,6 +18,28 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const googleButtonRef = useRef(null);
 
+  // Set only when a login attempt succeeds but the account belongs to more
+  // than one org — the FE has to ask which org before a real session exists.
+  const [orgPicker, setOrgPicker] = useState(null); // { pendingToken, orgs }
+
+  const finishLogin = async () => {
+    await login();
+    message.success('Welcome back!');
+    navigate('/dashboard');
+  };
+
+  const handleSelectOrg = async (orgId) => {
+    try {
+      setIsLoading(true);
+      await authAPI.selectOrg(orgPicker.pendingToken, orgId);
+      await finishLogin();
+    } catch (error) {
+      message.error(error.response?.data?.error || 'Failed to select organization');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const runtimeGoogleId = window.RUNTIME_CONFIG?.REACT_APP_GOOGLE_CLIENT_ID;
   const googleClientId =
     (runtimeGoogleId && runtimeGoogleId !== '${REACT_APP_GOOGLE_CLIENT_ID}' ? runtimeGoogleId : null) ||
@@ -26,12 +49,13 @@ export default function LoginPage() {
   const onFinish = async (values) => {
     try {
       setIsLoading(true);
-      await authAPI.login(values);
+      const result = await authAPI.login(values);
+      if (result.requires_org_selection) {
+        setOrgPicker({ pendingToken: result.pending_token, orgs: result.orgs });
+        return;
+      }
       // 2. WAIT for the AuthContext to fetch the user profile via /me
-      await login();
-      // 3. Now that we know who you are, go to the dashboard
-      message.success('Welcome back!');
-      navigate('/dashboard');
+      await finishLogin();
     } catch (error) {
       message.error(error.response?.data?.error || 'Failed to login');
     } finally {
@@ -42,10 +66,12 @@ export default function LoginPage() {
   const onGoogleCredential = async (response) => {
     try {
       setIsLoading(true);
-      await authAPI.googleLogin(response.credential);
-      await login();
-      message.success('Welcome back!');
-      navigate('/dashboard');
+      const result = await authAPI.googleLogin(response.credential);
+      if (result.requires_org_selection) {
+        setOrgPicker({ pendingToken: result.pending_token, orgs: result.orgs });
+        return;
+      }
+      await finishLogin();
     } catch (error) {
       message.error(error.response?.data?.error || 'Failed to sign in with Google');
     } finally {
@@ -224,47 +250,73 @@ export default function LoginPage() {
                     letterSpacing: '-0.02em',
                   }}
                 >
-                  Sign in to your account
+                  {orgPicker ? 'Choose an organization' : 'Sign in to your account'}
                 </Title>
                 <Text style={{ color: token.colorTextSecondary }}>
-                  Enter your credentials to access the workspace
+                  {orgPicker
+                    ? 'Your account belongs to more than one organization.'
+                    : 'Enter your credentials to access the workspace'}
                 </Text>
               </Flex>
 
-              <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
-                <Form.Item
-                  name="email"
-                  label="Email address"
-                  rules={[
-                    { required: true, message: 'Please enter your email' },
-                    { type: 'email', message: 'Invalid email' },
-                  ]}
-                >
-                  <Input size="large" placeholder="name@mnc.com" />
-                </Form.Item>
-                <Form.Item
-                  name="password"
-                  label="Password"
-                  rules={[{ required: true, message: 'Please enter your password' }]}
-                >
-                  <Input.Password size="large" placeholder="••••••••" />
-                </Form.Item>
-                <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
-                  Sign In
-                </Button>
-                <Flex justify="center" style={{ marginTop: token.marginSM }}>
-                  <Link to="/forgot-password" style={{ color: token.colorTextSecondary }}>
-                    Forgot password?
-                  </Link>
-                </Flex>
-              </Form>
-
-              {googleClientId && (
+              {orgPicker ? (
+                <List
+                  dataSource={orgPicker.orgs}
+                  renderItem={(org) => (
+                    <List.Item
+                      style={{ cursor: 'pointer', padding: '12px 16px', borderRadius: token.borderRadiusLG }}
+                      onClick={() => !isLoading && handleSelectOrg(org.org_id)}
+                    >
+                      <Flex align="center" gap="middle" style={{ width: '100%' }}>
+                        <ApartmentOutlined style={{ fontSize: 18, color: token.colorPrimary }} />
+                        <Flex vertical style={{ flex: 1 }}>
+                          <Text strong>{org.org_name}</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {(org.roles || []).join(', ').replace(/_/g, ' ')}
+                          </Text>
+                        </Flex>
+                      </Flex>
+                    </List.Item>
+                  )}
+                />
+              ) : (
                 <>
-                  <Divider style={{ margin: 0, color: token.colorTextSecondary }}>or</Divider>
-                  <Flex justify="center">
-                    <div ref={googleButtonRef} />
-                  </Flex>
+                  <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
+                    <Form.Item
+                      name="email"
+                      label="Email address"
+                      rules={[
+                        { required: true, message: 'Please enter your email' },
+                        { type: 'email', message: 'Invalid email' },
+                      ]}
+                    >
+                      <Input size="large" placeholder="name@mnc.com" />
+                    </Form.Item>
+                    <Form.Item
+                      name="password"
+                      label="Password"
+                      rules={[{ required: true, message: 'Please enter your password' }]}
+                    >
+                      <Input.Password size="large" placeholder="••••••••" />
+                    </Form.Item>
+                    <Button type="primary" htmlType="submit" size="large" block loading={isLoading}>
+                      Sign In
+                    </Button>
+                    <Flex justify="center" style={{ marginTop: token.marginSM }}>
+                      <Link to="/forgot-password" style={{ color: token.colorTextSecondary }}>
+                        Forgot password?
+                      </Link>
+                    </Flex>
+                  </Form>
+
+                  {googleClientId && (
+                    <>
+                      <Divider style={{ margin: 0, color: token.colorTextSecondary }}>or</Divider>
+                      <Flex justify="center">
+                        <div ref={googleButtonRef} />
+                      </Flex>
+                    </>
+                  )}
                 </>
               )}
 

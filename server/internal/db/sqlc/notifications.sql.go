@@ -13,37 +13,53 @@ import (
 )
 
 const clearNotifications = `-- name: ClearNotifications :exec
-DELETE FROM notifications WHERE user_id = $1
+DELETE FROM notifications WHERE user_id = $1 AND org_id = $2
 `
 
-func (q *Queries) ClearNotifications(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, clearNotifications, userID)
+type ClearNotificationsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) ClearNotifications(ctx context.Context, arg ClearNotificationsParams) error {
+	_, err := q.db.ExecContext(ctx, clearNotifications, arg.UserID, arg.OrgID)
 	return err
 }
 
 const createNotification = `-- name: CreateNotification :exec
-INSERT INTO notifications (user_id, title, message) 
-VALUES ($1, $2, $3)
+INSERT INTO notifications (user_id, org_id, title, message)
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateNotificationParams struct {
 	UserID  uuid.UUID `json:"user_id"`
+	OrgID   uuid.UUID `json:"org_id"`
 	Title   string    `json:"title"`
 	Message string    `json:"message"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
-	_, err := q.db.ExecContext(ctx, createNotification, arg.UserID, arg.Title, arg.Message)
+	_, err := q.db.ExecContext(ctx, createNotification,
+		arg.UserID,
+		arg.OrgID,
+		arg.Title,
+		arg.Message,
+	)
 	return err
 }
 
 const getUserNotifications = `-- name: GetUserNotifications :many
 SELECT id, title, message, is_read, created_at
 FROM notifications
-WHERE user_id = $1
+WHERE user_id = $1 AND org_id = $2
 ORDER BY created_at DESC
 LIMIT 20
 `
+
+type GetUserNotificationsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetUserNotificationsRow struct {
 	ID        uuid.UUID    `json:"id"`
@@ -53,8 +69,8 @@ type GetUserNotificationsRow struct {
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
-func (q *Queries) GetUserNotifications(ctx context.Context, userID uuid.UUID) ([]GetUserNotificationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserNotifications, userID)
+func (q *Queries) GetUserNotifications(ctx context.Context, arg GetUserNotificationsParams) ([]GetUserNotificationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserNotifications, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,24 +99,30 @@ func (q *Queries) GetUserNotifications(ctx context.Context, userID uuid.UUID) ([
 }
 
 const markNotificationsRead = `-- name: MarkNotificationsRead :exec
-UPDATE notifications SET is_read = TRUE WHERE user_id = $1
+UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND org_id = $2
 `
 
-func (q *Queries) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, markNotificationsRead, userID)
+type MarkNotificationsReadParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) error {
+	_, err := q.db.ExecContext(ctx, markNotificationsRead, arg.UserID, arg.OrgID)
 	return err
 }
 
 const markOneNotificationRead = `-- name: MarkOneNotificationRead :exec
-UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2
+UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2 AND org_id = $3
 `
 
 type MarkOneNotificationReadParams struct {
 	ID     uuid.UUID `json:"id"`
 	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
 }
 
 func (q *Queries) MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error {
-	_, err := q.db.ExecContext(ctx, markOneNotificationRead, arg.ID, arg.UserID)
+	_, err := q.db.ExecContext(ctx, markOneNotificationRead, arg.ID, arg.UserID, arg.OrgID)
 	return err
 }

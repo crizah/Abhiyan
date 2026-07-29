@@ -76,7 +76,6 @@ export default function UserOnboardingPage() {
                 </Form.Item>
                 <Form.Item label={<Text strong>System Role</Text>} name="role" rules={[{ required: true }]}>
                   <Select size="large">
-                    <Select.Option value="SUPER_ADMIN">Super Admin (Full Access)</Select.Option>
                     <Select.Option value="ADMIN">Admin (Team Management)</Select.Option>
                     <Select.Option value="EMPLOYEE">Employee (Standard)</Select.Option>
                   </Select>

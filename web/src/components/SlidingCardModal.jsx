@@ -123,12 +123,15 @@ export function SlidingCardModal({
               overflow: 'hidden',
             }}
           >
-            {/* Header */}
-            <Flex justify="space-between" align="center" style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
+            {/* Header — wraps instead of clipping when `extra` (e.g. a range picker +
+                action button) doesn't fit alongside the title on a narrow screen; the
+                card body below has overflow:hidden, so without wrap this content would
+                be silently cut off rather than dropping to a second line. */}
+            <Flex justify="space-between" align="center" wrap="wrap" gap={8} style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
               <Title level={4} style={{ margin: 0, letterSpacing: '-0.01em' }}>
                 {title}
               </Title>
-              <Flex align="center" gap={8}>
+              <Flex align="center" gap={8} wrap="wrap">
                 {extra}
                 <Button
                   type="text"

@@ -75,7 +75,7 @@ export default function SuperAdminDashboard() {
   return (
     <div>
       {/* Page Title Area */}
-      <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.email}</Title>
+      <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.full_name}</Title>
       <Paragraph type="secondary">Here is an overview of your organization's system health.</Paragraph>
 
       {/* Content Area: main column + leaderboard rail */}

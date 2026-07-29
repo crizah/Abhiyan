@@ -28,8 +28,11 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 
 	var notifications []schemas.NotificationResponse
 
-	// 1. Fetch standard DB notifications
-	dbNotifs, err := h.db.GetUserNotifications(c.Request.Context(), util.ParseUUID(userID))
+	// 1. Fetch standard DB notifications (this org only)
+	dbNotifs, err := h.db.GetUserNotifications(c.Request.Context(), db.GetUserNotificationsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err == nil {
 		for _, n := range dbNotifs {
 			notifications = append(notifications, schemas.NotificationResponse{
@@ -70,8 +73,12 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	err := h.db.MarkNotificationsRead(c.Request.Context(), util.ParseUUID(userID))
+	err := h.db.MarkNotificationsRead(c.Request.Context(), db.MarkNotificationsReadParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notifications read"})
 		return
@@ -81,8 +88,12 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 
 func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 
-	err := h.db.ClearNotifications(c.Request.Context(), util.ParseUUID(userID))
+	err := h.db.ClearNotifications(c.Request.Context(), db.ClearNotificationsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear notifications"})
 		return
@@ -92,11 +103,13 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 
 func (h *NotificationHandler) MarkOneRead(c *gin.Context) {
 	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
 	notifID := c.Param("id")
 
 	err := h.db.MarkOneNotificationRead(c.Request.Context(), db.MarkOneNotificationReadParams{
 		ID:     util.ParseUUID(notifID),
 		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(orgID),
 	})
 
 	if err != nil {

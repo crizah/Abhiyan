@@ -25,13 +25,14 @@ func NewUploadHandler(s3Service *services.S3Service, faceValidation *services.Fa
 func (h *UploadHandler) GetPresignedUploadsURL(c *gin.Context) {
 	fileName := c.Query("file_name")
 	folderType := c.Query("type")
+	orgID := c.MustGet("org_id").(string)
 
 	if fileName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file_name is required"})
 		return
 	}
 
-	uploadURL, finalURL, objectKey, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName, folderType)
+	uploadURL, finalURL, objectKey, err := h.s3Service.GeneratePresignedURL(c.Request.Context(), fileName, folderType, orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate upload URL"})
 		return
@@ -53,6 +54,12 @@ func (h *UploadHandler) DeleteS3Object(c *gin.Context) {
 		return
 	}
 
+	orgID := c.MustGet("org_id").(string)
+	if !h.s3Service.KeyBelongsToOrg(req.FileURL, orgID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: file does not belong to your organization"})
+		return
+	}
+
 	h.s3Service.DeleteObjects(c.Request.Context(), []string{req.FileURL})
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
@@ -66,7 +73,9 @@ func (h *UploadHandler) ValidateFace(c *gin.Context) {
 		return
 	}
 
-	jobID, err := h.faceValidation.InsertJob(c.Request.Context(), req.ObjectKey)
+	userID := c.MustGet("user_id").(string)
+
+	jobID, err := h.faceValidation.InsertJob(c.Request.Context(), userID, req.ObjectKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create validation job"})
 		return
@@ -82,8 +91,9 @@ func (h *UploadHandler) ValidateFace(c *gin.Context) {
 
 func (h *UploadHandler) GetValidationStatus(c *gin.Context) {
 	jobID := c.Param("job_id")
+	userID := c.MustGet("user_id").(string)
 
-	status, reason, err := h.faceValidation.GetJob(c.Request.Context(), jobID)
+	status, reason, err := h.faceValidation.GetJob(c.Request.Context(), jobID, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
 		return

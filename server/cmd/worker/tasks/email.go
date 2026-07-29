@@ -8,7 +8,7 @@ import (
 )
 
 // NewSendInviteEmailTask acts as a constructor to inject the EmailService dependency
-func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
+func NewSendInviteEmailTask(emailService services.EmailInterface) func(context.Context, map[string]any) (any, error) {
 
 	// This returned function is what Onion will actually execute
 	return func(ctx context.Context, args map[string]any) (any, error) {
@@ -18,6 +18,10 @@ func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Co
 		if !ok {
 			return nil, fmt.Errorf("missing or invalid 'email' argument")
 		}
+		orgName, ok := args["orgName"].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing or invalid 'orgName' argument")
+		}
 		link, ok := args["link"].(string)
 		if !ok {
 			return nil, fmt.Errorf("missing or invalid 'link' argument")
@@ -26,7 +30,7 @@ func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Co
 		fmt.Printf("Attempting to send invite email to %s...\n", email)
 
 		// 2. AWS SES
-		err := emailService.SendInviteEmail(ctx, email, link)
+		err := emailService.SendInviteEmail(ctx, email, orgName, link)
 		if err != nil {
 			fmt.Printf("Failed to send email to %s: %v\n", email, err)
 			return nil, err
@@ -37,7 +41,7 @@ func NewSendInviteEmailTask(emailService *services.EmailService) func(context.Co
 	}
 }
 
-func NewSendPasswordResetEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
+func NewSendPasswordResetEmailTask(emailService services.EmailInterface) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 		email, ok := args["email"].(string)
 		if !ok {
@@ -59,7 +63,7 @@ func NewSendPasswordResetEmailTask(emailService *services.EmailService) func(con
 	}
 }
 
-func NewSendReminderEmailTask(emailService *services.EmailService) func(context.Context, map[string]any) (any, error) {
+func NewSendReminderEmailTask(emailService services.EmailInterface) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 
 		// 1. Extract arguments safely to prevent panics

@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api';
 import PixelBlast from '../../../components/ui/PixelBlast';
 import Logo from '../../../components/Logo';
+import InfoCard from '../../../components/InfoCard';
 
 const { Title, Text } = Typography;
 
@@ -140,6 +141,15 @@ export default function RegisterOrgPage() {
                 </Text>
               </Flex>
 
+              <InfoCard>
+                Already have an account with us? You can still create a new organization and become its
+                Super Admin — just enter your existing password below; your name, phone, and other profile
+                details won't be changed. Forgot your password?{' '}
+                <Link to="/forgot-password" style={{ color: '#B3455C', fontWeight: 600 }}>
+                  Reset it here
+                </Link>.
+              </InfoCard>
+
               <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
                 <Title level={5} style={{ marginTop: 0, marginBottom: token.marginMD, color: token.colorPrimary }}>
                   Organization Details
@@ -181,8 +191,15 @@ export default function RegisterOrgPage() {
 
                 <Row gutter={[16, 0]}>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="admin_phone" label="Phone Number" rules={[{ required: true }]}>
-                      <Input size="large" placeholder="+1 234 567 8900" />
+                    <Form.Item
+                      name="admin_phone"
+                      label="Phone Number"
+                      rules={[
+                        { required: true, message: 'Phone number is required' },
+                        { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit phone number (no country code)' },
+                      ]}
+                    >
+                      <Input size="large" placeholder="9876543210" maxLength={10} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>

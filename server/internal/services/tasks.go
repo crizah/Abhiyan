@@ -103,6 +103,69 @@ func (s *TaskService) diffAttachments(
 	return s3URLsToDelete
 }
 
+// assertTaskInOrg confirms taskID belongs to callerOrgID before any read/write
+// touches it — the whole task subsystem is otherwise reachable cross-tenant by
+// just guessing/reusing a UUID from another org.
+func (s *TaskService) assertTaskInOrg(ctx context.Context, taskID uuid.UUID, callerOrgID uuid.UUID) error {
+	orgID, err := s.queries.GetTaskOrgID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to verify task organization: %w", err)
+	}
+	if orgID != callerOrgID {
+		return errors.New("unauthorized: task does not belong to your organization")
+	}
+	return nil
+}
+
+func (s *TaskService) assertTeamInOrg(ctx context.Context, teamID uuid.UUID, callerOrgID uuid.UUID) error {
+	orgID, err := s.queries.GetTeamOrgID(ctx, teamID)
+	if err != nil {
+		return fmt.Errorf("failed to verify team organization: %w", err)
+	}
+	if orgID != callerOrgID {
+		return errors.New("unauthorized: team does not belong to your organization")
+	}
+	return nil
+}
+
+func (s *TaskService) assertTaskUpdateInOrg(ctx context.Context, updateID uuid.UUID, callerOrgID uuid.UUID) error {
+	orgID, err := s.queries.GetTaskUpdateOrgID(ctx, updateID)
+	if err != nil {
+		return fmt.Errorf("failed to verify update organization: %w", err)
+	}
+	if orgID != callerOrgID {
+		return errors.New("unauthorized: update does not belong to your organization")
+	}
+	return nil
+}
+
+func (s *TaskService) assertAttachmentInOrg(ctx context.Context, attachmentID uuid.UUID, callerOrgID uuid.UUID) error {
+	orgID, err := s.queries.GetAttachmentOrgID(ctx, attachmentID)
+	if err != nil {
+		return fmt.Errorf("failed to verify attachment organization: %w", err)
+	}
+	if orgID != callerOrgID {
+		return errors.New("unauthorized: attachment does not belong to your organization")
+	}
+	return nil
+}
+
+// assertUsersInOrg guards against attaching participants from another org to a
+// task — team-scoping alone isn't enough since task_participants rows aren't
+// otherwise constrained to actual team members.
+func (s *TaskService) assertUsersInOrg(ctx context.Context, userIDs []string, callerOrgID uuid.UUID) error {
+	for _, idStr := range userIDs {
+		belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: util.ParseUUID(idStr), OrgID: callerOrgID})
+		if err != nil {
+			return fmt.Errorf("failed to verify participant organization: %w", err)
+		}
+		if !belongs {
+			return errors.New("action blocked: assignees and subscribers must belong to your organization")
+		}
+	}
+	return nil
+}
+
 // CalculateNextReminder computes the next trigger date based on custom intervals
 func CalculateNextReminder(currentScheduledAt time.Time, value int, unit string) (time.Time, error) {
 	switch unit {
@@ -121,7 +184,20 @@ func CalculateNextReminder(currentScheduledAt time.Time, value int, unit string)
 	}
 }
 
-func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schemas.CreateTaskRequest) (db.Task, error) {
+func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schemas.CreateTaskRequest, callerOrgID string) (db.Task, error) {
+	orgID := util.ParseUUID(callerOrgID)
+	teamID := util.ParseUUID(req.TeamID)
+
+	if err := s.assertTeamInOrg(ctx, teamID, orgID); err != nil {
+		return db.Task{}, err
+	}
+	if err := s.assertUsersInOrg(ctx, req.AssigneeIDs, orgID); err != nil {
+		return db.Task{}, err
+	}
+	if err := s.assertUsersInOrg(ctx, req.SubscriberIDs, orgID); err != nil {
+		return db.Task{}, err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return db.Task{}, err
@@ -131,7 +207,6 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	aID := util.ParseUUID(adminID)
 
 	qtx := s.queries.WithTx(tx)
-	teamID := util.ParseUUID(req.TeamID)
 
 	// 1. Create the base task
 	taskParams := db.CreateTaskParams{
@@ -183,6 +258,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	for _, assigneeID := range req.AssigneeIDs {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:  util.ParseUUID(assigneeID),
+			OrgID:   orgID,
 			Title:   "New Task Assigned",
 			Message: fmt.Sprintf("You have been assigned to: %s", req.Title),
 		})
@@ -192,6 +268,7 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	for _, subID := range req.SubscriberIDs {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:  util.ParseUUID(subID),
+			OrgID:   orgID,
 			Title:   "Added to Task Loop",
 			Message: fmt.Sprintf("You are subscribed to updates for: %s", req.Title),
 		})
@@ -235,9 +312,14 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 	return task, nil
 }
 
-func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string, limit, offset int32, callerOrgID string) (*schemas.PaginatedTaskResponse, error) {
+	tID := util.ParseUUID(teamID)
+	if err := s.assertTeamInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
 	dbTasks, err := s.queries.GetTeamTasks(ctx, db.GetTeamTasksParams{
-		TeamID: util.ParseUUID(teamID),
+		TeamID: tID,
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -287,8 +369,11 @@ func (s *TaskService) GetTeamTasks(ctx context.Context, teamID string, limit, of
 	}, nil
 }
 
-func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
+func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, status string, callerOrgID string) error {
 	tID := util.ParseUUID(taskID)
+	if err := s.assertTaskInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return err
+	}
 
 	// Update the absolute lifecycle status
 	err := s.queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
@@ -307,8 +392,11 @@ func (s *TaskService) UpdateTaskStatus(ctx context.Context, taskID string, statu
 	return nil
 }
 
-func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*schemas.FullTaskDetailsResponse, error) {
+func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string, callerOrgID string) (*schemas.FullTaskDetailsResponse, error) {
 	tID := util.ParseUUID(taskID)
+	if err := s.assertTaskInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
 
 	dbParts, err := s.queries.GetTaskParticipants(ctx, tID)
 	if err != nil {
@@ -418,7 +506,19 @@ func (s *TaskService) GetFullTaskDetails(ctx context.Context, taskID string) (*s
 
 }
 
-func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest, userid string) error {
+func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req schemas.UpdateTaskRequest, userid string, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+	if err := s.assertUsersInOrg(ctx, req.AssigneeIDs, orgID); err != nil {
+		return err
+	}
+	if err := s.assertUsersInOrg(ctx, req.SubscriberIDs, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -426,7 +526,6 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 
 	// 1. Safely handle the nullable Due Date pointer
 	var safeDueDate sql.NullTime
@@ -459,7 +558,7 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		_ = qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{TaskID: tID, UserID: uID, Role: db.ParticipantRoleASSIGNEE})
 		if !oldMap[assigneeID] { // Only notify if they are NEW
 			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID: uID, Title: "Task Assignment Updated", Message: fmt.Sprintf("You have been added to the task: %s", req.Title),
+				UserID: uID, OrgID: orgID, Title: "Task Assignment Updated", Message: fmt.Sprintf("You have been added to the task: %s", req.Title),
 			})
 		}
 	}
@@ -469,7 +568,7 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		_ = qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{TaskID: tID, UserID: uID, Role: db.ParticipantRoleSUBSCRIBER})
 		if !oldMap[subID] { // Only notify if they are NEW
 			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID: uID, Title: "Added to Task Loop", Message: fmt.Sprintf("You are now subscribed to: %s", req.Title),
+				UserID: uID, OrgID: orgID, Title: "Added to Task Loop", Message: fmt.Sprintf("You are now subscribed to: %s", req.Title),
 			})
 		}
 	}
@@ -500,9 +599,10 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	return nil
 }
 
-func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limit, offset int32, callerOrgID string) (*schemas.PaginatedTaskResponse, error) {
 	dbTasks, err := s.queries.GetAdminAllTasks(ctx, db.GetAdminAllTasksParams{
 		UserID: util.ParseUUID(adminID),
+		OrgID:  util.ParseUUID(callerOrgID),
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -553,7 +653,13 @@ func (s *TaskService) GetAdminAllTasks(ctx context.Context, adminID string, limi
 	}, nil
 }
 
-func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest) error {
+func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID string, req schemas.ActionTaskRequest, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -561,7 +667,6 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
 
 	// 1. Change Status back to OPEN
@@ -617,6 +722,7 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 		// We notify EVERYONE, even the admin doing it, so it's a clear system record
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:  p.ID,
+			OrgID:   orgID,
 			Title:   "Task Reopened",
 			Message: fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
 		})
@@ -625,8 +731,11 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	return tx.Commit()
 }
 
-func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, offset int32) ([]schemas.TaskUpdateResponse, error) {
+func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, offset int32, callerOrgID string) ([]schemas.TaskUpdateResponse, error) {
 	tID := util.ParseUUID(taskID)
+	if err := s.assertTaskInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
 
 	updates, err := s.queries.GetTaskUpdates(ctx, db.GetTaskUpdatesParams{
 		TaskID: tID,
@@ -688,8 +797,11 @@ func (s *TaskService) GetTaskUpdates(ctx context.Context, taskID string, limit, 
 	return mapped, nil
 }
 
-func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, limit, offset int32) ([]schemas.TaskUpdateCommentResponse, error) {
+func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, limit, offset int32, callerOrgID string) ([]schemas.TaskUpdateCommentResponse, error) {
 	uID := util.ParseUUID(updateID)
+	if err := s.assertTaskUpdateInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
 
 	dbComments, err := s.queries.GetUpdateComments(ctx, db.GetUpdateCommentsParams{
 		TaskUpdateID: uID,
@@ -753,7 +865,16 @@ func (s *TaskService) GetUpdateComments(ctx context.Context, updateID string, li
 	return comments, nil
 }
 
-func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest) error {
+func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID string, req schemas.AddTaskUpdateRequest, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+	if err := s.assertUsersInOrg(ctx, req.MentionedUserIDs, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -761,7 +882,6 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
 
 	// 1. Insert Update
@@ -814,6 +934,7 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:  mID,
+			OrgID:   orgID,
 			Title:   "You were mentioned!",
 			Message: fmt.Sprintf("%s mentioned you: %s", authorName, snippet),
 		})
@@ -824,6 +945,7 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 		if p.ID != uID && !mentionedMap[p.ID.String()] {
 			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
 				UserID:  p.ID,
+				OrgID:   orgID,
 				Title:   fmt.Sprintf("Update: %s", taskTitle),
 				Message: fmt.Sprintf("%s posted: %s", authorName, snippet),
 			})
@@ -833,7 +955,16 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 	return tx.Commit()
 }
 
-func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, req schemas.AddCommentRequest) error { // <-- UPDATED SIGNATURE
+func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, userID string, req schemas.AddCommentRequest, callerOrgID string) error { // <-- UPDATED SIGNATURE
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+	if err := s.assertUsersInOrg(ctx, req.MentionedUserIDs, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -843,7 +974,6 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 	qtx := s.queries.WithTx(tx)
 	uID := util.ParseUUID(updateID)
 	cID := util.ParseUUID(userID)
-	tID := util.ParseUUID(taskID)
 
 	// 1. Insert Comment
 	c, err := qtx.AddUpdateComment(ctx, db.AddUpdateCommentParams{
@@ -901,6 +1031,7 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 			mID := util.ParseUUID(mIDStr)
 			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
 				UserID:  mID,
+				OrgID:   orgID,
 				Title:   "Mentioned in comment!",
 				Message: fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle),
 			})
@@ -911,6 +1042,7 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 		if err == nil && updateAuthor.UUID != cID && !mentionMap[updateAuthorIdStr] {
 			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
 				UserID:  updateAuthor.UUID,
+				OrgID:   orgID,
 				Title:   "New comment on your task update",
 				Message: "Someone replied to your task update.",
 			})
@@ -921,9 +1053,14 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 }
 
 // 2. Fetch tasks where the employee is an Assignee or Subscriber
-func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string, limit, offset int32) (*schemas.PaginatedTaskResponse, error) {
+func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userID string, limit, offset int32, callerOrgID string) (*schemas.PaginatedTaskResponse, error) {
+	tID := util.ParseUUID(teamID)
+	if err := s.assertTeamInOrg(ctx, tID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
 	dbTasks, err := s.queries.GetEmployeeTasks(ctx, db.GetEmployeeTasksParams{
-		TeamID: util.ParseUUID(teamID),
+		TeamID: tID,
 		UserID: util.ParseUUID(userID),
 		Limit:  limit,
 		Offset: offset,
@@ -974,9 +1111,14 @@ func (s *TaskService) GetEmployeeTasks(ctx context.Context, teamID string, userI
 	}, nil
 }
 
-func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string) error {
+func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, userID string, callerOrgID string) error {
 	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
+	orgID := util.ParseUUID(callerOrgID)
+
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
 
 	isAssignee, err := s.queries.IsTaskAssignee(ctx, db.IsTaskAssigneeParams{TaskID: tID, UserID: uID})
 	if err != nil || !isAssignee {
@@ -1010,12 +1152,18 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 	admins, _ := qtx.GetTeamAdminsByTask(ctx, tID)
 	for _, adminID := range admins {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: adminID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
+			UserID: adminID, OrgID: orgID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
 		})
 	}
 	return tx.Commit()
 }
-func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID string) error {
+func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID string, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -1023,7 +1171,6 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 	aID := util.ParseUUID(adminID)
 
 	err = qtx.ApproveTaskState(ctx, tID)
@@ -1043,15 +1190,46 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 	for _, p := range participants {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
+			UserID: p.ID, OrgID: orgID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
 		})
 	}
-	return tx.Commit()
+
+	assigneePhones, _ := qtx.GetTaskAssigneePhones(ctx, tID)
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	s.notifyAssigneesWhatsapp(ctx, assigneePhones, taskTitle, "approved and closed")
+
+	return nil
+}
+
+// Best-effort WhatsApp fan-out to a task's assignees. Call only after the
+// state-changing transaction has committed — a failed send shouldn't roll back
+// an approval/rejection that already happened.
+func (s *TaskService) notifyAssigneesWhatsapp(ctx context.Context, phones []sql.NullString, taskTitle string, status string) {
+	for _, phone := range phones {
+		if !phone.Valid || phone.String == "" {
+			continue
+		}
+		_ = s.onionApp.Enqueue(ctx, "send_task_status_whatsapp", map[string]any{
+			"rPN":      phone.String,
+			"taskName": taskTitle,
+			"status":   status,
+		})
+	}
 }
 
 // Handles BOTH Reject and Reopen since the database logic/reminders are identical,
 // just the final Database State changes.
-func (s *TaskService) ActionTask(ctx context.Context, action string, taskID string, userID string, req schemas.ActionTaskRequest) error {
+func (s *TaskService) ActionTask(ctx context.Context, action string, taskID string, userID string, req schemas.ActionTaskRequest, callerOrgID string) error {
+	tID := util.ParseUUID(taskID)
+	orgID := util.ParseUUID(callerOrgID)
+	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -1059,7 +1237,6 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	tID := util.ParseUUID(taskID)
 	uID := util.ParseUUID(userID)
 
 	var safeDueDate sql.NullTime
@@ -1112,8 +1289,13 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 	for _, p := range participants {
 		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
+			UserID: p.ID, OrgID: orgID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
 		})
+	}
+
+	var assigneePhones []sql.NullString
+	if action == "REJECT" {
+		assigneePhones, _ = qtx.GetTaskAssigneePhones(ctx, tID)
 	}
 
 	// Diff Task Attachments instead of wiping
@@ -1123,14 +1305,21 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 		return err
 	}
 
+	if action == "REJECT" {
+		s.notifyAssigneesWhatsapp(ctx, assigneePhones, taskTitle, "rejected and reassigned")
+	}
+
 	if len(s3URLsToDelete) > 0 {
 		go s.s3Service.DeleteObjects(context.Background(), s3URLsToDelete)
 	}
 	return nil
 }
 
-func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]schemas.TeamResponse, error) {
-	dbTeams, err := s.queries.GetEmployeeTeams(ctx, util.ParseUUID(userID))
+func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string, callerOrgID string) ([]schemas.TeamResponse, error) {
+	dbTeams, err := s.queries.GetEmployeeTeams(ctx, db.GetEmployeeTeamsParams{
+		UserID: util.ParseUUID(userID),
+		OrgID:  util.ParseUUID(callerOrgID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1151,8 +1340,12 @@ func (s *TaskService) GetEmployeeTeams(ctx context.Context, userID string) ([]sc
 	return teams, nil
 }
 
-func (s *TaskService) GetTranscription(ctx context.Context, attachmentID string) (*schemas.TranscriptionResponse, error) {
+func (s *TaskService) GetTranscription(ctx context.Context, attachmentID string, callerOrgID string) (*schemas.TranscriptionResponse, error) {
 	aID := util.ParseUUID(attachmentID)
+	if err := s.assertAttachmentInOrg(ctx, aID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
 	t, err := s.queries.GetTranscriptionByAttachmentID(ctx, aID)
 	if err != nil {
 		return nil, err

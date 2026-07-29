@@ -17,6 +17,17 @@ export const authAPI = {
         return response.data;
     },
 
+    // Completes a login that came back with requires_org_selection (2+ org memberships).
+    selectOrg: async (pendingToken, orgId) => {
+        const response = await apiClient.post('/auth/select-org', { pending_token: pendingToken, org_id: orgId });
+        return response.data;
+    },
+
+    invitePreview: async (token) => {
+        const response = await apiClient.get('/auth/invite-preview', { params: { token } });
+        return response.data;
+    },
+
     logout: async () => {
     const response = await apiClient.post('/auth/logout');
     return response.data;

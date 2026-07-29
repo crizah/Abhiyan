@@ -122,6 +122,14 @@ resource "aws_ssm_parameter" "phone_id" {
   tags = { Project = var.project }
 }
 
+resource "aws_ssm_parameter" "resend_sender" {
+  name  = "/${var.project}/prod/RESEND_SENDER"
+  type  = "String"
+  value = var.resend_sender
+
+  tags = { Project = var.project }
+}
+
 resource "aws_ssm_parameter" "google_client_id" {
   name  = "/${var.project}/prod/GOOGLE_CLIENT_ID"
   type  = "String"
@@ -163,6 +171,16 @@ resource "aws_ssm_parameter" "openai_api_key" {
 
 resource "aws_ssm_parameter" "whatsapp_access_token" {
   name  = "/${var.project}/prod/WHATSAPP_ACCESS_TOKEN"
+  type  = "SecureString"
+  value = "CHANGE_ME"
+
+  lifecycle { ignore_changes = [value] }
+
+  tags = { Project = var.project }
+}
+
+resource "aws_ssm_parameter" "resend_api_key" {
+  name  = "/${var.project}/prod/RESEND_API_KEY"
   type  = "SecureString"
   value = "CHANGE_ME"
 

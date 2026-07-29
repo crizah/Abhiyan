@@ -57,7 +57,7 @@ const StandardMenuItem = ({ label, icon, onClick, token }) => {
   );
 };
 
-const GlobalHeader = ({ user, token, navigate, onRoleSwitch, isMobile }) => {
+const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobile }) => {
   const [notifications, setNotifications] = useState([]);
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -244,6 +244,25 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, isMobile }) => {
     </div>
   );
 
+  // Org switcher — only shown at all when the account actually has more than
+  // one org to switch between (the common single-org case sees nothing extra).
+  const ORG_OPTIONS = (user?.available_orgs || []).filter(o => o.org_id !== user?.org_id);
+  const showOrgSwitcher = ORG_OPTIONS.length > 0;
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+
+  const orgDropdownMenu = (
+    <div style={{ backgroundColor: token.colorBgElevated, borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowSecondary, padding: '8px 0', minWidth: '180px' }}>
+      {ORG_OPTIONS.map(org => (
+        <StandardMenuItem
+          key={org.org_id}
+          label={org.org_name}
+          onClick={() => onOrgSwitch(org.org_id)}
+          token={token}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <Header
       className="app-header"
@@ -360,11 +379,96 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, isMobile }) => {
   </motion.div>
 )}
 
+{showOrgSwitcher && (isMobile ? (
+  <Dropdown dropdownRender={() => orgDropdownMenu} placement="bottomRight" trigger={['click']}>
+    <Tooltip title="Switch Organization">
+      <button
+        className="org-switch-btn"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          borderRadius: '50%',
+          border: '1px solid rgba(179, 69, 92, 0.25)',
+          background: 'rgba(179, 69, 92, 0.12)',
+          color: '#B3455C',
+          cursor: 'pointer',
+        }}
+      >
+        <ApartmentOutlined style={{ fontSize: 16 }} />
+      </button>
+    </Tooltip>
+  </Dropdown>
+) : (
+  <motion.div style={{ display: 'flex', alignItems: 'center' }}>
+    <Tooltip title={orgMenuOpen ? '' : 'Switch Organization'}>
+      <motion.button
+        onClick={() => setOrgMenuOpen(o => !o)}
+        className="org-switch-btn"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          borderRadius: '50%',
+          border: '1px solid rgba(179, 69, 92, 0.25)',
+          background: orgMenuOpen ? '#B3455C' : 'rgba(179, 69, 92, 0.12)',
+          color: orgMenuOpen ? '#FFFFFF' : '#B3455C',
+          cursor: 'pointer',
+        }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+      >
+        <ApartmentOutlined style={{ fontSize: 16 }} />
+      </motion.button>
+    </Tooltip>
+
+    <AnimatePresence initial={false}>
+      {orgMenuOpen && (
+        <motion.div
+          key="org-options"
+          initial={{ width: 0, opacity: 0, marginLeft: 0 }}
+          animate={{ width: 'auto', opacity: 1, marginLeft: 6 }}
+          exit={{ width: 0, opacity: 0, marginLeft: 0 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+          style={{ display: 'flex', gap: 6, overflow: 'hidden' }}
+        >
+          {ORG_OPTIONS.map(org => (
+            <button
+              key={org.org_id}
+              className="role-pill"
+              onClick={() => { setOrgMenuOpen(false); onOrgSwitch(org.org_id); }}
+              style={{
+                whiteSpace: 'nowrap',
+                padding: '6px 14px',
+                borderRadius: 999,
+                border: '1px solid rgba(179, 69, 92, 0.25)',
+                background: 'rgba(179, 69, 92, 0.12)',
+                color: '#B3455C',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {org.org_name}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </motion.div>
+))}
+
         <Dropdown dropdownRender={() => customHeaderDropdown} placement="bottomRight" trigger={['click']}>
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
             <Flex vertical align="flex-start" justify="center" className="app-header-userinfo">
-              <Text strong style={{ lineHeight: '1.2' }}>{user?.email}</Text>
+              <Text strong style={{ lineHeight: '1.2' }}>{user?.full_name}</Text>
               <Tag color={ROLE_COLORS[user?.role] || 'blue'} bordered={false} style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}>
                 {(user?.role || '').replace('_', ' ')}
               </Tag>
@@ -375,7 +479,7 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, isMobile }) => {
       </Flex>
 
       <style>{`
-        .role-switch-btn:hover { background: #B3455C !important; color: #FFFFFF !important; }
+        .role-switch-btn:hover, .org-switch-btn:hover { background: #B3455C !important; color: #FFFFFF !important; }
         .role-pill { transition: background 0.15s ease, color 0.15s ease; }
         .role-pill:hover { background: #B3455C; color: #FFFFFF; }
       `}</style>
@@ -406,6 +510,19 @@ export default function AppLayout() {
       window.location.href = '/dashboard';
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to switch roles");
+    }
+  };
+
+  // Swaps which org the current session is scoped to — same endpoint/mechanism
+  // as role-switching (re-mints the session cookie), just with target_org_id
+  // instead of target_role. One active org per browser session, no re-login.
+  const handleOrgSwitch = async (targetOrgId) => {
+    try {
+      await apiClient.post('/auth/switch-role', { target_org_id: targetOrgId });
+      message.success('Switched organization');
+      window.location.href = '/dashboard';
+    } catch (err) {
+      message.error(err.response?.data?.error || 'Failed to switch organization');
     }
   };
 
@@ -540,7 +657,14 @@ export default function AppLayout() {
         </div>
       </div>
 
-      <GlobalHeader user={user} token={token} navigate={navigate} onRoleSwitch={handleRoleSwitch} isMobile={isMobile} />
+      <GlobalHeader
+        user={user}
+        token={token}
+        navigate={navigate}
+        onRoleSwitch={handleRoleSwitch}
+        onOrgSwitch={handleOrgSwitch}
+        isMobile={isMobile}
+      />
 
       <div className="app-dock-wrap" style={{ position: 'fixed', bottom: '28px', left: '28px', right: '28px', zIndex: 30 }}>
         <Dock

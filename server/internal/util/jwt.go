@@ -18,6 +18,7 @@ const (
 	TokenPurposeAccess        = "access"
 	TokenPurposeInvite        = "invite"
 	TokenPurposePasswordReset = "password_reset"
+	TokenPurposeOrgSelection  = "org_selection"
 )
 
 // InviteClaims defines the payload for an email invite link
@@ -161,4 +162,44 @@ func ParsePasswordResetToken(tokenStr string, secret []byte) (*PasswordResetClai
 		return claims, nil
 	}
 	return nil, errors.New("invalid password reset token")
+}
+
+// OrgSelectionClaims is the short-lived token returned by Login when a person
+// belongs to more than one org — it proves identity (password already
+// checked) without trusting a client-supplied user_id on the follow-up
+// /auth/select-org call, and without minting a real session cookie until an
+// org has actually been chosen.
+type OrgSelectionClaims struct {
+	UserID  string `json:"sub"`
+	Purpose string `json:"purpose"`
+	jwt.RegisteredClaims
+}
+
+func GenerateOrgSelectionToken(userID string, secret []byte, duration time.Duration) (string, error) {
+	claims := OrgSelectionClaims{
+		UserID:  userID,
+		Purpose: TokenPurposeOrgSelection,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(secret)
+}
+
+func ParseOrgSelectionToken(tokenStr string, secret []byte) (*OrgSelectionClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &OrgSelectionClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return secret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(*OrgSelectionClaims); ok && token.Valid {
+		if claims.Purpose != TokenPurposeOrgSelection {
+			return nil, errors.New("wrong token purpose")
+		}
+		return claims, nil
+	}
+	return nil, errors.New("invalid org selection token")
 }

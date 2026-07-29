@@ -16,7 +16,7 @@ SELECT
     COUNT(*) FILTER (WHERE event_type = 'MISSED_DEADLINE') AS missed_count,
     COUNT(*) FILTER (WHERE event_type = 'REJECTION') AS rejection_count
 FROM employee_scores
-WHERE user_id = $1 AND superseded = false
+WHERE user_id = $1 AND org_id = sqlc.arg('org_id') AND superseded = false
   AND (sqlc.arg('team_filter')::text = '' OR team_id::text = sqlc.arg('team_filter'));
 
 -- name: GetUserScoreEvents :many
@@ -28,7 +28,7 @@ SELECT
 FROM employee_scores es
 JOIN tasks t ON es.task_id = t.id
 JOIN teams tm ON es.team_id = tm.id
-WHERE es.user_id = $1 AND es.superseded = false
+WHERE es.user_id = $1 AND es.org_id = sqlc.arg('org_id') AND es.superseded = false
   AND (sqlc.arg('team_filter')::text = '' OR es.team_id::text = sqlc.arg('team_filter'))
 ORDER BY es.event_at DESC
 LIMIT $2 OFFSET $3;
@@ -108,7 +108,7 @@ SELECT
 FROM employee_scores es
 JOIN tasks t ON es.task_id = t.id
 JOIN teams tm ON es.team_id = tm.id
-WHERE es.user_id = $1 AND es.superseded = false
+WHERE es.user_id = $1 AND es.org_id = $2 AND es.superseded = false
 ORDER BY es.event_at DESC;
 
 -- name: GetBulkUserScoreBreakdowns :many

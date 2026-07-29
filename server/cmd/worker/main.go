@@ -31,15 +31,27 @@ func main() {
 	queries := db.New(dbConn)
 
 	// 1. Initialize AWS SES Service
-	senderEmail := os.Getenv("AWS_SES_SENDER") // e.g., "no-reply@yourdomain.com"
+	// senderEmail := os.Getenv("AWS_SES_SENDER") // e.g., "no-reply@yourdomain.com"
+	// if senderEmail == "" {
+	// 	log.Fatal("AWS_SES_SENDER environment variable is not set")
+	// }
+
+	// emailService, err := services.NewEmailService(context.Background(), senderEmail)
+	// if err != nil {
+	// 	log.Fatalf("Failed to initialize AWS SES client: %v", err)
+	// }
+
+	// initialise resend email service
+	senderEmail := os.Getenv("RESEND_SENDER")
 	if senderEmail == "" {
-		log.Fatal("AWS_SES_SENDER environment variable is not set")
+		log.Fatal("RESEND_SENDER environment variable is not set")
+	}
+	resendApiKey := os.Getenv("RESEND_API_KEY")
+	if resendApiKey == "" {
+		log.Fatalf("RESEND_API_KEY variable is not set")
 	}
 
-	emailService, err := services.NewEmailService(context.Background(), senderEmail)
-	if err != nil {
-		log.Fatalf("Failed to initialize AWS SES client: %v", err)
-	}
+	emailService := services.NewEmailServiceResend(resendApiKey, senderEmail)
 
 	wa := os.Getenv("WHATSAPP_ACCESS_TOKEN")
 	bp := os.Getenv("PHONE_ID")
@@ -83,6 +95,7 @@ func main() {
 	onionApp.Register("send_reminder_email", tasks.NewSendReminderEmailTask(emailService))
 	onionApp.Register("poll_due_reminders", tasks.NewPollDueRemindersTask(dbConn, queries, onionApp))
 	onionApp.Register("send_reminder_whatsapp", tasks.NewSendReminderWhatsappTask(whatsappService))
+	onionApp.Register("send_task_status_whatsapp", tasks.NewSendTaskStatusWhatsappTask(whatsappService))
 
 	// register transcription
 	onionApp.Register("poll_pending_transcriptions", tasks.NewPollPendingTranscriptionsTask(queries, onionApp))
@@ -130,6 +143,7 @@ func main() {
 			"send_password_reset_email":     "critical",
 			"send_reminder_email":           "reminders",
 			"send_reminder_whatsapp":        "reminders",
+			"send_task_status_whatsapp":     "reminders",
 			"poll_due_reminders":            "polling",
 			"poll_pending_transcriptions":   "polling",
 			"transcribe_audio":              "default",

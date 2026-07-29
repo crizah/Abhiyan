@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -15,6 +16,19 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/google/uuid"
 )
+
+// assertUserInOrg guards score/attendance endpoints that take a target user_id
+// straight from the URL/query with no other scoping.
+func (s *ScoreService) assertUserInOrg(ctx context.Context, userID uuid.UUID, callerOrgID uuid.UUID) error {
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: userID, OrgID: callerOrgID})
+	if err != nil {
+		return fmt.Errorf("failed to verify user's organization: %w", err)
+	}
+	if !belongs {
+		return errors.New("unauthorized: user does not belong to your organization")
+	}
+	return nil
+}
 
 type ScoreService struct {
 	db      *sql.DB
@@ -147,11 +161,17 @@ func (s *ScoreService) RecordReopenTx(ctx context.Context, qtx *db.Queries, task
 	return nil
 }
 
-func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, teamFilter string, limit, offset int32) (*schemas.ScoreBreakdownResponse, error) {
+func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, teamFilter string, limit, offset int32, callerOrgID string) (*schemas.ScoreBreakdownResponse, error) {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
+	oID := util.ParseUUID(callerOrgID)
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
+		OrgID:      oID,
 		TeamFilter: teamFilter,
 	})
 	if err != nil {
@@ -160,6 +180,7 @@ func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, team
 
 	events, err := s.queries.GetUserScoreEvents(ctx, db.GetUserScoreEventsParams{
 		UserID:     uID,
+		OrgID:      oID,
 		Limit:      limit,
 		Offset:     offset,
 		TeamFilter: teamFilter,
@@ -279,18 +300,30 @@ func (s *ScoreService) GetAdminLeaderboard(ctx context.Context, teamIDs []uuid.U
 	return resp, nil
 }
 
-func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID string, visible bool, adminID string) error {
+func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID string, visible bool, adminID string, callerOrgID string) error {
+	tID := util.ParseUUID(teamID)
+	teamOrgID, err := s.queries.GetTeamOrgID(ctx, tID)
+	if err != nil {
+		return fmt.Errorf("failed to verify team's organization: %w", err)
+	}
+	if teamOrgID != util.ParseUUID(callerOrgID) {
+		return errors.New("unauthorized: team does not belong to your organization")
+	}
+
 	return s.queries.UpsertLeaderboardVisibility(ctx, db.UpsertLeaderboardVisibilityParams{
-		TeamID:             util.ParseUUID(teamID),
+		TeamID:             tID,
 		LeaderboardVisible: visible,
 		UpdatedBy:          uuid.NullUUID{UUID: util.ParseUUID(adminID), Valid: true},
 	})
 }
 
-func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string, teamFilter string) (*schemas.LeaderboardResponse, error) {
+func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string, teamFilter string, callerOrgID string) (*schemas.LeaderboardResponse, error) {
 	uID := util.ParseUUID(userID)
 
-	userTeams, err := s.queries.GetEmployeeTeams(ctx, uID)
+	userTeams, err := s.queries.GetEmployeeTeams(ctx, db.GetEmployeeTeamsParams{
+		UserID: uID,
+		OrgID:  util.ParseUUID(callerOrgID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -374,8 +407,12 @@ type UserNameResult struct {
 	Email    string
 }
 
-func (s *ScoreService) GetUserName(ctx context.Context, userID string) (*UserNameResult, error) {
+func (s *ScoreService) GetUserName(ctx context.Context, userID string, callerOrgID string) (*UserNameResult, error) {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return nil, err
+	}
+
 	user, err := s.queries.GetUserNameByID(ctx, uID)
 	if err != nil {
 		return nil, err
@@ -388,18 +425,27 @@ func (s *ScoreService) GetUserName(ctx context.Context, userID string) (*UserNam
 	return &UserNameResult{FullName: fullName, Email: email}, nil
 }
 
-func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, userName string, email string, w io.Writer) error {
+func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, userName string, email string, w io.Writer, callerOrgID string) error {
 	uID := util.ParseUUID(userID)
+	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+		return err
+	}
+
+	oID := util.ParseUUID(callerOrgID)
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
+		OrgID:      oID,
 		TeamFilter: "",
 	})
 	if err != nil {
 		return err
 	}
 
-	events, err := s.queries.GetUserScoreReportData(ctx, uID)
+	events, err := s.queries.GetUserScoreReportData(ctx, db.GetUserScoreReportDataParams{
+		UserID: uID,
+		OrgID:  oID,
+	})
 	if err != nil {
 		return err
 	}
@@ -426,7 +472,7 @@ func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, 
 	for _, e := range events {
 		dueDate := "N/A"
 		if e.DueDateSnapshot.Valid {
-			dueDate = e.DueDateSnapshot.Time.Format("2006-01-02")
+			dueDate = e.DueDateSnapshot.Time.In(util.IST).Format("2006-01-02")
 		}
 		cw.Write([]string{
 			e.TaskTitle,
@@ -434,7 +480,7 @@ func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, 
 			e.EsEventType,
 			fmt.Sprintf("%d", e.PointsAwarded),
 			dueDate,
-			e.EventAt.Format("2006-01-02"),
+			e.EventAt.In(util.IST).Format("2006-01-02"),
 		})
 	}
 

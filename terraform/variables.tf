@@ -49,6 +49,11 @@ variable "phone_id" {
   description = "WhatsApp Business phone ID"
 }
 
+variable "resend_sender" {
+  type        = string
+  description = "Verified Resend sender email"
+}
+
 variable "cookie_domain" {
   type        = string
   description = "Cookie domain e.g. yourdomain.com"

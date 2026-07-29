@@ -51,7 +51,7 @@ export default function EmployeeDashboard() {
   return (
     <div>
       {/* Page Title Area */}
-      <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.email || 'Team Member'}</Title>
+      <Title level={2} style={{ marginTop: 0 }}>Welcome back, {user?.full_name || 'Team Member'}</Title>
       <Paragraph type="secondary">Here is an overview of your teams.</Paragraph>
 
       {/* Content Area */}

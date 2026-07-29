@@ -8,19 +8,24 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const batchInsertAbsentAttendance = `-- name: BatchInsertAbsentAttendance :exec
-INSERT INTO attendance_record (user_id, present, status)
-SELECT u.id, false, 'absent'
-FROM users u
-JOIN organizations o ON u.org_id = o.id
-WHERE u.status = 'ACTIVE'
+INSERT INTO attendance_record (user_id, org_id, present, status)
+SELECT om.user_id, om.org_id, false, 'absent'
+FROM org_memberships om
+JOIN organizations o ON om.org_id = o.id
+WHERE om.status = 'ACTIVE'
   AND o.attendance_enabled = true
-  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
-ON CONFLICT (user_id, attendance_date) DO NOTHING
+  AND EXISTS (
+      SELECT 1 FROM team_members tm
+      JOIN teams t ON tm.team_id = t.id
+      WHERE tm.user_id = om.user_id AND t.org_id = om.org_id
+  )
+ON CONFLICT (user_id, org_id, attendance_date) DO NOTHING
 `
 
 func (q *Queries) BatchInsertAbsentAttendance(ctx context.Context) error {
@@ -38,14 +43,18 @@ SELECT DISTINCT ON (u.id)
     CASE
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
-        ELSE 'absent'
+        ELSE 'no_record'
     END AS attendance_status
 FROM users u
-LEFT JOIN attendance_record a ON u.id = a.user_id AND a.attendance_date = $1
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
+LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
 LEFT JOIN team_members tm ON u.id = tm.user_id
-LEFT JOIN teams t ON tm.team_id = t.id
-WHERE u.org_id = $2 AND u.status = 'ACTIVE'
-  AND EXISTS (SELECT 1 FROM team_members tm WHERE tm.user_id = u.id)
+LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = $2
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm2
+    JOIN teams t2 ON tm2.team_id = t2.id
+    WHERE tm2.user_id = u.id AND t2.org_id = $2
+)
 ORDER BY u.id, u.first_name
 `
 
@@ -103,13 +112,13 @@ SELECT
     CASE
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
-        ELSE 'absent'
+        ELSE 'no_record'
     END AS attendance_status
 FROM users u
-LEFT JOIN attendance_record a ON u.id = a.user_id AND a.attendance_date = $1
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
+LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
 JOIN team_members tm ON u.id = tm.user_id AND tm.team_id = $3
-JOIN teams t ON tm.team_id = t.id
-WHERE u.org_id = $2 AND u.status = 'ACTIVE'
+JOIN teams t ON tm.team_id = t.id AND t.org_id = $2
 ORDER BY u.first_name
 `
 
@@ -158,12 +167,166 @@ func (q *Queries) GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgA
 	return items, nil
 }
 
+const getOrgAttendanceRange = `-- name: GetOrgAttendanceRange :many
+SELECT
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    COALESCE(t.name, 'Unassigned') AS team_name,
+    d.day::date AS attendance_date,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'no_record'
+    END AS attendance_status
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $1 AND om.status = 'ACTIVE'
+CROSS JOIN generate_series($2::date, $3::date, interval '1 day') AS d(day)
+LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = $1 AND a.attendance_date = d.day
+LEFT JOIN team_members tm ON u.id = tm.user_id
+LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = $1
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm2
+    JOIN teams t2 ON tm2.team_id = t2.id
+    WHERE tm2.user_id = u.id AND t2.org_id = $1
+)
+ORDER BY u.first_name, u.last_name, d.day
+`
+
+type GetOrgAttendanceRangeParams struct {
+	OrgID    uuid.UUID `json:"org_id"`
+	FromDate time.Time `json:"from_date"`
+	ToDate   time.Time `json:"to_date"`
+}
+
+type GetOrgAttendanceRangeRow struct {
+	ID               uuid.UUID `json:"id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	EmailID          string    `json:"email_id"`
+	TeamName         string    `json:"team_name"`
+	AttendanceDate   time.Time `json:"attendance_date"`
+	AttendanceStatus string    `json:"attendance_status"`
+}
+
+func (q *Queries) GetOrgAttendanceRange(ctx context.Context, arg GetOrgAttendanceRangeParams) ([]GetOrgAttendanceRangeRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgAttendanceRange, arg.OrgID, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrgAttendanceRangeRow
+	for rows.Next() {
+		var i GetOrgAttendanceRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.TeamName,
+			&i.AttendanceDate,
+			&i.AttendanceStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgAttendanceRangeByTeam = `-- name: GetOrgAttendanceRangeByTeam :many
+SELECT
+    u.id,
+    COALESCE(u.first_name, '') AS first_name,
+    COALESCE(u.last_name, '') AS last_name,
+    u.email_id,
+    t.name AS team_name,
+    d.day::date AS attendance_date,
+    CASE
+        WHEN a.present = true THEN 'present'
+        WHEN a.present = false THEN 'absent'
+        ELSE 'no_record'
+    END AS attendance_status
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $1 AND om.status = 'ACTIVE'
+CROSS JOIN generate_series($2::date, $3::date, interval '1 day') AS d(day)
+LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = $1 AND a.attendance_date = d.day
+JOIN team_members tm ON u.id = tm.user_id AND tm.team_id = $4
+JOIN teams t ON tm.team_id = t.id AND t.org_id = $1
+ORDER BY u.first_name, u.last_name, d.day
+`
+
+type GetOrgAttendanceRangeByTeamParams struct {
+	OrgID    uuid.UUID `json:"org_id"`
+	FromDate time.Time `json:"from_date"`
+	ToDate   time.Time `json:"to_date"`
+	TeamID   uuid.UUID `json:"team_id"`
+}
+
+type GetOrgAttendanceRangeByTeamRow struct {
+	ID               uuid.UUID `json:"id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	EmailID          string    `json:"email_id"`
+	TeamName         string    `json:"team_name"`
+	AttendanceDate   time.Time `json:"attendance_date"`
+	AttendanceStatus string    `json:"attendance_status"`
+}
+
+func (q *Queries) GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAttendanceRangeByTeamParams) ([]GetOrgAttendanceRangeByTeamRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgAttendanceRangeByTeam,
+		arg.OrgID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.TeamID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrgAttendanceRangeByTeamRow
+	for rows.Next() {
+		var i GetOrgAttendanceRangeByTeamRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.TeamName,
+			&i.AttendanceDate,
+			&i.AttendanceStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTodayAttendance = `-- name: GetTodayAttendance :one
 SELECT id, status, present
 FROM attendance_record
-WHERE user_id = $1 AND attendance_date = CURRENT_DATE
+WHERE user_id = $1 AND org_id = $2 AND attendance_date = CURRENT_DATE
 LIMIT 1
 `
+
+type GetTodayAttendanceParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetTodayAttendanceRow struct {
 	ID      uuid.UUID    `json:"id"`
@@ -171,35 +334,47 @@ type GetTodayAttendanceRow struct {
 	Present sql.NullBool `json:"present"`
 }
 
-func (q *Queries) GetTodayAttendance(ctx context.Context, userID uuid.UUID) (GetTodayAttendanceRow, error) {
-	row := q.db.QueryRowContext(ctx, getTodayAttendance, userID)
+func (q *Queries) GetTodayAttendance(ctx context.Context, arg GetTodayAttendanceParams) (GetTodayAttendanceRow, error) {
+	row := q.db.QueryRowContext(ctx, getTodayAttendance, arg.UserID, arg.OrgID)
 	var i GetTodayAttendanceRow
 	err := row.Scan(&i.ID, &i.Status, &i.Present)
 	return i, err
 }
 
-const getUserAttendanceHistory = `-- name: GetUserAttendanceHistory :many
+const getUserAttendanceHistoryRange = `-- name: GetUserAttendanceHistoryRange :many
 SELECT attendance_date, present
 FROM attendance_record
-WHERE user_id = $1
+WHERE user_id = $1 AND org_id = $2
+  AND attendance_date BETWEEN $3::date AND $4::date
 ORDER BY attendance_date DESC
-LIMIT 60
 `
 
-type GetUserAttendanceHistoryRow struct {
+type GetUserAttendanceHistoryRangeParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	OrgID    uuid.UUID `json:"org_id"`
+	FromDate time.Time `json:"from_date"`
+	ToDate   time.Time `json:"to_date"`
+}
+
+type GetUserAttendanceHistoryRangeRow struct {
 	AttendanceDate sql.NullTime `json:"attendance_date"`
 	Present        sql.NullBool `json:"present"`
 }
 
-func (q *Queries) GetUserAttendanceHistory(ctx context.Context, userID uuid.UUID) ([]GetUserAttendanceHistoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserAttendanceHistory, userID)
+func (q *Queries) GetUserAttendanceHistoryRange(ctx context.Context, arg GetUserAttendanceHistoryRangeParams) ([]GetUserAttendanceHistoryRangeRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserAttendanceHistoryRange,
+		arg.UserID,
+		arg.OrgID,
+		arg.FromDate,
+		arg.ToDate,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetUserAttendanceHistoryRow
+	var items []GetUserAttendanceHistoryRangeRow
 	for rows.Next() {
-		var i GetUserAttendanceHistoryRow
+		var i GetUserAttendanceHistoryRangeRow
 		if err := rows.Scan(&i.AttendanceDate, &i.Present); err != nil {
 			return nil, err
 		}
@@ -214,22 +389,35 @@ func (q *Queries) GetUserAttendanceHistory(ctx context.Context, userID uuid.UUID
 	return items, nil
 }
 
-const getUserAttendanceSummary = `-- name: GetUserAttendanceSummary :one
+const getUserAttendanceSummaryRange = `-- name: GetUserAttendanceSummaryRange :one
 SELECT
     COUNT(*) FILTER (WHERE present = true)::int AS present_count,
     COUNT(*) FILTER (WHERE present = false)::int AS absent_count
 FROM attendance_record
-WHERE user_id = $1
+WHERE user_id = $1 AND org_id = $2
+  AND attendance_date BETWEEN $3::date AND $4::date
 `
 
-type GetUserAttendanceSummaryRow struct {
+type GetUserAttendanceSummaryRangeParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	OrgID    uuid.UUID `json:"org_id"`
+	FromDate time.Time `json:"from_date"`
+	ToDate   time.Time `json:"to_date"`
+}
+
+type GetUserAttendanceSummaryRangeRow struct {
 	PresentCount int32 `json:"present_count"`
 	AbsentCount  int32 `json:"absent_count"`
 }
 
-func (q *Queries) GetUserAttendanceSummary(ctx context.Context, userID uuid.UUID) (GetUserAttendanceSummaryRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserAttendanceSummary, userID)
-	var i GetUserAttendanceSummaryRow
+func (q *Queries) GetUserAttendanceSummaryRange(ctx context.Context, arg GetUserAttendanceSummaryRangeParams) (GetUserAttendanceSummaryRangeRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserAttendanceSummaryRange,
+		arg.UserID,
+		arg.OrgID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	var i GetUserAttendanceSummaryRangeRow
 	err := row.Scan(&i.PresentCount, &i.AbsentCount)
 	return i, err
 }
@@ -252,20 +440,21 @@ func (q *Queries) SetAttendanceResult(ctx context.Context, arg SetAttendanceResu
 }
 
 const upsertAttendanceRecord = `-- name: UpsertAttendanceRecord :one
-INSERT INTO attendance_record (user_id, target_file_uri, status)
-VALUES ($1, $2, 'pending')
-ON CONFLICT (user_id, attendance_date)
-DO UPDATE SET target_file_uri = $2, status = 'pending', updated_at = NOW()
+INSERT INTO attendance_record (user_id, org_id, target_file_uri, status)
+VALUES ($1, $2, $3, 'pending')
+ON CONFLICT (user_id, org_id, attendance_date)
+DO UPDATE SET target_file_uri = $3, status = 'pending', updated_at = NOW()
 RETURNING id
 `
 
 type UpsertAttendanceRecordParams struct {
 	UserID        uuid.UUID      `json:"user_id"`
+	OrgID         uuid.UUID      `json:"org_id"`
 	TargetFileUri sql.NullString `json:"target_file_uri"`
 }
 
 func (q *Queries) UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error) {
-	row := q.db.QueryRowContext(ctx, upsertAttendanceRecord, arg.UserID, arg.TargetFileUri)
+	row := q.db.QueryRowContext(ctx, upsertAttendanceRecord, arg.UserID, arg.OrgID, arg.TargetFileUri)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err

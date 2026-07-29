@@ -336,12 +336,13 @@ SELECT
     COUNT(*) FILTER (WHERE event_type = 'MISSED_DEADLINE') AS missed_count,
     COUNT(*) FILTER (WHERE event_type = 'REJECTION') AS rejection_count
 FROM employee_scores
-WHERE user_id = $1 AND superseded = false
-  AND ($2::text = '' OR team_id::text = $2)
+WHERE user_id = $1 AND org_id = $2 AND superseded = false
+  AND ($3::text = '' OR team_id::text = $3)
 `
 
 type GetUserScoreBreakdownParams struct {
 	UserID     uuid.UUID `json:"user_id"`
+	OrgID      uuid.UUID `json:"org_id"`
 	TeamFilter string    `json:"team_filter"`
 }
 
@@ -354,7 +355,7 @@ type GetUserScoreBreakdownRow struct {
 }
 
 func (q *Queries) GetUserScoreBreakdown(ctx context.Context, arg GetUserScoreBreakdownParams) (GetUserScoreBreakdownRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserScoreBreakdown, arg.UserID, arg.TeamFilter)
+	row := q.db.QueryRowContext(ctx, getUserScoreBreakdown, arg.UserID, arg.OrgID, arg.TeamFilter)
 	var i GetUserScoreBreakdownRow
 	err := row.Scan(
 		&i.TotalPoints,
@@ -375,8 +376,8 @@ SELECT
 FROM employee_scores es
 JOIN tasks t ON es.task_id = t.id
 JOIN teams tm ON es.team_id = tm.id
-WHERE es.user_id = $1 AND es.superseded = false
-  AND ($4::text = '' OR es.team_id::text = $4)
+WHERE es.user_id = $1 AND es.org_id = $4 AND es.superseded = false
+  AND ($5::text = '' OR es.team_id::text = $5)
 ORDER BY es.event_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -385,6 +386,7 @@ type GetUserScoreEventsParams struct {
 	UserID     uuid.UUID `json:"user_id"`
 	Limit      int32     `json:"limit"`
 	Offset     int32     `json:"offset"`
+	OrgID      uuid.UUID `json:"org_id"`
 	TeamFilter string    `json:"team_filter"`
 }
 
@@ -405,6 +407,7 @@ func (q *Queries) GetUserScoreEvents(ctx context.Context, arg GetUserScoreEvents
 		arg.UserID,
 		arg.Limit,
 		arg.Offset,
+		arg.OrgID,
 		arg.TeamFilter,
 	)
 	if err != nil {
@@ -446,9 +449,14 @@ SELECT
 FROM employee_scores es
 JOIN tasks t ON es.task_id = t.id
 JOIN teams tm ON es.team_id = tm.id
-WHERE es.user_id = $1 AND es.superseded = false
+WHERE es.user_id = $1 AND es.org_id = $2 AND es.superseded = false
 ORDER BY es.event_at DESC
 `
+
+type GetUserScoreReportDataParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
 
 type GetUserScoreReportDataRow struct {
 	EsEventType     string       `json:"es_event_type"`
@@ -459,8 +467,8 @@ type GetUserScoreReportDataRow struct {
 	TeamName        string       `json:"team_name"`
 }
 
-func (q *Queries) GetUserScoreReportData(ctx context.Context, userID uuid.UUID) ([]GetUserScoreReportDataRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserScoreReportData, userID)
+func (q *Queries) GetUserScoreReportData(ctx context.Context, arg GetUserScoreReportDataParams) ([]GetUserScoreReportDataRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserScoreReportData, arg.UserID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

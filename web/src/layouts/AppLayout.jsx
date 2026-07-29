@@ -468,7 +468,7 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
           <Flex align="center" gap="small" style={{ cursor: 'pointer' }}>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
             <Flex vertical align="flex-start" justify="center" className="app-header-userinfo">
-              <Text strong style={{ lineHeight: '1.2' }}>{user?.email}</Text>
+              <Text strong style={{ lineHeight: '1.2' }}>{user?.full_name}</Text>
               <Tag color={ROLE_COLORS[user?.role] || 'blue'} bordered={false} style={{ margin: 0, marginTop: '2px', fontSize: '10px' }}>
                 {(user?.role || '').replace('_', ' ')}
               </Tag>

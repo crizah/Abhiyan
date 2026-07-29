@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -92,6 +93,11 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	user, err := h.authService.Queries.GetUserByEmail(c.Request.Context(), claims.Email)
 	faceRegistered := err == nil && user.FaceS3Uri.Valid && user.FaceS3Uri.String != ""
 
+	fullName := strings.TrimSpace(user.FirstName.String + " " + user.LastName.String)
+	if fullName == "" {
+		fullName = "Unknown User"
+	}
+
 	// 5. Every org this person belongs to, for the header's org-switcher menu
 	// — works unchanged for a single-org user, who just gets a 1-item list.
 	orgs := []schemas.OrgOption{}
@@ -112,6 +118,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"org_name":           orgName,
 		"role":               claims.Role,
 		"email":              claims.Email,
+		"full_name":          fullName,
 		"attendance_enabled": attendanceEnabled,
 		"face_registered":    faceRegistered,
 		"available_orgs":     orgs,

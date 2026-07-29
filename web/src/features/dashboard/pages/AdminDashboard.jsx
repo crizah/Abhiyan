@@ -70,7 +70,7 @@ useEffect(() => {
   return (
     <div>
       {/* Page Title Area */}
-      <Title level={2} style={{ marginTop: 0 }}>Team Workspace, {user?.email}</Title>
+      <Title level={2} style={{ marginTop: 0 }}>Team Workspace, {user?.full_name}</Title>
       <Paragraph type="secondary">Here is an overview of the teams you manage.</Paragraph>
 
       {/* Content Area */}

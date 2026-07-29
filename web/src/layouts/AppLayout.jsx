@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
 import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
+import { App } from '@capacitor/app';
 
 // eslint-disable-next-line no-unused-vars -- kept for the commented-out sidebar block below, don't delete
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
@@ -80,8 +81,36 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
     const handleForceRefresh = () => fetchNotifications();
     window.addEventListener('refresh-notifications', handleForceRefresh);
 
+    // Foreground-only polling: a notification from someone else's action (a
+    // comment/update on a task you're subscribed to) never dispatches
+    // 'refresh-notifications', so resume-refetch alone would leave the badge
+    // stale for as long as the app stays continuously focused. Poll every
+    // 60s, but only while actually foregrounded — paused on pause/background
+    // so it never fires with nobody watching.
+    let intervalId = null;
+    const startPolling = () => {
+      if (intervalId) return;
+      intervalId = setInterval(fetchNotifications, 60000);
+    };
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    let cancelled = false;
+    let resumeHandle, pauseHandle;
+    App.getState().then(({ isActive }) => { if (isActive) startPolling(); });
+    App.addListener('resume', startPolling).then(h => { if (cancelled) h.remove(); else resumeHandle = h; });
+    App.addListener('pause', stopPolling).then(h => { if (cancelled) h.remove(); else pauseHandle = h; });
+
     return () => {
+      cancelled = true;
+      stopPolling();
       window.removeEventListener('refresh-notifications', handleForceRefresh);
+      resumeHandle?.remove();
+      pauseHandle?.remove();
     };
   }, []);
 

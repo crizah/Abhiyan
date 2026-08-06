@@ -188,3 +188,13 @@ resource "aws_ssm_parameter" "resend_api_key" {
 
   tags = { Project = var.project }
 }
+
+resource "aws_ssm_parameter" "fcm_service_account_json" {
+  name  = "/${var.project}/prod/FCM_SERVICE_ACCOUNT_JSON"
+  type  = "SecureString"
+  value = "CHANGE_ME"
+
+  lifecycle { ignore_changes = [value] }
+
+  tags = { Project = var.project }
+}

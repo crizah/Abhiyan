@@ -33,6 +33,30 @@ func NewTaskService(dbConn *sql.DB, o *app.App, s3 *S3Service, sc *ScoreService)
 	}
 }
 
+// notify writes a notifications row and enqueues a matching push send, so
+// every code path that surfaces something in the in-app bell also reaches
+// the user's phone if they have the Android app installed. qtx is passed
+// explicitly since callers use it both inside a tx (qtx) and from detached
+// goroutines that run after commit (s.queries).
+func (s *TaskService) notify(ctx context.Context, qtx *db.Queries, userID, orgID uuid.UUID, title, message string) {
+	_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+		UserID:  userID,
+		OrgID:   orgID,
+		Title:   title,
+		Message: message,
+	})
+
+	if s.onionApp == nil {
+		return
+	}
+	_ = s.onionApp.Enqueue(ctx, "send_push_notification", map[string]any{
+		"user_id": userID.String(),
+		"org_id":  orgID.String(),
+		"title":   title,
+		"message": message,
+	})
+}
+
 func insertAttachmentWithTranscription(ctx context.Context, qtx *db.Queries, params db.InsertAttachmentParams) error {
 	attID, err := qtx.InsertAttachment(ctx, params)
 	if err != nil {
@@ -256,22 +280,12 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 
 	// Create Notifications for Assignees
 	for _, assigneeID := range req.AssigneeIDs {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  util.ParseUUID(assigneeID),
-			OrgID:   orgID,
-			Title:   "New Task Assigned",
-			Message: fmt.Sprintf("You have been assigned to: %s", req.Title),
-		})
+		s.notify(ctx, qtx, util.ParseUUID(assigneeID), orgID, "New Task Assigned", fmt.Sprintf("You have been assigned to: %s", req.Title))
 	}
 
 	// Create Notifications for Subscribers
 	for _, subID := range req.SubscriberIDs {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  util.ParseUUID(subID),
-			OrgID:   orgID,
-			Title:   "Added to Task Loop",
-			Message: fmt.Sprintf("You are subscribed to updates for: %s", req.Title),
-		})
+		s.notify(ctx, qtx, util.ParseUUID(subID), orgID, "Added to Task Loop", fmt.Sprintf("You are subscribed to updates for: %s", req.Title))
 	}
 
 	// 4. Configure Reminders (Pure DB write, Onion Poller will pick it up)
@@ -557,9 +571,7 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		uID := util.ParseUUID(assigneeID)
 		_ = qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{TaskID: tID, UserID: uID, Role: db.ParticipantRoleASSIGNEE})
 		if !oldMap[assigneeID] { // Only notify if they are NEW
-			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID: uID, OrgID: orgID, Title: "Task Assignment Updated", Message: fmt.Sprintf("You have been added to the task: %s", req.Title),
-			})
+			s.notify(ctx, qtx, uID, orgID, "Task Assignment Updated", fmt.Sprintf("You have been added to the task: %s", req.Title))
 		}
 	}
 
@@ -567,9 +579,7 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		uID := util.ParseUUID(subID)
 		_ = qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{TaskID: tID, UserID: uID, Role: db.ParticipantRoleSUBSCRIBER})
 		if !oldMap[subID] { // Only notify if they are NEW
-			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID: uID, OrgID: orgID, Title: "Added to Task Loop", Message: fmt.Sprintf("You are now subscribed to: %s", req.Title),
-			})
+			s.notify(ctx, qtx, uID, orgID, "Added to Task Loop", fmt.Sprintf("You are now subscribed to: %s", req.Title))
 		}
 	}
 
@@ -720,12 +730,7 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 
 	for _, p := range participants {
 		// We notify EVERYONE, even the admin doing it, so it's a clear system record
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  p.ID,
-			OrgID:   orgID,
-			Title:   "Task Reopened",
-			Message: fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
-		})
+		s.notify(ctx, qtx, p.ID, orgID, "Task Reopened", fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle))
 	}
 
 	return tx.Commit()
@@ -932,23 +937,13 @@ func (s *TaskService) PostTaskUpdate(ctx context.Context, taskID string, userID 
 		mID := util.ParseUUID(mIDStr)
 		mentionedMap[mIDStr] = true
 
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  mID,
-			OrgID:   orgID,
-			Title:   "You were mentioned!",
-			Message: fmt.Sprintf("%s mentioned you: %s", authorName, snippet),
-		})
+		s.notify(ctx, qtx, mID, orgID, "You were mentioned!", fmt.Sprintf("%s mentioned you: %s", authorName, snippet))
 	}
 
 	// 4. Handle Standard Participants (skip author and anyone already mentioned)
 	for _, p := range participants {
 		if p.ID != uID && !mentionedMap[p.ID.String()] {
-			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID:  p.ID,
-				OrgID:   orgID,
-				Title:   fmt.Sprintf("Update: %s", taskTitle),
-				Message: fmt.Sprintf("%s posted: %s", authorName, snippet),
-			})
+			s.notify(ctx, qtx, p.ID, orgID, fmt.Sprintf("Update: %s", taskTitle), fmt.Sprintf("%s posted: %s", authorName, snippet))
 		}
 	}
 
@@ -1029,23 +1024,13 @@ func (s *TaskService) PostUpdateComment(ctx context.Context, taskID, updateID, u
 
 		for _, mIDStr := range uniqueMentionedIds {
 			mID := util.ParseUUID(mIDStr)
-			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
-				UserID:  mID,
-				OrgID:   orgID,
-				Title:   "Mentioned in comment!",
-				Message: fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle),
-			})
+			s.notify(nctx, q, mID, orgID, "Mentioned in comment!", fmt.Sprintf("%s mentioned you in a comment on: %s", commentAuthorName, taskTitle))
 		}
 
 		updateAuthor, err := q.GetTaskUpdateAuthor(nctx, uID)
 		updateAuthorIdStr := updateAuthor.UUID.String()
 		if err == nil && updateAuthor.UUID != cID && !mentionMap[updateAuthorIdStr] {
-			_ = q.CreateNotification(nctx, db.CreateNotificationParams{
-				UserID:  updateAuthor.UUID,
-				OrgID:   orgID,
-				Title:   "New comment on your task update",
-				Message: "Someone replied to your task update.",
-			})
+			s.notify(nctx, q, updateAuthor.UUID, orgID, "New comment on your task update", "Someone replied to your task update.")
 		}
 	}()
 
@@ -1151,9 +1136,7 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 
 	admins, _ := qtx.GetTeamAdminsByTask(ctx, tID)
 	for _, adminID := range admins {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: adminID, OrgID: orgID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
-		})
+		s.notify(ctx, qtx, adminID, orgID, "Task Ready for Review", fmt.Sprintf("%s submitted: %s", userName, taskTitle))
 	}
 	return tx.Commit()
 }
@@ -1189,9 +1172,7 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 	for _, p := range participants {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, OrgID: orgID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
-		})
+		s.notify(ctx, qtx, p.ID, orgID, "Task Approved", fmt.Sprintf("Yay '%s' was approved.", taskTitle))
 	}
 
 	assigneePhones, _ := qtx.GetTaskAssigneePhones(ctx, tID)
@@ -1288,9 +1269,7 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 	for _, p := range participants {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, OrgID: orgID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
-		})
+		s.notify(ctx, qtx, p.ID, orgID, "Task "+strings.Title(strings.ToLower(action)), fmt.Sprintf("'%s' requires your attention.", taskTitle))
 	}
 
 	var assigneePhones []sql.NullString

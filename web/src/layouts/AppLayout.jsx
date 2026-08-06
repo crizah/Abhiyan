@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
 import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import { App } from '@capacitor/app';
 
 // eslint-disable-next-line no-unused-vars -- kept for the commented-out sidebar block below, don't delete
@@ -523,7 +524,9 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { token } = theme.useToken(); 
+  const { token } = theme.useToken();
+
+  usePushNotifications();
 
   const activeRole = (user?.role || '').toUpperCase();
 

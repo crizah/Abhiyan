@@ -63,6 +63,14 @@ func main() {
 	}
 	whisperService := services.NewWhisperService()
 
+	// Firebase isn't provisioned for every environment yet, so this stays
+	// non-fatal when unset: the worker still starts, push sends just fail
+	// per-task (visible in the Onion dashboard) until credentials land.
+	pushService, err := services.NewPushService(context.Background(), os.Getenv("FCM_SERVICE_ACCOUNT_JSON"))
+	if err != nil {
+		log.Fatalf("Failed to initialize push service: %v", err)
+	}
+
 	// 2. Initialize Onion App
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
@@ -127,6 +135,9 @@ func main() {
 	// register attendance cron
 	onionApp.Register("batch_insert_attendance", tasks.NewBatchInsertAttendanceTask(queries))
 
+	// register push notification delivery
+	onionApp.Register("send_push_notification", tasks.NewSendPushNotificationTask(queries, pushService))
+
 	// cron schedules (e.g. the daily attendance batch) are meant to fire at
 	// local IST times regardless of the host/container's own timezone
 	istLocation, err := time.LoadLocation("Asia/Kolkata")
@@ -153,6 +164,7 @@ func main() {
 			"validate_face":                 "default",
 			"compare_faces":                 "default",
 			"batch_insert_attendance":       "polling",
+			"send_push_notification":        "critical",
 		},
 	})
 

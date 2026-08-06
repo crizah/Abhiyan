@@ -5,12 +5,13 @@ const config: CapacitorConfig = {
   appName: 'Abhiyan',
   webDir: 'build',
   // Dev-only: load the live CRA dev server instead of a static build so
-  // changes hot-reload in the emulator. Using the host's LAN IP (rather than
-  // the emulator-only 10.0.2.2 alias) so it's the same address the backend
-  // URL in .env.local uses. Remove this whole `server` block before
-  // producing a real release build.
+  // changes hot-reload in the emulator. Using localhost (tunneled to the
+  // host via `adb reverse tcp:3000 tcp:3000`) rather than the LAN IP, since
+  // only localhost/127.0.0.1/https count as a secure context — camera/mic
+  // access is silently unavailable on a plain-http LAN address. Remove this
+  // whole `server` block before producing a real release build.
   server: {
-    url: 'http://192.168.88.11:3000',
+    url: 'http://localhost:3000',
     cleartext: true
   }
 };

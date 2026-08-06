@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Typography, Button, Flex } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const { Title } = Typography;
 
@@ -26,6 +27,7 @@ export function SlidingCardModal({
   defaultWidth = 760,
   minWidth = DEFAULT_MIN_WIDTH,
 }) {
+  const isMobile = useIsMobile();
   const [activeKey, setActiveKey] = useState(tabs[0]?.key);
   const [width, setWidth] = useState(defaultWidth);
   const draggingRef = useRef(false);
@@ -123,31 +125,38 @@ export function SlidingCardModal({
               overflow: 'hidden',
             }}
           >
-            {/* Header — wraps instead of clipping when `extra` (e.g. a range picker +
-                action button) doesn't fit alongside the title on a narrow screen; the
-                card body below has overflow:hidden, so without wrap this content would
-                be silently cut off rather than dropping to a second line. */}
-            <Flex justify="space-between" align="center" wrap="wrap" gap={8} style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
-              <Title level={4} style={{ margin: 0, letterSpacing: '-0.01em' }}>
-                {title}
-              </Title>
-              <Flex align="center" gap={8} wrap="wrap">
-                {extra}
-                <Button
-                  type="text"
-                  shape="circle"
-                  icon={<CloseOutlined />}
-                  onClick={onClose}
-                  style={{ color: 'rgba(24, 24, 27, 0.55)' }}
-                />
+            {/* Header — on mobile, `extra` (e.g. a range picker + action button) always
+                drops to its own row below the title so the close button stays pinned
+                top-right no matter how wide `extra` is, instead of wrapping onto a third
+                row alongside it. Desktop keeps title/extra/close on one wrapping row. */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(24, 24, 27, 0.08)' }}>
+              <Flex justify="space-between" align="center" wrap={isMobile ? 'nowrap' : 'wrap'} gap={8}>
+                <Title level={4} style={{ margin: 0, letterSpacing: '-0.01em' }}>
+                  {title}
+                </Title>
+                <Flex align="center" gap={8} wrap="wrap" style={{ flexShrink: 0 }}>
+                  {!isMobile && extra}
+                  <Button
+                    type="text"
+                    shape="circle"
+                    icon={<CloseOutlined />}
+                    onClick={onClose}
+                    style={{ color: 'rgba(24, 24, 27, 0.55)', flexShrink: 0 }}
+                  />
+                </Flex>
               </Flex>
-            </Flex>
+              {isMobile && extra && (
+                <div style={{ marginTop: 12 }}>
+                  {extra}
+                </div>
+              )}
+            </div>
 
             {/* Tab toggle — floating glass-bubble treatment, same as the app header. Skipped
                 entirely for a single-tab modal, where a lone always-active pill would just be
                 visual noise. */}
             {n > 1 && (
-              <div style={{ padding: '12px 24px 0' }}>
+              <div style={{ padding: '12px 24px 0', textAlign: isMobile ? 'center' : 'left' }}>
                 <div
                   style={{
                     display: 'inline-flex',

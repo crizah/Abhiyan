@@ -4,6 +4,7 @@ import { TeamOutlined, ApartmentOutlined, UserOutlined } from '@ant-design/icons
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
+import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -17,36 +18,43 @@ export default function EmployeeDashboard() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const res = await apiClient.get('/employee/teams');
-        setTeams(res.data || []);
-      } catch (error) {
-        message.error("Failed to load dashboard data");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchDashboardData = async () => {
+    try {
+      const res = await apiClient.get('/employee/teams');
+      setTeams(res.data || []);
+    } catch (error) {
+      message.error("Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+      markFetched('employee-teams');
+    }
+  };
 
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  useRefetchOnResume('employee-teams', fetchDashboardData, { minIntervalMs: 60000 });
+
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
+      const res = await apiClient.get('/leaderboard', { params });
+      setLeaderboardData(res.data.entries || []);
+    } catch {
+      // Leaderboard may not be enabled — silently handle
+    } finally {
+      setLeaderboardLoading(false);
+      markFetched('employee-leaderboard');
+    }
+  };
+
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLeaderboardLoading(true);
-      try {
-        const params = leaderboardTeamFilter !== 'ALL' ? { team: leaderboardTeamFilter } : {};
-        const res = await apiClient.get('/leaderboard', { params });
-        setLeaderboardData(res.data.entries || []);
-      } catch {
-        // Leaderboard may not be enabled — silently handle
-      } finally {
-        setLeaderboardLoading(false);
-      }
-    };
     fetchLeaderboard();
   }, [leaderboardTeamFilter]);
+
+  useRefetchOnResume('employee-leaderboard', fetchLeaderboard, { minIntervalMs: 60000 });
 
   return (
     <div>

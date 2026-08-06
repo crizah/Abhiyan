@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider } from 'antd';
-import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined } from '@ant-design/icons';
+import { Typography, Button, Flex, Popover, Mentions, Upload, Tag, Card, Divider, Tooltip } from 'antd';
+import { CommentOutlined, SendOutlined, DownloadOutlined, PlusOutlined, AudioOutlined, CheckOutlined, DeleteOutlined, LoadingOutlined, PlayCircleOutlined, PauseCircleOutlined, FilePdfOutlined, FileOutlined, FileImageOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseOutlined, CalendarOutlined, ReloadOutlined } from '@ant-design/icons';
 import AudioAttachment from './AudioAttachment';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { fulfillmentColor, taskStatusColor, reviewStatusColor, roleColor } from '../utils/taskColors';
@@ -614,7 +614,7 @@ export function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate
 // its own leading "Team" column on top of this when viewing across teams.
 export function buildTaskColumns({ onView }) {
   return [
-    { title: 'Task', dataIndex: 'title', key: 'title', render: text => <Text strong>{text}</Text> },
+    { title: 'Task', dataIndex: 'title', key: 'title', ellipsis: true, render: text => <Text strong ellipsis={{ tooltip: text }}>{text}</Text> },
     { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY h:mm A') : <Text type="secondary">No deadline</Text> },
     { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={fulfillmentColor(status)}>{status}</Tag> },
     { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={taskStatusColor(status)}>{status}</Tag> },
@@ -639,6 +639,8 @@ export function TaskDetailsDrawer({
   taskDetails,
   user,
   extra,
+  onRefresh,
+  refreshing = false,
   showReminders = false,
   taskUpdates,
   loadingUpdates,
@@ -761,12 +763,30 @@ export function TaskDetailsDrawer({
     </>
   );
 
+  const extraWithRefresh = (
+    <Flex align="center" gap={8}>
+      {onRefresh && (
+        <Tooltip title="Refresh">
+          <Button
+            type="text"
+            shape="circle"
+            icon={<ReloadOutlined spin={refreshing} />}
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label="Refresh task"
+          />
+        </Tooltip>
+      )}
+      {extra}
+    </Flex>
+  );
+
   return (
     <SlidingCardModal
       open={open}
       onClose={onClose}
       title={selectedTask?.title || 'Task Details'}
-      extra={extra}
+      extra={extraWithRefresh}
       resetKey={selectedTask?.id}
       defaultWidth={PANEL_DEFAULT_WIDTH}
       minWidth={PANEL_MIN_WIDTH}

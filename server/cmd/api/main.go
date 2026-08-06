@@ -63,6 +63,7 @@ func main() {
 			"send_reminder_email":       "reminders",
 			"send_reminder_whatsapp":    "reminders",
 			"poll_due_reminders":        "polling",
+			"send_push_notification":    "critical",
 			"validate_face":             "default",
 			"compare_faces":             "default",
 		},
@@ -91,6 +92,7 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(adminService)
 	userHandler := handlers.NewUserHandler(userService)
 	notificationHandler := handlers.NewNotificationHandler(adminService, queries)
+	deviceHandler := handlers.NewDeviceHandler(queries)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	uploadHandler := handlers.NewUploadHandler(s3Service, faceValidationService, onionApp)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, onionApp)
@@ -143,6 +145,7 @@ func main() {
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
 			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)
+			general.POST("/devices/register", deviceHandler.RegisterDevice)
 			general.GET("/employee/teams", taskHandler.GetEmployeeTeams)
 			general.GET("/employee/teams/:team_id/tasks", taskHandler.GetEmployeeTasks)
 			general.PUT("/employee/tasks/:task_id/submit", taskHandler.SubmitTask)

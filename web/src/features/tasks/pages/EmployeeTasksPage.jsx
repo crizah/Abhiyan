@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Select, message, Popconfirm } from 'antd';
+import { Typography, Card, Button, Flex, Select, message, Popconfirm } from 'antd';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { useAuth } from '../../../context/AuthContext';
 import { TaskDetailsDrawer, buildTaskColumns } from '../../../components/TaskDrawerShared';
+import ResponsiveTable from '../../../components/ResponsiveTable';
+import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
 
 const { Title } = Typography;
 
@@ -18,15 +20,6 @@ export default function EmployeeTasksPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
-
-  // Only scope the table to a horizontal scroll container on narrow screens —
-  // on desktop the columns should keep stretching to fill the card like before.
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -61,10 +54,12 @@ export default function EmployeeTasksPage() {
 
   useEffect(() => { fetchTeams(); }, []);
 
+  useRefetchOnResume('employee-teams', () => fetchTeams(), { minIntervalMs: 60000 });
+
   useEffect(() => {
     if (activeTeamId) {
       setCurrentPage(1);
-      apiClient.get(`teams/${activeTeamId}/members`).then(res => setTeamMembers(res.data || [])).catch(() => {});
+      fetchTeamMembers(activeTeamId);
     } else {
       setTasks([]);
       setTeamMembers([]);
@@ -72,16 +67,29 @@ export default function EmployeeTasksPage() {
     }
   }, [activeTeamId]);
 
+  useRefetchOnResume('employee-team-members', () => activeTeamId && fetchTeamMembers(activeTeamId), { minIntervalMs: 60000, enabled: !!activeTeamId });
+
   useEffect(() => {
     if (activeTeamId) fetchTasks(activeTeamId, currentPage, pageSize);
   }, [activeTeamId, currentPage, pageSize]);
+
+  useRefetchOnResume('employee-tasks-list', () => fetchTasks(activeTeamId, currentPage, pageSize), { minIntervalMs: 60000, enabled: !!activeTeamId });
 
   const fetchTeams = async () => {
     try {
       const res = await apiClient.get('/employee/teams');
       setTeams(res.data || []);
-      if (res.data?.length > 0) setActiveTeamId(res.data[0].id);
+      if (res.data?.length > 0) setActiveTeamId(prev => prev || res.data[0].id);
     } catch { message.error("Failed to load your teams."); }
+    finally { markFetched('employee-teams'); }
+  };
+
+  const fetchTeamMembers = async (teamId) => {
+    try {
+      const res = await apiClient.get(`teams/${teamId}/members`);
+      setTeamMembers(res.data || []);
+    } catch { /* silent */ }
+    finally { markFetched('employee-team-members'); }
   };
 
   const fetchTasks = async (teamId, page = 1, limit = 10) => {
@@ -91,7 +99,10 @@ export default function EmployeeTasksPage() {
       setTasks(res.data.tasks || res.data || []);
       setTotalTasks(res.data.total_count || 0);
     } catch { message.error("Failed to load your tasks."); }
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+      markFetched('employee-tasks-list');
+    }
   };
 
   const deleteUnsavedS3File = (file) => {
@@ -128,10 +139,15 @@ export default function EmployeeTasksPage() {
     setExpandedComments({});
     setTaskDetails(null);
     fetchTaskUpdates(task.id, 0);
+    fetchTaskDetails(task.id);
+  };
+
+  const fetchTaskDetails = async (taskId) => {
     try {
-      const res = await apiClient.get(`/tasks/${task.id}/details`);
+      const res = await apiClient.get(`/tasks/${taskId}/details`);
       setTaskDetails(res.data);
     } catch {}
+    finally { markFetched(`task-details-${taskId}`); }
   };
 
   const fetchTaskUpdates = async (taskId, offset) => {
@@ -144,7 +160,38 @@ export default function EmployeeTasksPage() {
       setUpdateOffset(offset + fetched.length);
       setHasMoreUpdates(fetched.length === UPDATE_LIMIT);
     } catch {}
-    finally { setLoadingUpdates(false); }
+    finally {
+      setLoadingUpdates(false);
+      markFetched(`task-updates-${taskId}`);
+    }
+  };
+
+  useRefetchOnResume(
+    `task-details-${selectedTask?.id}`,
+    () => fetchTaskDetails(selectedTask.id),
+    { minIntervalMs: 60000, enabled: isDrawerOpen && !!selectedTask }
+  );
+
+  useRefetchOnResume(
+    `task-updates-${selectedTask?.id}`,
+    () => fetchTaskUpdates(selectedTask.id, 0),
+    { minIntervalMs: 60000, enabled: isDrawerOpen && !!selectedTask }
+  );
+
+  const [drawerRefreshing, setDrawerRefreshing] = useState(false);
+
+  const refreshTaskDrawer = async () => {
+    if (!selectedTask) return;
+    setDrawerRefreshing(true);
+    try {
+      await Promise.all([
+        fetchTaskDetails(selectedTask.id),
+        fetchTaskUpdates(selectedTask.id, 0),
+        ...Object.keys(commentsMap).map(updateId => fetchComments(selectedTask.id, updateId, 0)),
+      ]);
+    } finally {
+      setDrawerRefreshing(false);
+    }
   };
 
   const fetchComments = async (taskId, updateId, offset) => {
@@ -221,12 +268,12 @@ export default function EmployeeTasksPage() {
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <Table
+        <ResponsiveTable
           columns={columns}
+          primaryColumnKeys={['title']}
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{ current: currentPage, pageSize, total: totalTasks, showSizeChanger: true }}
           onChange={(pagination) => { setCurrentPage(pagination.current); setPageSize(pagination.pageSize); }}
         />
@@ -238,6 +285,8 @@ export default function EmployeeTasksPage() {
         selectedTask={selectedTask}
         taskDetails={taskDetails}
         user={user}
+        onRefresh={refreshTaskDrawer}
+        refreshing={drawerRefreshing}
         extra={canSubmit && (
           <Popconfirm title="Submit this task for review?" onConfirm={submitTaskForReview}>
             <Button type="primary" style={{ backgroundColor: '#B3455C', border: 'none' }}>Submit for Review</Button>

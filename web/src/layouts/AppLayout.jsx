@@ -12,6 +12,9 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../config/axios';
 import { ROLE_COLORS } from '../utils/colorMaps';
+import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
+import { usePushNotifications } from '../hooks/usePushNotifications';
+import { App } from '@capacitor/app';
 
 // eslint-disable-next-line no-unused-vars -- kept for the commented-out sidebar block below, don't delete
 import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '@coreui/react';
@@ -61,28 +64,58 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
   const [notifications, setNotifications] = useState([]);
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  useEffect(() => {
-    fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 60000);
-    
-    // Listen for the custom real-time event from the task updates
-    const handleForceRefresh = () => fetchNotifications();
-    window.addEventListener('refresh-notifications', handleForceRefresh);
-    
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('refresh-notifications', handleForceRefresh);
-    };
-  }, []);
-
   const fetchNotifications = async () => {
     try {
       const res = await apiClient.get('/notifications');
       setNotifications(res.data || []);
     } catch (e) {
       console.error("Failed to load notifications", e);
+    } finally {
+      markFetched('notifications');
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+
+    // Listen for the custom real-time event from the task updates
+    const handleForceRefresh = () => fetchNotifications();
+    window.addEventListener('refresh-notifications', handleForceRefresh);
+
+    // Foreground-only polling: a notification from someone else's action (a
+    // comment/update on a task you're subscribed to) never dispatches
+    // 'refresh-notifications', so resume-refetch alone would leave the badge
+    // stale for as long as the app stays continuously focused. Poll every
+    // 60s, but only while actually foregrounded — paused on pause/background
+    // so it never fires with nobody watching.
+    let intervalId = null;
+    const startPolling = () => {
+      if (intervalId) return;
+      intervalId = setInterval(fetchNotifications, 60000);
+    };
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    let cancelled = false;
+    let resumeHandle, pauseHandle;
+    App.getState().then(({ isActive }) => { if (isActive) startPolling(); });
+    App.addListener('resume', startPolling).then(h => { if (cancelled) h.remove(); else resumeHandle = h; });
+    App.addListener('pause', stopPolling).then(h => { if (cancelled) h.remove(); else pauseHandle = h; });
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      window.removeEventListener('refresh-notifications', handleForceRefresh);
+      resumeHandle?.remove();
+      pauseHandle?.remove();
+    };
+  }, []);
+
+  useRefetchOnResume('notifications', fetchNotifications, { minIntervalMs: 60000 });
 
   const markAllRead = async () => {
     try {
@@ -491,7 +524,9 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { token } = theme.useToken(); 
+  const { token } = theme.useToken();
+
+  usePushNotifications();
 
   const activeRole = (user?.role || '').toUpperCase();
 

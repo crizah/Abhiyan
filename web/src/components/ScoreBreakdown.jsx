@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Spin, Tag, Table, Flex, Button, Statistic, message, theme, Empty } from 'antd';
+import { Typography, Spin, Tag, Flex, Button, Statistic, message, theme, Empty } from 'antd';
 import {
   CheckCircleOutlined, ClockCircleOutlined, WarningOutlined,
   CloseCircleOutlined, DownloadOutlined, TrophyOutlined,
 } from '@ant-design/icons';
 import apiClient from '../config/axios';
+import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
+import ResponsiveTable from './ResponsiveTable';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -22,21 +24,29 @@ export default function ScoreBreakdown({ userId, basePath = '/admin/employees', 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
+  const fetchBreakdown = async () => {
     if (!userId) return;
-    const fetchBreakdown = async () => {
-      setLoading(true);
-      try {
-        const res = await apiClient.get(`${basePath}/${userId}/score-breakdown`);
-        setBreakdown(res.data);
-      } catch {
-        message.error('Failed to load performance data');
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(true);
+    try {
+      const res = await apiClient.get(`${basePath}/${userId}/score-breakdown`);
+      setBreakdown(res.data);
+    } catch {
+      message.error('Failed to load performance data');
+    } finally {
+      setLoading(false);
+      markFetched(`score-breakdown-${basePath}-${userId}`);
+    }
+  };
+
+  useEffect(() => {
     fetchBreakdown();
-  }, [userId, basePath]);
+  }, [userId, basePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useRefetchOnResume(
+    `score-breakdown-${basePath}-${userId}`,
+    () => fetchBreakdown(),
+    { minIntervalMs: 60000, enabled: !!userId }
+  );
 
   const handleDownloadReport = async () => {
     setDownloading(true);
@@ -136,8 +146,9 @@ export default function ScoreBreakdown({ userId, basePath = '/admin/employees', 
       </Flex>
 
       <Text strong style={{ display: 'block', marginBottom: 12 }}>Activity History</Text>
-      <Table
+      <ResponsiveTable
         columns={eventColumns}
+        primaryColumnKeys={['task_title']}
         dataSource={breakdown.events}
         rowKey="id"
         pagination={{ pageSize: 10, size: 'small' }}

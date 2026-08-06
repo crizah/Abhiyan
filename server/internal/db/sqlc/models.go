@@ -608,6 +608,16 @@ type AudioTranscode struct {
 	UpdatedAt         sql.NullTime             `json:"updated_at"`
 }
 
+type DeviceToken struct {
+	ID         uuid.UUID    `json:"id"`
+	UserID     uuid.UUID    `json:"user_id"`
+	OrgID      uuid.UUID    `json:"org_id"`
+	Platform   string       `json:"platform"`
+	FcmToken   string       `json:"fcm_token"`
+	CreatedAt  sql.NullTime `json:"created_at"`
+	LastSeenAt sql.NullTime `json:"last_seen_at"`
+}
+
 type EmployeeScore struct {
 	ID              uuid.UUID      `json:"id"`
 	TaskID          uuid.UUID      `json:"task_id"`

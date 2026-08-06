@@ -42,6 +42,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
+	DeleteDeviceToken(ctx context.Context, fcmToken string) error
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
@@ -60,6 +61,7 @@ type Querier interface {
 	GetAssignedOrgUsers(ctx context.Context, arg GetAssignedOrgUsersParams) ([]GetAssignedOrgUsersRow, error)
 	GetAttachmentOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetBulkUserScoreBreakdowns(ctx context.Context, dollar_1 []uuid.UUID) ([]GetBulkUserScoreBreakdownsRow, error)
+	GetDeviceTokensForUser(ctx context.Context, arg GetDeviceTokensForUserParams) ([]string, error)
 	GetDueReminders(ctx context.Context) ([]GetDueRemindersRow, error)
 	GetEmailByUser(ctx context.Context, id uuid.UUID) (string, error)
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
@@ -168,6 +170,7 @@ type Querier interface {
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error)
+	UpsertDeviceToken(ctx context.Context, arg UpsertDeviceTokenParams) error
 	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 }

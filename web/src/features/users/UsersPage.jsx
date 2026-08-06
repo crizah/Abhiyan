@@ -6,6 +6,9 @@ import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
 import InfoTooltip from '../../components/InfoTooltip';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import ResponsiveTable from '../../components/ResponsiveTable';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
 
@@ -32,20 +35,16 @@ export default function UsersPage() {
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
 
-  // Only scope the table to a horizontal scroll container on narrow screens —
-  // without it, the browser squeezes the User column's name/email down to
-  // near-zero width instead of letting the table scroll.
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  // On narrow screens, ResponsiveTable collapses the table to just the User
+  // column and moves the rest into an expandable row.
+  const isMobile = useIsMobile();
 
   // Fetch teams once on mount
   useEffect(() => {
     fetchTeams();
   }, []);
+
+  useRefetchOnResume('admin-users-teams-options', () => fetchTeams(), { minIntervalMs: 60000 });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,12 +53,20 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
   }, [currentPage, pageSize, searchText, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useRefetchOnResume(
+    'admin-users-list',
+    () => fetchUsers(),
+    { minIntervalMs: 60000 }
+  );
+
   const fetchTeams = async () => {
     try {
       const res = await apiClient.get('/admin/teams');
       setTeams(res.data || []);
     } catch (err) {
       message.error("Failed to load organization teams.");
+    } finally {
+      markFetched('admin-users-teams-options');
     }
   };
 
@@ -75,8 +82,15 @@ export default function UsersPage() {
       message.error("Failed to load users data.");
     } finally {
       setLoading(false);
+      markFetched('admin-users-list');
     }
   };
+
+  useRefetchOnResume(
+    `user-teams-${selectedUser?.id}`,
+    () => fetchUserTeams(selectedUser.id),
+    { minIntervalMs: 60000, enabled: isManageOpen && !!selectedUser }
+  );
 
   const openUserDrawer = (user) => {
     setSelectedUser(user);
@@ -116,6 +130,8 @@ export default function UsersPage() {
       setUserTeams(res.data || []);
     } catch (err) {
       message.error("Failed to load user teams");
+    } finally {
+      markFetched(`user-teams-${userId}`);
     }
   };
 
@@ -260,21 +276,23 @@ export default function UsersPage() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '16px' }}>
-        <Title level={3} style={{ margin: 0 }}>Users Directory</Title>
-        <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={handleDownloadOrgReport}
-            loading={downloadingReport}
-            style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
-          >
-            Performance Report
-          </Button>
-        </Tooltip>
+      <Flex justify={isMobile ? 'center' : 'space-between'} align="center" wrap gap={12} style={{ marginBottom: '16px' }}>
+        <Title level={3} style={{ margin: 0, textAlign: isMobile ? 'center' : 'left', width: isMobile ? '100%' : 'auto' }}>Users Directory</Title>
+        {!isMobile && (
+          <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadOrgReport}
+              loading={downloadingReport}
+              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+            >
+              Performance Report
+            </Button>
+          </Tooltip>
+        )}
       </Flex>
 
-      <Flex wrap="wrap" gap={12} style={{ marginBottom: '24px' }} align="center">
+      <Flex wrap="wrap" gap={12} style={{ marginBottom: isMobile ? 12 : 24 }} align="center">
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#B3455C', hoverBorderColor: '#B3455C' } } }}>
           <Input
             placeholder="Search by name or email..."
@@ -284,31 +302,73 @@ export default function UsersPage() {
           />
         </ConfigProvider>
 
-        <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setRoleFilter}
-          options={[
-            { value: 'ALL', label: 'All Roles' },
-            { value: 'SUPER_ADMIN', label: 'Super Admin' },
-            { value: 'ADMIN', label: 'Admin' },
-            { value: 'EMPLOYEE', label: 'Employee' },
-          ]}
-        />
+        {!isMobile && (
+          <>
+            <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setRoleFilter}
+              options={[
+                { value: 'ALL', label: 'All Roles' },
+                { value: 'SUPER_ADMIN', label: 'Super Admin' },
+                { value: 'ADMIN', label: 'Admin' },
+                { value: 'EMPLOYEE', label: 'Employee' },
+              ]}
+            />
 
-        <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setStatusFilter}
-          options={[
-            { value: 'ALL', label: 'All Statuses' },
-            { value: 'ACTIVE', label: 'Active' },
-            { value: 'INVITED', label: 'Invited' },
-            { value: 'SUSPENDED', label: 'Suspended' },
-          ]}
-        />
+            <Select defaultValue="ALL" style={{ flex: '1 1 150px', minWidth: 140 }} onChange={setStatusFilter}
+              options={[
+                { value: 'ALL', label: 'All Statuses' },
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'INVITED', label: 'Invited' },
+                { value: 'SUSPENDED', label: 'Suspended' },
+              ]}
+            />
+          </>
+        )}
       </Flex>
 
-      <Table
+      {isMobile && (
+        <Flex wrap="wrap" gap={8} style={{ marginBottom: '24px' }} align="center">
+          <Select
+            size="small"
+            defaultValue="ALL" style={{ flex: '1 1 90px', minWidth: 80 }} onChange={setRoleFilter}
+            options={[
+              { value: 'ALL', label: 'All Roles' },
+              { value: 'SUPER_ADMIN', label: 'Super Admin' },
+              { value: 'ADMIN', label: 'Admin' },
+              { value: 'EMPLOYEE', label: 'Employee' },
+            ]}
+          />
+
+          <Select
+            size="small"
+            defaultValue="ALL" style={{ flex: '1 1 90px', minWidth: 80 }} onChange={setStatusFilter}
+            options={[
+              { value: 'ALL', label: 'All Statuses' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INVITED', label: 'Invited' },
+              { value: 'SUSPENDED', label: 'Suspended' },
+            ]}
+          />
+
+          <Tooltip title="Apply filters and generate performance reports for all employees within the filter">
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadOrgReport}
+              loading={downloadingReport}
+              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF', flex: '0 0 auto' }}
+            >
+              Report
+            </Button>
+          </Tooltip>
+        </Flex>
+      )}
+
+      <ResponsiveTable
         columns={columns}
+        primaryColumnKeys={['user']}
         dataSource={users}
         rowKey="id"
         loading={loading}
-        scroll={isMobile ? { x: 'max-content' } : undefined}
         onChange={(p) => { setCurrentPage(p.current); setPageSize(p.pageSize); }}
         pagination={{ current: currentPage, pageSize, total: totalUsers, showSizeChanger: true }}
       />

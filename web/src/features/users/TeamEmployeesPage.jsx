@@ -1,29 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Input, Select, Button, Typography, Tag, Avatar, Flex, message, ConfigProvider, Card, Divider, Tooltip } from 'antd';
+import { Input, Select, Button, Typography, Tag, Avatar, Flex, message, ConfigProvider, Card, Divider, Tooltip } from 'antd';
 import { UserOutlined, SearchOutlined, DownloadOutlined, BarChartOutlined } from '@ant-design/icons';
 import apiClient from '../../config/axios';
 import { ROLE_COLORS, STATUS_COLORS, formatRole } from '../../utils/colorMaps';
 import ScoreBreakdown from '../../components/ScoreBreakdown';
 import InfoTooltip from '../../components/InfoTooltip';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import ResponsiveTable from '../../components/ResponsiveTable';
+import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
 
-// ─── responsive helpers ───────────────────────────────────────────────────────
-function useWindowWidth() {
-  const [width, setWidth] = useState(window.innerWidth);
-  useEffect(() => {
-    const handle = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handle);
-    return () => window.removeEventListener('resize', handle);
-  }, []);
-  return width;
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function TeamEmployeesPage() {
-  const windowWidth = useWindowWidth();
-  const isMobile = windowWidth < 768;
+  const isMobile = useIsMobile();
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +41,16 @@ export default function TeamEmployeesPage() {
     fetchTeamOptions();
   }, []);
 
+  useRefetchOnResume('team-employees-team-options', () => fetchTeamOptions(), { minIntervalMs: 60000 });
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchEmployees();
     }, 300);
     return () => clearTimeout(timer);
   }, [currentPage, pageSize, searchText, teamFilter, roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useRefetchOnResume('team-employees-list', () => fetchEmployees(), { minIntervalMs: 60000 });
 
   const fetchTeamOptions = async () => {
     try {
@@ -65,6 +59,8 @@ export default function TeamEmployeesPage() {
       setTeamOptions([{ value: 'ALL', label: 'All My Teams' }, ...dynamicOptions]);
     } catch (error) {
       console.error("Failed to load team options");
+    } finally {
+      markFetched('team-employees-team-options');
     }
   };
 
@@ -87,6 +83,7 @@ export default function TeamEmployeesPage() {
       message.error("Failed to load employees.");
     } finally {
       setLoading(false);
+      markFetched('team-employees-list');
     }
   };
 
@@ -216,7 +213,7 @@ export default function TeamEmployeesPage() {
         </Tooltip>
       </Flex>
 
-      <Flex wrap="wrap" gap={12} style={{ marginBottom: '24px' }} align="center">
+      <Flex wrap="wrap" gap={12} style={{ marginBottom: isMobile ? 12 : 24 }} align="center">
         <ConfigProvider theme={{ components: { Input: { activeBorderColor: '#B3455C', hoverBorderColor: '#B3455C' } } }}>
           <Input
             placeholder="Search by name or email..."
@@ -226,45 +223,87 @@ export default function TeamEmployeesPage() {
           />
         </ConfigProvider>
 
-        <Select
-          value={teamFilter}
-          style={{ flex: '1 1 160px', minWidth: 150 }}
-          onChange={setTeamFilter}
-          options={teamOptions}
-        />
+        {!isMobile && (
+          <>
+            <Select
+              value={teamFilter}
+              style={{ flex: '1 1 160px', minWidth: 150 }}
+              onChange={setTeamFilter}
+              options={teamOptions}
+            />
 
-        <Select
-          value={roleFilter}
-          style={{ flex: '1 1 140px', minWidth: 130 }}
-          onChange={setRoleFilter}
-          options={[
-            { value: 'ALL', label: 'All Roles' },
-            { value: 'TEAM_ADMIN', label: 'Team Admin' },
-            { value: 'MEMBER', label: 'Member' },
-          ]}
-        />
+            <Select
+              value={roleFilter}
+              style={{ flex: '1 1 140px', minWidth: 130 }}
+              onChange={setRoleFilter}
+              options={[
+                { value: 'ALL', label: 'All Roles' },
+                { value: 'TEAM_ADMIN', label: 'Team Admin' },
+                { value: 'MEMBER', label: 'Member' },
+              ]}
+            />
 
-        <Select
-          value={statusFilter}
-          style={{ flex: '1 1 140px', minWidth: 130 }}
-          onChange={setStatusFilter}
-          options={[
-            { value: 'ALL', label: 'All Statuses' },
-            { value: 'ACTIVE', label: 'Active' },
-            { value: 'INVITED', label: 'Invited' },
-            { value: 'SUSPENDED', label: 'Suspended' },
-          ]}
-        />
+            <Select
+              value={statusFilter}
+              style={{ flex: '1 1 140px', minWidth: 130 }}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'ALL', label: 'All Statuses' },
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'INVITED', label: 'Invited' },
+                { value: 'SUSPENDED', label: 'Suspended' },
+              ]}
+            />
+          </>
+        )}
       </Flex>
 
+      {isMobile && (
+        <Flex wrap="wrap" gap={8} style={{ marginBottom: '24px' }} align="center">
+          <Select
+            size="small"
+            value={teamFilter}
+            style={{ flex: '1 1 90px', minWidth: 80 }}
+            onChange={setTeamFilter}
+            options={teamOptions}
+          />
+
+          <Select
+            size="small"
+            value={roleFilter}
+            style={{ flex: '1 1 90px', minWidth: 80 }}
+            onChange={setRoleFilter}
+            options={[
+              { value: 'ALL', label: 'All Roles' },
+              { value: 'TEAM_ADMIN', label: 'Team Admin' },
+              { value: 'MEMBER', label: 'Member' },
+            ]}
+          />
+
+          <Select
+            size="small"
+            value={statusFilter}
+            style={{ flex: '1 1 90px', minWidth: 80 }}
+            onChange={setStatusFilter}
+            options={[
+              { value: 'ALL', label: 'All Statuses' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INVITED', label: 'Invited' },
+              { value: 'SUSPENDED', label: 'Suspended' },
+            ]}
+          />
+        </Flex>
+      )}
+
       <div style={{ overflow: 'hidden' }}>
-        <Table 
-          columns={columns} 
-          dataSource={employees} 
-          rowKey={(record) => `${record.id}-${record.team_name}`} 
+        <ResponsiveTable
+          columns={columns}
+          primaryColumnKeys={['user']}
+          dataSource={employees}
+          rowKey={(record) => `${record.id}-${record.team_name}`}
           loading={loading}
           onChange={handleTableChange}
-          pagination={{ 
+          pagination={{
             current: currentPage,
             pageSize: pageSize,
             total: totalUsers,

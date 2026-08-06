@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Tag, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Upload } from 'antd';
+import { Typography, Card, Button, Flex, Tag, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Upload } from 'antd';
 import { useAuth } from '../../../context/AuthContext';
 import { PlusOutlined, ClockCircleOutlined, PaperClipOutlined, EditOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
 import { TaskDetailsDrawer, buildTaskColumns } from '../../../components/TaskDrawerShared';
+import ResponsiveTable from '../../../components/ResponsiveTable';
+import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -28,14 +31,7 @@ export default function TeamTasksPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
 
-  // Only scope the table to a horizontal scroll container on narrow screens —
-  // on desktop the columns should keep stretching to fill the card like before.
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const isMobile = useIsMobile();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -85,6 +81,8 @@ export default function TeamTasksPage() {
 
   useEffect(() => { fetchTeams(); }, []);
 
+  useRefetchOnResume('team-tasks-teams', () => fetchTeams(), { minIntervalMs: 60000 });
+
   // Reset page to 1 whenever the team changes
   useEffect(() => {
     if (activeTeamId) {
@@ -98,6 +96,12 @@ export default function TeamTasksPage() {
     }
   }, [activeTeamId]);
 
+  useRefetchOnResume(
+    'team-tasks-members',
+    () => fetchTeamMembers(activeTeamId),
+    { minIntervalMs: 60000, enabled: !!activeTeamId && activeTeamId !== 'ALL' }
+  );
+
   // Fetch tasks whenever team, page, or pageSize changes
   useEffect(() => {
     if (activeTeamId) {
@@ -105,17 +109,24 @@ export default function TeamTasksPage() {
     }
   }, [activeTeamId, currentPage, pageSize]);
 
-  useEffect(() => { 
-    form.resetFields(); 
-    setCreateFileList([]); 
+  useRefetchOnResume(
+    'team-tasks-list',
+    () => fetchTasks(activeTeamId, currentPage, pageSize),
+    { minIntervalMs: 60000, enabled: !!activeTeamId }
+  );
+
+  useEffect(() => {
+    form.resetFields();
+    setCreateFileList([]);
   }, [activeTeamId, form]);
 
   const fetchTeams = async () => {
     try {
-      const res = await apiClient.get('/admin/my-teams'); 
+      const res = await apiClient.get('/admin/my-teams');
       setTeams(res.data || []);
-      if (res.data?.length > 0) setActiveTeamId(res.data[0].id);
+      if (res.data?.length > 0) setActiveTeamId(prev => prev || res.data[0].id);
     } catch (err) { message.error("Failed to load teams."); }
+    finally { markFetched('team-tasks-teams'); }
   };
 
   const fetchTasks = async (teamId, page = 1, limit = 10) => {
@@ -126,7 +137,10 @@ export default function TeamTasksPage() {
       setTasks(res.data.tasks || []);
       setTotalTasks(res.data.total_count || 0);
     } catch (err) { message.error("Failed to load tasks."); }
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+      markFetched('team-tasks-list');
+    }
   };
 
   const fetchTeamMembers = async (teamId) => {
@@ -134,6 +148,7 @@ export default function TeamTasksPage() {
       const res = await apiClient.get(`/admin/teams/${teamId}/members`);
       setTeamMembers(res.data || []);
     } catch (err) {}
+    finally { markFetched('team-tasks-members'); }
   };
 
   const handleS3UploadWithPurge = async (options, setterFunc) => {
@@ -292,10 +307,15 @@ export default function TeamTasksPage() {
     setHasMoreComments({});
     setExpandedComments({});
     fetchTaskUpdates(task.id, 0);
+    fetchTaskDetails(task.id);
+  };
+
+  const fetchTaskDetails = async (taskId) => {
     try {
-      const res = await apiClient.get(`/admin/tasks/${task.id}/details`);
+      const res = await apiClient.get(`/admin/tasks/${taskId}/details`);
       setTaskDetails(res.data);
-    } catch(err) {}
+    } catch (err) {}
+    finally { markFetched(`task-details-${taskId}`); }
   };
 
   const fetchTaskUpdates = async (taskId, offset) => {
@@ -312,7 +332,38 @@ export default function TeamTasksPage() {
       setUpdateOffset(offset + fetched.length);
       setHasMoreUpdates(fetched.length === UPDATE_LIMIT);
     } catch (err) {}
-    finally { setLoadingUpdates(false); }
+    finally {
+      setLoadingUpdates(false);
+      markFetched(`task-updates-${taskId}`);
+    }
+  };
+
+  useRefetchOnResume(
+    `task-details-${selectedTask?.id}`,
+    () => fetchTaskDetails(selectedTask.id),
+    { minIntervalMs: 60000, enabled: isDrawerOpen && !!selectedTask }
+  );
+
+  useRefetchOnResume(
+    `task-updates-${selectedTask?.id}`,
+    () => fetchTaskUpdates(selectedTask.id, 0),
+    { minIntervalMs: 60000, enabled: isDrawerOpen && !!selectedTask }
+  );
+
+  const [drawerRefreshing, setDrawerRefreshing] = useState(false);
+
+  const refreshTaskDrawer = async () => {
+    if (!selectedTask) return;
+    setDrawerRefreshing(true);
+    try {
+      await Promise.all([
+        fetchTaskDetails(selectedTask.id),
+        fetchTaskUpdates(selectedTask.id, 0),
+        ...Object.keys(commentsMap).map(updateId => fetchComments(selectedTask.id, updateId, 0)),
+      ]);
+    } finally {
+      setDrawerRefreshing(false);
+    }
   };
 
   const fetchComments = async (taskId, updateId, offset) => {
@@ -414,19 +465,35 @@ export default function TeamTasksPage() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
-        <Flex gap="small" wrap>
-          <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 200, maxWidth: '100%' }} options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]} placeholder="Select a Team" />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }} disabled={!activeTeamId || activeTeamId === 'ALL'}>Assign New Task</Button>
+        <Flex gap="small" wrap={isMobile ? 'nowrap' : 'wrap'} style={isMobile ? { width: '100%' } : undefined}>
+          <Select
+            value={activeTeamId}
+            onChange={setActiveTeamId}
+            size={isMobile ? 'small' : 'middle'}
+            style={isMobile ? { flex: '1 1 0', minWidth: 0 } : { width: 200, maxWidth: '100%' }}
+            options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]}
+            placeholder="Select a Team"
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            size={isMobile ? 'small' : 'middle'}
+            style={isMobile ? { flex: '1 1 0', minWidth: 0 } : undefined}
+            onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }}
+            disabled={!activeTeamId || activeTeamId === 'ALL'}
+          >
+            {isMobile ? 'Assign Task' : 'Assign New Task'}
+          </Button>
         </Flex>
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <Table
+        <ResponsiveTable
           columns={columns}
+          primaryColumnKeys={['title']}
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{
             current: currentPage,
             pageSize: pageSize,
@@ -566,6 +633,8 @@ export default function TeamTasksPage() {
         taskDetails={taskDetails}
         user={user}
         showReminders
+        onRefresh={refreshTaskDrawer}
+        refreshing={drawerRefreshing}
         extra={
           <Flex gap="small">
             {selectedTask?.status === 'OPEN' ? (

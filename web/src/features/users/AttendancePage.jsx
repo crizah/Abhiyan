@@ -366,7 +366,7 @@ export default function AttendancePage() {
         resetKey={selectedUser?.id}
         defaultWidth={640}
         extra={
-          <Flex align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap" gap={8}>
+          <Flex align="center" wrap={isMobile ? 'nowrap' : 'wrap'} gap={8}>
             <RangePicker
               size="small"
               value={drawerRange}
@@ -375,7 +375,6 @@ export default function AttendancePage() {
               disabledDate={disableFutureDate}
               suffixIcon={isMobile ? undefined : <CalendarOutlined />}
               format={isMobile ? COMPACT_DATE_FORMAT : undefined}
-              style={isMobile ? { width: '100%' } : undefined}
             />
             <AntTooltip title="Download this user's attendance report as a CSV file for the selected range">
               <Button
@@ -383,10 +382,9 @@ export default function AttendancePage() {
                 loading={downloadingUserReport}
                 onClick={handleDownloadUserReport}
                 size="small"
-                block={isMobile}
-                style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                style={{ flexShrink: 0, background: '#B3455C', border: 'none', color: '#FFFFFF' }}
               >
-                Download Report
+                {isMobile ? 'Report' : 'Download Report'}
               </Button>
             </AntTooltip>
           </Flex>

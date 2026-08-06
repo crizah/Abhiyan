@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Tag, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Upload } from 'antd';
+import { Typography, Card, Button, Flex, Tag, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Upload } from 'antd';
 import { useAuth } from '../../../context/AuthContext';
 import { PlusOutlined, ClockCircleOutlined, PaperClipOutlined, EditOutlined } from '@ant-design/icons';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { AudioRecorder } from '../../../components/AudioRecorder';
 import { TaskDetailsDrawer, buildTaskColumns } from '../../../components/TaskDrawerShared';
+import ResponsiveTable from '../../../components/ResponsiveTable';
 import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -29,14 +31,7 @@ export default function TeamTasksPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
 
-  // Only scope the table to a horizontal scroll container on narrow screens —
-  // on desktop the columns should keep stretching to fill the card like before.
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const isMobile = useIsMobile();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -470,19 +465,35 @@ export default function TeamTasksPage() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
-        <Flex gap="small" wrap>
-          <Select value={activeTeamId} onChange={setActiveTeamId} style={{ width: 200, maxWidth: '100%' }} options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]} placeholder="Select a Team" />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }} disabled={!activeTeamId || activeTeamId === 'ALL'}>Assign New Task</Button>
+        <Flex gap="small" wrap={isMobile ? 'nowrap' : 'wrap'} style={isMobile ? { width: '100%' } : undefined}>
+          <Select
+            value={activeTeamId}
+            onChange={setActiveTeamId}
+            size={isMobile ? 'small' : 'middle'}
+            style={isMobile ? { flex: '1 1 0', minWidth: 0 } : { width: 200, maxWidth: '100%' }}
+            options={[{ label: 'All My Teams', value: 'ALL' }, ...teams.map(t => ({ label: t.name, value: t.id }))]}
+            placeholder="Select a Team"
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            size={isMobile ? 'small' : 'middle'}
+            style={isMobile ? { flex: '1 1 0', minWidth: 0 } : undefined}
+            onClick={() => { form.resetFields(); setIsCreateModalOpen(true); }}
+            disabled={!activeTeamId || activeTeamId === 'ALL'}
+          >
+            {isMobile ? 'Assign Task' : 'Assign New Task'}
+          </Button>
         </Flex>
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <Table
+        <ResponsiveTable
           columns={columns}
+          primaryColumnKeys={['title']}
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{
             current: currentPage,
             pageSize: pageSize,

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Button, Table, Flex, Select, message, Popconfirm } from 'antd';
+import { Typography, Card, Button, Flex, Select, message, Popconfirm } from 'antd';
 import apiClient from '../../../config/axios';
 import { uploadFileToS3 } from '../../../utils/S3Upload';
 import { useAuth } from '../../../context/AuthContext';
 import { TaskDetailsDrawer, buildTaskColumns } from '../../../components/TaskDrawerShared';
+import ResponsiveTable from '../../../components/ResponsiveTable';
 import { useRefetchOnResume, markFetched } from '../../../hooks/useRefetchOnResume';
 
 const { Title } = Typography;
@@ -19,15 +20,6 @@ export default function EmployeeTasksPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalTasks, setTotalTasks] = useState(0);
-
-  // Only scope the table to a horizontal scroll container on narrow screens —
-  // on desktop the columns should keep stretching to fill the card like before.
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -276,12 +268,12 @@ export default function EmployeeTasksPage() {
       </Flex>
 
       <Card style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <Table
+        <ResponsiveTable
           columns={columns}
+          primaryColumnKeys={['title']}
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={isMobile ? { x: 'max-content' } : undefined}
           pagination={{ current: currentPage, pageSize, total: totalTasks, showSizeChanger: true }}
           onChange={(pagination) => { setCurrentPage(pagination.current); setPageSize(pagination.pageSize); }}
         />

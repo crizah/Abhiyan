@@ -52,6 +52,13 @@ func (p *PushService) SendPush(ctx context.Context, token string, title string, 
 			Title: title,
 			Body:  body,
 		},
+		Android: &messaging.AndroidConfig{
+			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				ChannelID: "default",
+				Priority:  messaging.PriorityHigh,
+			},
+		},
 	})
 	return err
 }

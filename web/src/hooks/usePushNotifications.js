@@ -44,6 +44,21 @@ export function usePushNotifications() {
       window.dispatchEvent(new Event('refresh-notifications'));
     }));
 
+    // FCM_SERVICE_ACCOUNT_JSON pushes tag messages with channel_id "default" at
+    // PRIORITY_HIGH (see push.go), but that only produces a heads-up popup if a
+    // channel with that exact id actually has IMPORTANCE_HIGH — Capacitor's own
+    // fallback channel is IMPORTANCE_DEFAULT (shade only, no popup). Must exist
+    // before any push arrives, so create it unconditionally, ahead of permission
+    // checks/registration.
+    PushNotifications.createChannel({
+      id: 'default',
+      name: 'General',
+      description: 'Task and account notifications',
+      importance: 4, // IMPORTANCE_HIGH — required for the heads-up popup
+      visibility: 1,
+      vibration: true,
+    }).catch(e => console.error('Failed to create notification channel', e));
+
     (async () => {
       const current = await PushNotifications.checkPermissions();
       let status = current.receive;

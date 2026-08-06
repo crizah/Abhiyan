@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Typography, Button, Flex } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const { Title } = Typography;
 
@@ -26,6 +27,7 @@ export function SlidingCardModal({
   defaultWidth = 760,
   minWidth = DEFAULT_MIN_WIDTH,
 }) {
+  const isMobile = useIsMobile();
   const [activeKey, setActiveKey] = useState(tabs[0]?.key);
   const [width, setWidth] = useState(defaultWidth);
   const draggingRef = useRef(false);
@@ -147,7 +149,7 @@ export function SlidingCardModal({
                 entirely for a single-tab modal, where a lone always-active pill would just be
                 visual noise. */}
             {n > 1 && (
-              <div style={{ padding: '12px 24px 0' }}>
+              <div style={{ padding: '12px 24px 0', textAlign: isMobile ? 'center' : 'left' }}>
                 <div
                   style={{
                     display: 'inline-flex',

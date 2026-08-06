@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Spin, Tag, Table, Flex, Button, Statistic, message, theme, Empty } from 'antd';
+import { Typography, Spin, Tag, Flex, Button, Statistic, message, theme, Empty } from 'antd';
 import {
   CheckCircleOutlined, ClockCircleOutlined, WarningOutlined,
   CloseCircleOutlined, DownloadOutlined, TrophyOutlined,
 } from '@ant-design/icons';
 import apiClient from '../config/axios';
 import { useRefetchOnResume, markFetched } from '../hooks/useRefetchOnResume';
+import ResponsiveTable from './ResponsiveTable';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -145,8 +146,9 @@ export default function ScoreBreakdown({ userId, basePath = '/admin/employees', 
       </Flex>
 
       <Text strong style={{ display: 'block', marginBottom: 12 }}>Activity History</Text>
-      <Table
+      <ResponsiveTable
         columns={eventColumns}
+        primaryColumnKeys={['task_title']}
         dataSource={breakdown.events}
         rowKey="id"
         pagination={{ pageSize: 10, size: 'small' }}

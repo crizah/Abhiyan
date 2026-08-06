@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Table, Select, DatePicker, Button, Tag, Flex, Typography,
+  Select, DatePicker, Button, Tag, Flex, Typography,
   message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented, ConfigProvider
 } from 'antd';
 import {
@@ -10,9 +10,11 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveCont
 import dayjs from 'dayjs';
 import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
+import ResponsiveTable from '../../components/ResponsiveTable';
 import InfoTooltip from '../../components/InfoTooltip';
 import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
 import { useRefetchOnResume, markFetched } from '../../hooks/useRefetchOnResume';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -55,12 +57,7 @@ export default function AttendancePage() {
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
   const [drawerRange, setDrawerRange] = useState(DEFAULT_DRAWER_RANGE);
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const isMobile = useIsMobile();
 
   const fetchTeams = async () => {
     try {
@@ -232,80 +229,134 @@ export default function AttendancePage() {
     ...teams.map(t => ({ value: t.id, label: t.name })),
   ];
 
+  const reportTooltipTitle = reportMode === 'range'
+    ? 'Generates the attendance report across the selected date range and team filter'
+    : 'Generates the attendance report for the selected date and team filter';
+
   return (
     <Flex vertical gap={token.marginLG}>
       <Flex justify="space-between" align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap" gap={token.marginSM}>
         <Title level={4} style={{ margin: 0 }}>Attendance</Title>
         <Flex gap={token.marginSM} align={isMobile ? 'stretch' : 'center'} vertical={isMobile} wrap="wrap">
-          <DatePicker
-            value={date}
-            onChange={setDate}
-            allowClear={false}
-            disabledDate={d => d.isAfter(dayjs())}
-            suffixIcon={<CalendarOutlined />}
-            size={isMobile ? 'small' : 'middle'}
-            format={isMobile ? COMPACT_DATE_FORMAT : undefined}
-            style={isMobile ? { width: '100%' } : undefined}
-          />
-          <Select
-            value={teamFilter}
-            onChange={setTeamFilter}
-            options={teamOptions}
-            size={isMobile ? 'small' : 'middle'}
-            style={{ minWidth: isMobile ? undefined : 160, width: isMobile ? '100%' : undefined }}
-          />
-          <Flex align="center" gap={6}>
-            <ConfigProvider theme={{ components: { Segmented: { itemSelectedBg: '#B3455C', itemSelectedColor: '#FFFFFF' } } }}>
-              <Segmented
-                value={reportMode}
-                onChange={setReportMode}
-                options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
-                size={isMobile ? 'small' : 'middle'}
-                block={isMobile}
-                style={isMobile ? { flex: 1 } : undefined}
+          {isMobile && (
+            <Flex justify={reportMode === 'range' ? 'flex-start' : 'center'} align="center" gap={8} wrap="nowrap">
+              <Flex align="center" gap={6} style={{ flexShrink: 0 }}>
+                <ConfigProvider theme={{ components: { Segmented: { itemSelectedBg: '#B3455C', itemSelectedColor: '#FFFFFF' } } }}>
+                  <Segmented
+                    value={reportMode}
+                    onChange={setReportMode}
+                    options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
+                    size="small"
+                    style={{ borderRadius: 999 }}
+                  />
+                </ConfigProvider>
+                <InfoTooltip title="Day generates the report for a single date. Range generates one combined report across a span of dates instead." />
+              </Flex>
+              {reportMode === 'range' && (
+                <RangePicker
+                  value={reportRange}
+                  onChange={setReportRange}
+                  allowClear={false}
+                  disabledDate={disableFutureDate}
+                  size="small"
+                  format={COMPACT_DATE_FORMAT}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+              )}
+            </Flex>
+          )}
+          {isMobile ? (
+            <Flex gap={8} wrap="nowrap" align="center">
+              <DatePicker
+                value={date}
+                onChange={setDate}
+                allowClear={false}
+                disabledDate={d => d.isAfter(dayjs())}
+                suffixIcon={<CalendarOutlined />}
+                size="small"
+                format={COMPACT_DATE_FORMAT}
+                style={{ flex: '1 1 0', minWidth: 0 }}
               />
-            </ConfigProvider>
-            <InfoTooltip title="Day generates the report for a single date. Range generates one combined report across a span of dates instead." />
-          </Flex>
-          {reportMode === 'range' && (
+              <Select
+                value={teamFilter}
+                onChange={setTeamFilter}
+                options={teamOptions}
+                size="small"
+                style={{ flex: '1 1 0', minWidth: 0 }}
+              />
+              <AntTooltip title={reportTooltipTitle}>
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={downloadingReport}
+                  disabled={reportMode === 'range' && !(reportRange?.[0] && reportRange?.[1])}
+                  onClick={handleDownloadReport}
+                  size="small"
+                  style={{ flexShrink: 0, background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+                >
+                  Report
+                </Button>
+              </AntTooltip>
+            </Flex>
+          ) : (
+            <>
+              <DatePicker
+                value={date}
+                onChange={setDate}
+                allowClear={false}
+                disabledDate={d => d.isAfter(dayjs())}
+                suffixIcon={<CalendarOutlined />}
+              />
+              <Select
+                value={teamFilter}
+                onChange={setTeamFilter}
+                options={teamOptions}
+                style={{ minWidth: 160 }}
+              />
+              <Flex align="center" gap={6}>
+                <ConfigProvider theme={{ components: { Segmented: { itemSelectedBg: '#B3455C', itemSelectedColor: '#FFFFFF' } } }}>
+                  <Segmented
+                    value={reportMode}
+                    onChange={setReportMode}
+                    options={[{ label: 'Day', value: 'day' }, { label: 'Range', value: 'range' }]}
+                  />
+                </ConfigProvider>
+                <InfoTooltip title="Day generates the report for a single date. Range generates one combined report across a span of dates instead." />
+              </Flex>
+            </>
+          )}
+          {!isMobile && reportMode === 'range' && (
             <RangePicker
               value={reportRange}
               onChange={setReportRange}
               allowClear={false}
               disabledDate={disableFutureDate}
-              suffixIcon={isMobile ? undefined : <CalendarOutlined />}
-              size={isMobile ? 'small' : 'middle'}
-              format={isMobile ? COMPACT_DATE_FORMAT : undefined}
-              style={isMobile ? { width: '100%' } : undefined}
+              suffixIcon={<CalendarOutlined />}
             />
           )}
-          <AntTooltip title={reportMode === 'range'
-            ? 'Generates the attendance report across the selected date range and team filter'
-            : 'Generates the attendance report for the selected date and team filter'}
-          >
-            <Button
-              icon={<DownloadOutlined />}
-              loading={downloadingReport}
-              disabled={reportMode === 'range' && !(reportRange?.[0] && reportRange?.[1])}
-              onClick={handleDownloadReport}
-              block={isMobile}
-              size={isMobile ? 'small' : 'middle'}
-              style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
-            >
-              Generate Report
-            </Button>
-          </AntTooltip>
+          {!isMobile && (
+            <AntTooltip title={reportTooltipTitle}>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={downloadingReport}
+                disabled={reportMode === 'range' && !(reportRange?.[0] && reportRange?.[1])}
+                onClick={handleDownloadReport}
+                style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+              >
+                Generate Report
+              </Button>
+            </AntTooltip>
+          )}
         </Flex>
       </Flex>
 
-      <Table
+      <ResponsiveTable
         rowKey="id"
         columns={columns}
+        primaryColumnKeys={['user']}
         dataSource={records}
         loading={loading}
         pagination={{ pageSize: 15 }}
         size="middle"
-        scroll={isMobile ? { x: 'max-content' } : undefined}
       />
 
       <SlidingCardModal

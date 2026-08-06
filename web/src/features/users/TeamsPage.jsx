@@ -311,10 +311,11 @@ export default function TeamsPage() {
       title: 'Assign To',
       key: 'assign',
       render: (_, record) => (
-        <Flex gap="small" align="center" wrap="wrap">
+        <Flex gap="small" align="center" wrap={isMobile ? 'nowrap' : 'wrap'}>
           <Select
             placeholder="Select Team"
-            style={{ width: isMobile ? '100%' : 160, minWidth: 120 }}
+            size={isMobile ? 'small' : 'middle'}
+            style={isMobile ? { flex: '1 1 0', minWidth: 90 } : { width: 160, minWidth: 120 }}
             value={pendingAssignments[record.id]}
             onChange={(val) => handleQueueDropdownChange(record.id, val)}
             options={teams.map((t) => ({ label: t.name, value: t.id }))}
@@ -322,6 +323,7 @@ export default function TeamsPage() {
           <Button
             type="primary"
             size="small"
+            style={{ flexShrink: 0 }}
             disabled={!pendingAssignments[record.id]}
             onClick={() => executeQueueAssignment(record.id)}
           >

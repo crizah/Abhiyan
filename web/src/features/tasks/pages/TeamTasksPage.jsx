@@ -516,7 +516,7 @@ export default function TeamTasksPage() {
       </Card>
 
       {/* CREATE MODAL */}
-      <Modal destroyOnClose title="Assign New Task" open={isCreateModalOpen} onCancel={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }} width={700} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => form.submit()}>Create Task</Button>]}>
+      <Modal destroyOnClose title="Assign New Task" open={isCreateModalOpen} onCancel={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }} width={isMobile ? '94vw' : 700} style={isMobile ? { top: 12 } : undefined} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(createFileList); setCreateFileList([]); setIsCreateModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" onClick={() => form.submit()}>Create Task</Button>]}>
         <Form form={form} layout="vertical" onFinish={handleCreateTask}>
           <Form.Item name="title" label="Task Title" rules={[{ required: true }]}><Input size="large" /></Form.Item>
           <Form.Item name="description" label="Description"><TextArea rows={3} /></Form.Item>
@@ -529,7 +529,7 @@ export default function TeamTasksPage() {
             <AudioRecorder onUploadSuccess={(fileObj) => setCreateFileList(prev => [...prev, fileObj])} />
           </Form.Item>
 
-          <Flex gap="middle">
+          <Flex gap="middle" vertical={isMobile}>
             <Form.Item name="assignees" label="Assign To" style={{ flex: 1 }} rules={[{ required: true }]}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
             <Form.Item name="subscribers" label="Subscribers" style={{ flex: 1 }}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
           </Flex>
@@ -540,12 +540,14 @@ export default function TeamTasksPage() {
              {(fields, { add, remove }) => (
                <>{fields.map(({ key, name, ...restField }) => (
                    <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
-                     <Flex gap="small" align="flex-end">
-                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'HOURS', label: 'Hours'}, {value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
-                       <Button danger onClick={() => remove(name)}>X</Button>
+                     <Flex gap="small" align={isMobile ? 'stretch' : 'flex-end'} vertical={isMobile}>
+                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: isMobile ? '100%' : 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                       <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1, width: isMobile ? '100%' : undefined }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
+                       <Flex gap="small" style={isMobile ? { width: '100%' } : undefined}>
+                         <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: isMobile ? '100%' : 80, flex: isMobile ? 1 : undefined }}><Input type="number" min={1} /></Form.Item>
+                         <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: isMobile ? '100%' : 110, flex: isMobile ? 1 : undefined }}><Select options={[{value: 'HOURS', label: 'Hours'}, {value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
+                       </Flex>
+                       <Button danger onClick={() => remove(name)} block={isMobile}>X</Button>
                      </Flex>
                    </Card>
                  ))}
@@ -557,7 +559,7 @@ export default function TeamTasksPage() {
       </Modal>
 
       {/* EDIT MODAL */}
-      <Modal destroyOnClose title="Edit Task Details" open={isEditModalOpen} onCancel={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }} width={700} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" disabled={!editDirty} onClick={() => editForm.submit()}>Save Changes</Button>]}>
+      <Modal destroyOnClose title="Edit Task Details" open={isEditModalOpen} onCancel={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }} width={isMobile ? '94vw' : 700} style={isMobile ? { top: 12 } : undefined} footer={[<Button key="back" onClick={() => { purgeUnsavedFiles(editFileList); setIsEditModalOpen(false); }}>Cancel</Button>, <Button key="submit" type="primary" disabled={!editDirty} onClick={() => editForm.submit()}>Save Changes</Button>]}>
         <Form form={editForm} layout="vertical" onFinish={handleEditTask} onValuesChange={() => checkEditDirty()}>
           <Form.Item name="title" label="Task Title" rules={[{ required: true }]}><Input size="large" /></Form.Item>
           <Form.Item name="description" label="Description"><TextArea rows={3} /></Form.Item>
@@ -570,7 +572,7 @@ export default function TeamTasksPage() {
             <AudioRecorder onUploadSuccess={(fileObj) => setEditFileList(prev => { const next = [...prev, fileObj]; checkEditDirty(null, next); return next; })} />
           </Form.Item>
 
-          <Flex gap="middle">
+          <Flex gap="middle" vertical={isMobile}>
             <Form.Item name="assignees" label="Assign To" style={{ flex: 1 }} rules={[{ required: true }]}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
             <Form.Item name="subscribers" label="Subscribers" style={{ flex: 1 }}><Select mode="multiple" options={teamMembers.map(m => ({ label: m.full_name, value: m.id }))} /></Form.Item>
           </Flex>
@@ -581,12 +583,14 @@ export default function TeamTasksPage() {
              {(fields, { add, remove }) => (
                <>{fields.map(({ key, name, ...restField }) => (
                    <Card size="small" key={key} style={{ marginBottom: 8, backgroundColor: '#f9f9f9' }}>
-                     <Flex gap="small" align="flex-end">
-                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1 }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: 80 }}><Input type="number" min={1} /></Form.Item>
-                       <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: 110 }}><Select options={[{value: 'HOURS', label: 'Hours'}, {value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
-                       <Button danger onClick={() => remove(name)}>X</Button>
+                     <Flex gap="small" align={isMobile ? 'stretch' : 'flex-end'} vertical={isMobile}>
+                       <Form.Item {...restField} name={[name, 'channel']} label="Channels" rules={[{ required: true, type: 'array', min: 1, message: 'Select at least one channel' }]} style={{ margin: 0, width: isMobile ? '100%' : 200 }}><Select mode="multiple" options={[{value: 'EMAIL', label: 'Email'}, {value: 'WHATSAPP', label: 'WhatsApp'}]} /></Form.Item>
+                       <Form.Item {...restField} name={[name, 'scheduled_at']} label="First Alert" rules={[{ required: true }]} style={{ margin: 0, flex: 1, width: isMobile ? '100%' : undefined }}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
+                       <Flex gap="small" style={isMobile ? { width: '100%' } : undefined}>
+                         <Form.Item {...restField} name={[name, 'recurrence_value']} label="Every" style={{ margin: 0, width: isMobile ? '100%' : 80, flex: isMobile ? 1 : undefined }}><Input type="number" min={1} /></Form.Item>
+                         <Form.Item {...restField} name={[name, 'recurrence_unit']} label="Unit" style={{ margin: 0, width: isMobile ? '100%' : 110, flex: isMobile ? 1 : undefined }}><Select options={[{value: 'HOURS', label: 'Hours'}, {value: 'DAYS', label: 'Days'}, {value: 'WEEKS', label: 'Weeks'}, {value: 'MONTHS', label: 'Months'}]} allowClear /></Form.Item>
+                       </Flex>
+                       <Button danger onClick={() => remove(name)} block={isMobile}>X</Button>
                      </Flex>
                    </Card>
                  ))}

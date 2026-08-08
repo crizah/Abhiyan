@@ -317,9 +317,22 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
         zIndex: 30,
       }}
     >
-      <Text className="app-header-orgname" strong style={{ fontSize: '16px', color: token.colorTextHeading }}>{user?.org_name || 'Organization Workspace'}</Text>
+      <Text
+        className="app-header-orgname"
+        strong
+        ellipsis={isMobile ? { tooltip: user?.org_name || 'Organization Workspace' } : undefined}
+        style={{
+          fontSize: isMobile ? '14px' : '16px',
+          color: token.colorTextHeading,
+          minWidth: 0,
+          flex: isMobile ? '1 1 auto' : undefined,
+          marginRight: isMobile ? 8 : undefined,
+        }}
+      >
+        {user?.org_name || 'Organization Workspace'}
+      </Text>
 
-      <Flex align="center" gap="large">
+      <Flex align="center" gap="large" style={isMobile ? { flexShrink: 0 } : undefined}>
         
         <Dropdown dropdownRender={() => notificationDropdown} placement="bottomRight" trigger={['click']}>
           <Badge count={unreadCount} overflowCount={99} size="small" style={{ backgroundColor: '#B3455C' }}>
@@ -722,7 +735,7 @@ export default function AppLayout() {
             border-radius: 18px !important;
           }
           .app-header { top: 12px !important; left: 12px !important; right: 12px !important; padding: 0 14px !important; }
-          .app-header-orgname, .app-header-userinfo { display: none !important; }
+          .app-header-userinfo { display: none !important; }
           .app-dock-wrap { bottom: 12px !important; left: 12px !important; right: 12px !important; }
         }
 

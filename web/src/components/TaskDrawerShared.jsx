@@ -615,10 +615,10 @@ export function UpdateComposer({ drawerFileList, setDrawerFileList, onPostUpdate
 export function buildTaskColumns({ onView }) {
   return [
     { title: 'Task', dataIndex: 'title', key: 'title', ellipsis: true, render: text => <Text strong ellipsis={{ tooltip: text }}>{text}</Text> },
-    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', render: date => date ? dayjs(date).format('MMM D, YYYY h:mm A') : <Text type="secondary">No deadline</Text> },
-    { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', render: status => <Tag color={fulfillmentColor(status)}>{status}</Tag> },
-    { title: 'Task Status', dataIndex: 'status', key: 'status', render: status => <Tag color={taskStatusColor(status)}>{status}</Tag> },
-    { title: 'Review', dataIndex: 'review_status', key: 'review', render: status => <Tag color={reviewStatusColor(status)}>{status}</Tag> },
+    { title: 'Due Date', dataIndex: 'due_date', key: 'due_date', width: 190, render: date => date ? dayjs(date).format('MMM D, YYYY h:mm A') : <Text type="secondary">No deadline</Text> },
+    { title: 'Fulfillment', dataIndex: 'fulfillment_status', key: 'fulfillment', width: 140, render: status => <Tag color={fulfillmentColor(status)}>{status}</Tag> },
+    { title: 'Task Status', dataIndex: 'status', key: 'status', width: 130, render: status => <Tag color={taskStatusColor(status)}>{status}</Tag> },
+    { title: 'Review', dataIndex: 'review_status', key: 'review', width: 130, render: status => <Tag color={reviewStatusColor(status)}>{status}</Tag> },
     { title: 'Action', key: 'action', width: 120, render: (_, record) => <Button type="primary" size="small" onClick={() => onView(record)}>View Task</Button> },
   ];
 }

@@ -124,7 +124,7 @@ export default function TeamTasksPage() {
     try {
       const res = await apiClient.get('/admin/my-teams');
       setTeams(res.data || []);
-      if (res.data?.length > 0) setActiveTeamId(prev => prev || res.data[0].id);
+      if (res.data?.length > 0) setActiveTeamId(prev => prev || 'ALL');
     } catch (err) { message.error("Failed to load teams."); }
     finally { markFetched('team-tasks-teams'); }
   };
@@ -459,10 +459,17 @@ export default function TeamTasksPage() {
   };
 
   const baseColumns = buildTaskColumns({ onView: openTaskDrawer });
-  const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
+  const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', width: 130, render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
+
+  const wideMode = !isMobile && activeTeamId === 'ALL';
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: wideMode ? '1600px' : '1200px', margin: '0 auto' }}>
+      {/* AppLayout's shared page shell (.app-content-box) hard-caps at 840px; widen it only
+          while this page needs the extra Team column, and only for as long as it's mounted. */}
+      {wideMode && (
+        <style>{`.app-content-box { max-width: 1600px !important; }`}</style>
+      )}
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: '24px' }}>
         <Title level={3} style={{ margin: 0 }}>Task Management</Title>
         <Flex gap="small" wrap={isMobile ? 'nowrap' : 'wrap'} style={isMobile ? { width: '100%' } : undefined}>
@@ -494,6 +501,7 @@ export default function TeamTasksPage() {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
+          tableLayout={isMobile ? undefined : 'fixed'}
           pagination={{
             current: currentPage,
             pageSize: pageSize,

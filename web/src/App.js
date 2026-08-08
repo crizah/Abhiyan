@@ -5,6 +5,7 @@ import { ConfigProvider, App as AntApp } from 'antd';
 import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAndroidBackButton } from './hooks/useAndroidBackButton';
+import OfflineBanner from './components/ui/OfflineBanner';
 
 // Pages & Layouts
 import LandingPage from './features/landing/LandingPage';
@@ -65,35 +66,33 @@ const AppRoutes = () => {
   useAndroidBackButton();
 
   return (
-    <Routes>
-      <Route path="/" element={<RootRoute />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register-org" element={<RegisterOrgPage />} />
-      <Route path="/accept-invite" element={<AcceptInvitePage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <>
+      <OfflineBanner />
+      <Routes>
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register-org" element={<RegisterOrgPage />} />
+        <Route path="/accept-invite" element={<AcceptInvitePage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="dashboard" element={<DashboardRouter />} />
+          <Route path="profile" element={<UserProfilePage />} />
+          <Route path="users" element={<UsersPage/>} />
+          <Route path="employees" element={<TeamEmployeesPage />} />
+          <Route path="onboarding" element={<UserOnboardingPage />} />
+          <Route path="teams" element={<TeamsPage />} />
 
-      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="dashboard" element={<DashboardRouter />} />
-        <Route path="profile" element={<UserProfilePage />} />
-        <Route path="users" element={<UsersPage/>} />
-        <Route path="employees" element={<TeamEmployeesPage />} />
-        <Route path="onboarding" element={<UserOnboardingPage />} />
-        <Route path="teams" element={<TeamsPage />} />
+          <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
+          <Route path="employee-tasks" element={<EmployeeTasksPage />} />
+          <Route path="admin-teams" element={<AdminTeamsPage />} />
+          <Route path="attendance" element={<AttendancePage />} />
+        </Route>
 
-        <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
-        <Route path="employee-tasks" element={<EmployeeTasksPage />} />
-        <Route path="admin-teams" element={<AdminTeamsPage />} />
-        <Route path="attendance" element={<AttendancePage />} />
-
-
-
-
-      </Route>
-
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </>
   );
 };
 

@@ -1,7 +1,8 @@
 // src/App.js
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAndroidBackButton } from './hooks/useAndroidBackButton';
@@ -97,6 +98,12 @@ const AppRoutes = () => {
 };
 
 export default function App() {
+  // launchAutoHide is off (capacitor.config.ts) so the native splash stays
+  // branded until this fires, instead of a fixed timer racing bundle load.
+  useEffect(() => {
+    SplashScreen.hide();
+  }, []);
+
   return (
     <ConfigProvider theme={customTheme}>
       <AntApp>

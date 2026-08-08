@@ -311,7 +311,7 @@ const GlobalHeader = ({ user, token, navigate, onRoleSwitch, onOrgSwitch, isMobi
         justifyContent: 'space-between',
         alignItems: 'center',
         position: 'fixed',
-        top: '28px',
+        top: 'calc(28px + env(safe-area-inset-top))',
         left: '28px',
         right: '28px',
         zIndex: 30,
@@ -714,7 +714,7 @@ export default function AppLayout() {
         isMobile={isMobile}
       />
 
-      <div className="app-dock-wrap" style={{ position: 'fixed', bottom: '28px', left: '28px', right: '28px', zIndex: 30 }}>
+      <div className="app-dock-wrap" style={{ position: 'fixed', bottom: 'calc(28px + env(safe-area-inset-bottom))', left: '28px', right: '28px', zIndex: 30 }}>
         <Dock
           items={dockItems}
           panelHeight={isMobile ? 56 : 68}
@@ -734,9 +734,9 @@ export default function AppLayout() {
             padding: 16px !important;
             border-radius: 18px !important;
           }
-          .app-header { top: 12px !important; left: 12px !important; right: 12px !important; padding: 0 14px !important; }
+          .app-header { top: calc(12px + env(safe-area-inset-top)) !important; left: 12px !important; right: 12px !important; padding: 0 14px !important; }
           .app-header-userinfo { display: none !important; }
-          .app-dock-wrap { bottom: 12px !important; left: 12px !important; right: 12px !important; }
+          .app-dock-wrap { bottom: calc(12px + env(safe-area-inset-bottom)) !important; left: 12px !important; right: 12px !important; }
         }
 
         .app-dock {

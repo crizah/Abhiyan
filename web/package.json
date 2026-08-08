@@ -8,6 +8,7 @@
     "@capacitor/core": "^6.2.1",
     "@capacitor/network": "^6.0.4",
     "@capacitor/push-notifications": "^6.0.5",
+    "@capacitor/splash-screen": "^6.0.4",
     "@coreui/icons": "^3.1.0",
     "@coreui/icons-react": "^2.3.0",
     "@coreui/react": "^5.11.0",

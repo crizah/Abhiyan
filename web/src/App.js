@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import { customTheme } from './config/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useAndroidBackButton } from './hooks/useAndroidBackButton';
 
 // Pages & Layouts
 import LandingPage from './features/landing/LandingPage';
@@ -58,41 +59,51 @@ const RootRoute = () => {
   return <LandingPage />;
 };
 
+// Split out so useAndroidBackButton (needs router context via useNavigate)
+// can live inside <BrowserRouter> while still wiring up before any route renders.
+const AppRoutes = () => {
+  useAndroidBackButton();
+
+  return (
+    <Routes>
+      <Route path="/" element={<RootRoute />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register-org" element={<RegisterOrgPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+
+      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+        <Route path="dashboard" element={<DashboardRouter />} />
+        <Route path="profile" element={<UserProfilePage />} />
+        <Route path="users" element={<UsersPage/>} />
+        <Route path="employees" element={<TeamEmployeesPage />} />
+        <Route path="onboarding" element={<UserOnboardingPage />} />
+        <Route path="teams" element={<TeamsPage />} />
+
+        <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
+        <Route path="employee-tasks" element={<EmployeeTasksPage />} />
+        <Route path="admin-teams" element={<AdminTeamsPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
+
+
+
+
+      </Route>
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+};
+
 export default function App() {
   return (
     <ConfigProvider theme={customTheme}>
       <AntApp>
         <AuthProvider>
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<RootRoute />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register-org" element={<RegisterOrgPage />} />
-              <Route path="/accept-invite" element={<AcceptInvitePage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-
-
-              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route path="dashboard" element={<DashboardRouter />} />
-                <Route path="profile" element={<UserProfilePage />} />
-                <Route path="users" element={<UsersPage/>} />
-                <Route path="employees" element={<TeamEmployeesPage />} />
-                <Route path="onboarding" element={<UserOnboardingPage />} />
-                <Route path="teams" element={<TeamsPage />} />
-                
-                <Route path="tasks" element={<TeamTasksPage />} /> {/* this is admin */}
-                <Route path="employee-tasks" element={<EmployeeTasksPage />} />
-                <Route path="admin-teams" element={<AdminTeamsPage />} />
-                <Route path="attendance" element={<AttendancePage />} />
-                
-
-                
-                
-              </Route>
-
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
+            <AppRoutes />
           </BrowserRouter>
         </AuthProvider>
       </AntApp>

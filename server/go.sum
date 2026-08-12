@@ -60,6 +60,8 @@ github.com/cloudwego/base64x v0.1.6 h1:t11wG9AECkCDk5fMSoxmufanudBtJ+/HemLstXDLI
 github.com/cloudwego/base64x v0.1.6/go.mod h1:OFcloc187FXDaYHvrNIjxSe8ncn0OOM8gEHfghB2IPU=
 github.com/crizah/Onion v0.0.0-20260711221738-64ef76b3c4cc h1:Sd9CA02K2keE53y9aKDhkbXRLyyWkP8WG+vTsw2bl3k=
 github.com/crizah/Onion v0.0.0-20260711221738-64ef76b3c4cc/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
+github.com/crizah/Onion v0.0.0-20260805153319-1dd3774477e7 h1:E6kyJG8ODAP48kntZLdlkpFNZ2cPlAB9wil7onGOkUI=
+github.com/crizah/Onion v0.0.0-20260805153319-1dd3774477e7/go.mod h1:6OYjzZRPNlhHz0n935oA36ydIbg64yijEcz6VKDJLI8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

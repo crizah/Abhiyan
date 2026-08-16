@@ -12,6 +12,7 @@ import (
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	app "github.com/crizah/Onion/app"
+	"github.com/crizah/Onion/backend"
 	broker "github.com/crizah/Onion/broker"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -68,13 +69,15 @@ func main() {
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
+	br := app.BrokerAddr{Broker: broker.BrokerPostgres, Addr: dbURL}
+	ba := app.BackendURL{DB: backend.DBTypePostgres, ConnectionString: dbURL}
 
 	onionApp, err := app.New(app.Config{
-		BrokerAddr:    broker_url,
-		BackendURL:    dbURL,
+		BrokerAddr:    br,
+		BackendURL:    ba,
 		DashboardAddr: dashboard_addr,
 
-		Concurrency:  10,
+		Concurrency:  5,
 		DefaultQueue: "default",
 		Queues: []broker.Queue{
 			{Name: "auth", Priority: 10},

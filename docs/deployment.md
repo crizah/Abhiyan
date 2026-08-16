@@ -311,3 +311,55 @@ aws lambda update-alias --function-name abhiyan-api --name prod --function-versi
 ```bash
 aws ecs update-service --cluster abhiyan-prod --service abhiyan-worker --task-definition abhiyan-worker:<previous-revision>
 ```
+
+---
+
+## Migration Plan — ElastiCache → SQS (~$7/month net savings)
+
+Replaces the Redis broker (`~$14.60/mo`) with SQS (free tier) + one VPC interface
+endpoint (`~$7.30/mo`, needed because Lambda sits in the private subnets with no
+NAT and can't reach SQS's public endpoint otherwise — the worker already has
+internet access via the public subnets and needs no endpoint).
+
+### 1. Onion (separate repo)
+- Implement `broker/sqs.go` satisfying the existing `Broker` interface (`Enqueue`,
+  `Dequeue`, `Ping`, `Len`) against `aws-sdk-go-v2/service/sqs`.
+- Bump Abhiyan's pinned Onion module version once merged.
+
+### 2. `terraform/modules/networking`
+- Add `aws_vpc_endpoint` (type `Interface`, service `com.amazonaws.<region>.sqs`,
+  `private_dns_enabled = true`) in **one** of the two private subnets only — a
+  second AZ would double the hourly charge and isn't needed at this volume.
+- Add a security group for the endpoint allowing 443 inbound from `lambda_sg`
+  (and `worker_sg` if the worker should use it too, though it doesn't need to).
+- Add an output for the endpoint id/SG if compute or data need to reference it
+  directly (likely not required — IAM handles the actual authorization).
+
+### 3. `terraform/modules/data`
+- Add one `aws_sqs_queue` per broker queue name the worker is configured with
+  (`auth`, `critical`, `reminders`, `polling`, plus `default`).
+- Remove `aws_elasticache_subnet_group.main` and `aws_elasticache_cluster.redis`
+  once cutover is verified (not on first apply — keep Redis running until the
+  new broker is confirmed working in prod).
+- Replace `aws_ssm_parameter.broker_url` — instead of the Redis
+  `address:6379` value, store whatever config Onion's SQS broker expects
+  (region + queue URLs/names). Keep it a `SecureString` only if that shape
+  ends up containing anything sensitive; queue URLs alone aren't secret.
+
+### 4. `terraform/modules/compute/iam.tf`
+- `aws_iam_role_policy.ecs_task_permissions` (ECS Task Role): add
+  `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`,
+  `sqs:GetQueueAttributes`, `sqs:GetQueueUrl` scoped to the new queue ARNs.
+- `aws_iam_role_policy.lambda_permissions` (Lambda Execution Role): same SQS
+  actions, since the API also enqueues tasks.
+- No IAM changes needed for the Redis removal — Redis access was
+  security-group-based, not IAM-based.
+
+### 5. Cutover sequence
+1. `terraform apply` networking (VPC endpoint) + data (new SQS queues) —
+   additive, Redis keeps running.
+2. Deploy Onion's SQS broker to worker (ECS) and API (Lambda) with the new
+   `BROKER_URL`/SSM config, pointed at the new queues.
+3. Verify tasks flow correctly (dashboard, logs, dead-letter behavior).
+4. Remove `aws_elasticache_cluster.redis`, its subnet group, and the
+   `redis_sg` security group in `modules/networking`; `terraform apply`.

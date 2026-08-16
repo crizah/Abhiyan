@@ -314,52 +314,77 @@ aws ecs update-service --cluster abhiyan-prod --service abhiyan-worker --task-de
 
 ---
 
-## Migration Plan — ElastiCache → SQS (~$7/month net savings)
+## Migration Plan — ElastiCache → Postgres Broker (~$14.60/month savings, $0 added cost)
 
-Replaces the Redis broker (`~$14.60/mo`) with SQS (free tier) + one VPC interface
-endpoint (`~$7.30/mo`, needed because Lambda sits in the private subnets with no
-NAT and can't reach SQS's public endpoint otherwise — the worker already has
-internet access via the public subnets and needs no endpoint).
+Replaces the Redis broker with a `FOR UPDATE SKIP LOCKED`-based queue table on
+the existing RDS Postgres instance — no new AWS resource of any kind. This
+supersedes the earlier SQS plan: SQS needed a ~$7.30/mo VPC interface endpoint
+because Lambda has no NAT/internet egress from the private subnets, but Lambda
+and the worker already reach RDS privately over the existing `rds_sg` rule, so
+that whole networking problem doesn't exist here. Full ElastiCache removal,
+zero added infra cost.
 
-### 1. Onion (separate repo)
-- Implement `broker/sqs.go` satisfying the existing `Broker` interface (`Enqueue`,
-  `Dequeue`, `Ping`, `Len`) against `aws-sdk-go-v2/service/sqs`.
-- Bump Abhiyan's pinned Onion module version once merged.
+### 1. Onion (separate repo) — status
+- `broker/postgres.go` is implemented: `PostgresBroker` satisfies `Enqueue`,
+  `Dequeue`, `Ping`, `Len` via an atomic `SELECT ... FOR UPDATE SKIP LOCKED`
+  pop against a self-migrating `onion_queue` table, polling on a short
+  interval since Postgres has no blocking-pop primitive like `BRPOP`.
+- `app.Config.BrokerAddr` is now a `{Broker BrokerType, Addr string}` struct
+  (`broker.BrokerRedis` / `broker.BrokerPostgres`) instead of a bare string,
+  dispatched through `brokerHelper` in `app/app.go`.
+- Before tagging a release: `brokerHelper` is missing a `default` case in its
+  type switch — an unmatched/unset `BrokerType` currently returns a nil
+  broker with a nil error, which panics on the `Ping` call right after. Needs
+  a one-line fix (mirror `backendHelper`'s `default: return nil, fmt.Errorf(...)`).
+  Also decide whether to keep or delete the now-orphaned `broker/sqs.go` stub
+  before tagging, and run `go mod tidy` after that decision (it currently
+  carries the full AWS SDK v2 dependency tree for an unused file).
 
-### 2. `terraform/modules/networking`
-- Add `aws_vpc_endpoint` (type `Interface`, service `com.amazonaws.<region>.sqs`,
-  `private_dns_enabled = true`) in **one** of the two private subnets only — a
-  second AZ would double the hourly charge and isn't needed at this volume.
-- Add a security group for the endpoint allowing 443 inbound from `lambda_sg`
-  (and `worker_sg` if the worker should use it too, though it doesn't need to).
-- Add an output for the endpoint id/SG if compute or data need to reference it
-  directly (likely not required — IAM handles the actual authorization).
+### 2. Abhiyan code changes
+- Bump `server/go.mod`'s pinned Onion version to the release with the fix
+  above.
+- `cmd/api/main.go` and `cmd/worker/main.go`: change how `app.Config.BrokerAddr`
+  is built — from `app.BrokerAddr{Broker: broker.BrokerRedis, Addr: <redis addr>}`
+  to `app.BrokerAddr{Broker: broker.BrokerPostgres, Addr: <postgres DSN>}`.
+  The DSN shape is identical to what `DB_URL` already uses (`NewPostgresBroker`
+  and the backend's `NewPostgres` both just `sql.Open("postgres", connStr)`) —
+  simplest is to point `BROKER_URL` at the same connection string as `DB_URL`.
+- Drop worker `Concurrency` from `10` to `5` in `cmd/worker/main.go` while
+  you're in there — halves the number of goroutines independently polling
+  `onion_queue`, for free, unrelated to correctness but worth doing in the
+  same pass.
 
 ### 3. `terraform/modules/data`
-- Add one `aws_sqs_queue` per broker queue name the worker is configured with
-  (`auth`, `critical`, `reminders`, `polling`, plus `default`).
+- Update `aws_ssm_parameter.broker_url` to hold a Postgres connection string
+  instead of the Redis `address:6379` value — can literally reuse the same
+  value as `aws_ssm_parameter.db_url`.
 - Remove `aws_elasticache_subnet_group.main` and `aws_elasticache_cluster.redis`
   once cutover is verified (not on first apply — keep Redis running until the
   new broker is confirmed working in prod).
-- Replace `aws_ssm_parameter.broker_url` — instead of the Redis
-  `address:6379` value, store whatever config Onion's SQS broker expects
-  (region + queue URLs/names). Keep it a `SecureString` only if that shape
-  ends up containing anything sensitive; queue URLs alone aren't secret.
+- No new resources needed — `onion_queue` is created automatically by
+  `PostgresBroker`'s self-migration on first connect, same as how
+  `onion_tasks` already gets created by the backend.
 
-### 4. `terraform/modules/compute/iam.tf`
-- `aws_iam_role_policy.ecs_task_permissions` (ECS Task Role): add
-  `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`,
-  `sqs:GetQueueAttributes`, `sqs:GetQueueUrl` scoped to the new queue ARNs.
-- `aws_iam_role_policy.lambda_permissions` (Lambda Execution Role): same SQS
-  actions, since the API also enqueues tasks.
-- No IAM changes needed for the Redis removal — Redis access was
-  security-group-based, not IAM-based.
+### 4. `terraform/modules/networking`
+- Nothing to add. No VPC endpoint, no NAT Gateway — this is the entire
+  category of work the SQS plan required, and it goes away.
+- After cutover, remove the `aws_security_group.redis` security group (now
+  unused) along with the ElastiCache resources.
 
-### 5. Cutover sequence
-1. `terraform apply` networking (VPC endpoint) + data (new SQS queues) —
-   additive, Redis keeps running.
-2. Deploy Onion's SQS broker to worker (ECS) and API (Lambda) with the new
-   `BROKER_URL`/SSM config, pointed at the new queues.
-3. Verify tasks flow correctly (dashboard, logs, dead-letter behavior).
+### 5. `terraform/modules/compute/iam.tf`
+- No changes. Postgres access is security-group-based (already granted via
+  `rds_sg`'s existing ingress from `worker_sg`/`lambda_sg`), not IAM-based —
+  unlike SQS, there's no new IAM policy to write.
+
+### 6. Cutover sequence
+1. `terraform apply` the `broker_url` SSM value change in `modules/data` —
+   Redis keeps running, this is just updating what the parameter *will* point
+   to once the new code reads it.
+2. Deploy the new worker (ECS) and API (Lambda) builds with the bumped Onion
+   version and updated `BrokerAddr` wiring. First connection creates
+   `onion_queue` automatically.
+3. Verify tasks flow correctly (dashboard, logs) — confirm both `Enqueue`
+   from Lambda and `Dequeue` from the worker are hitting Postgres, not Redis.
 4. Remove `aws_elasticache_cluster.redis`, its subnet group, and the
-   `redis_sg` security group in `modules/networking`; `terraform apply`.
+   `redis_sg` security group in `modules/networking`/`modules/data`;
+   `terraform apply`.

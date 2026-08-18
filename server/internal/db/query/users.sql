@@ -145,10 +145,12 @@ WITH base AS (
     SELECT u.id, u.first_name, u.last_name, u.email_id, om.status, u.created_at
     FROM users u
     JOIN org_memberships om ON om.user_id = u.id
-    LEFT JOIN team_members tm ON u.id = tm.user_id
-    LEFT JOIN teams t ON t.id = tm.team_id AND t.org_id = $1
     WHERE om.org_id = $1
-      AND t.id IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM team_members tm
+        JOIN teams t ON t.id = tm.team_id
+        WHERE tm.user_id = u.id AND t.org_id = $1
+      )
 )
 SELECT id, first_name, last_name, email_id, status, created_at, COUNT(*) OVER() AS total_count
 FROM base

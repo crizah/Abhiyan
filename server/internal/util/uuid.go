@@ -2,6 +2,7 @@ package util
 
 import (
 	"database/sql"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -30,14 +31,17 @@ var IST = func() *time.Location {
 	return loc
 }()
 
-// ParseUUID safely converts a string to a uuid.UUID.
-// If the string is invalid, it returns uuid.Nil (a zeroed UUID).
-func ParseUUID(id string) uuid.UUID {
+// ParseUUID converts a string to a uuid.UUID, returning an error if the
+// string isn't a valid UUID instead of silently collapsing to uuid.Nil —
+// a silent Nil previously let an invalid ID (e.g. a team name where a team
+// UUID was expected) fail an equality/lookup check for the wrong reason,
+// surfacing as a misleading authorization error instead of "invalid id".
+func ParseUUID(id string) (uuid.UUID, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
-		return uuid.Nil
+		return uuid.Nil, fmt.Errorf("invalid uuid %q: %w", id, err)
 	}
-	return parsed
+	return parsed, nil
 }
 
 func ParsePhoneNumber(rawNumber string) string {

@@ -40,7 +40,15 @@ func NewAttendanceService(dbConn *sql.DB) *AttendanceService {
 // assertUserInOrg guards attendance endpoints that take a target user_id
 // straight from the URL with no other scoping.
 func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, callerOrgID string) error {
-	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: util.ParseUUID(userID), OrgID: util.ParseUUID(callerOrgID)})
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return err
+	}
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: oID})
 	if err != nil {
 		return fmt.Errorf("failed to verify user's organization: %w", err)
 	}
@@ -51,9 +59,17 @@ func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, 
 }
 
 func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, targetKey string) (string, error) {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return "", err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return "", err
+	}
 	id, err := s.queries.UpsertAttendanceRecord(ctx, db.UpsertAttendanceRecordParams{
-		UserID:        util.ParseUUID(userID),
-		OrgID:         util.ParseUUID(orgID),
+		UserID:        uID,
+		OrgID:         oID,
 		TargetFileUri: sql.NullString{String: targetKey, Valid: true},
 	})
 	if err != nil {
@@ -63,9 +79,17 @@ func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, tar
 }
 
 func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID string) (string, error) {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return "", err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return "", err
+	}
 	row, err := s.queries.GetTodayAttendance(ctx, db.GetTodayAttendanceParams{
-		UserID: util.ParseUUID(userID),
-		OrgID:  util.ParseUUID(orgID),
+		UserID: uID,
+		OrgID:  oID,
 	})
 	if err == sql.ErrNoRows {
 		return "none", nil
@@ -77,15 +101,23 @@ func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID st
 }
 
 func (s *AttendanceService) SetResult(ctx context.Context, recordID string, present bool, status string) error {
+	rID, err := util.ParseUUID(recordID)
+	if err != nil {
+		return err
+	}
 	return s.queries.SetAttendanceResult(ctx, db.SetAttendanceResultParams{
-		ID:      util.ParseUUID(recordID),
+		ID:      rID,
 		Present: sql.NullBool{Bool: present, Valid: true},
 		Status:  status,
 	})
 }
 
 func (s *AttendanceService) GetUserFaceURI(ctx context.Context, userID string) (string, error) {
-	uri, err := s.queries.GetUserFaceURI(ctx, util.ParseUUID(userID))
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return "", err
+	}
+	uri, err := s.queries.GetUserFaceURI(ctx, uID)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +125,11 @@ func (s *AttendanceService) GetUserFaceURI(ctx context.Context, userID string) (
 }
 
 func (s *AttendanceService) IsAttendanceEnabled(ctx context.Context, orgID string) (bool, error) {
-	row, err := s.queries.GetOrgInfo(ctx, util.ParseUUID(orgID))
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return false, err
+	}
+	row, err := s.queries.GetOrgInfo(ctx, oID)
 	if err != nil {
 		return false, err
 	}
@@ -138,11 +174,20 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 		return nil, err
 	}
 
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
+
 	if teamID != "" && teamID != "ALL" {
+		parsedTeamID, err := util.ParseUUID(teamID)
+		if err != nil {
+			return nil, err
+		}
 		rows, err := s.queries.GetOrgAttendanceByDateAndTeam(ctx, db.GetOrgAttendanceByDateAndTeamParams{
 			AttendanceDate: sql.NullTime{Time: date, Valid: true},
-			OrgID:          util.ParseUUID(orgID),
-			TeamID:         util.ParseUUID(teamID),
+			OrgID:          parsedOrgID,
+			TeamID:         parsedTeamID,
 		})
 		if err != nil {
 			return nil, err
@@ -163,7 +208,7 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 
 	rows, err := s.queries.GetOrgAttendanceByDate(ctx, db.GetOrgAttendanceByDateParams{
 		AttendanceDate: sql.NullTime{Time: date, Valid: true},
-		OrgID:          util.ParseUUID(orgID),
+		OrgID:          parsedOrgID,
 	})
 	if err != nil {
 		return nil, err
@@ -203,12 +248,21 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 		return nil, err
 	}
 
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
+
 	if teamID != "" && teamID != "ALL" {
+		parsedTeamID, err := util.ParseUUID(teamID)
+		if err != nil {
+			return nil, err
+		}
 		rows, err := s.queries.GetOrgAttendanceRangeByTeam(ctx, db.GetOrgAttendanceRangeByTeamParams{
-			OrgID:    util.ParseUUID(orgID),
+			OrgID:    parsedOrgID,
 			FromDate: from,
 			ToDate:   to,
-			TeamID:   util.ParseUUID(teamID),
+			TeamID:   parsedTeamID,
 		})
 		if err != nil {
 			return nil, err
@@ -229,7 +283,7 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 	}
 
 	rows, err := s.queries.GetOrgAttendanceRange(ctx, db.GetOrgAttendanceRangeParams{
-		OrgID:    util.ParseUUID(orgID),
+		OrgID:    parsedOrgID,
 		FromDate: from,
 		ToDate:   to,
 	})
@@ -285,8 +339,14 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOr
 		return nil, err
 	}
 
-	uid := util.ParseUUID(userID)
-	oid := util.ParseUUID(callerOrgID)
+	uid, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oid, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return nil, err
+	}
 
 	enabled, err := s.IsAttendanceEnabled(ctx, callerOrgID)
 	if err != nil {

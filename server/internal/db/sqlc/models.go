@@ -737,7 +737,7 @@ type Transcription struct {
 
 type User struct {
 	ID          uuid.UUID      `json:"id"`
-	OrgID       uuid.UUID      `json:"org_id"`
+	OrgID       uuid.NullUUID  `json:"org_id"`
 	Status      NullUserStatus `json:"status"`
 	FirstName   sql.NullString `json:"first_name"`
 	LastName    sql.NullString `json:"last_name"`

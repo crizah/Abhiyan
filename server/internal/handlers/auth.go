@@ -101,13 +101,15 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	// 5. Every org this person belongs to, for the header's org-switcher menu
 	// — works unchanged for a single-org user, who just gets a 1-item list.
 	orgs := []schemas.OrgOption{}
-	if memberships, mErr := h.authService.Queries.GetUserOrgMemberships(c.Request.Context(), util.ParseUUID(claims.UserID)); mErr == nil {
-		for _, m := range memberships {
-			orgs = append(orgs, schemas.OrgOption{
-				OrgID:   m.OrgID.String(),
-				OrgName: m.OrgName,
-				Roles:   util.ParsePGTextArray(m.Roles),
-			})
+	if callerID, idErr := util.ParseUUID(claims.UserID); idErr == nil {
+		if memberships, mErr := h.authService.Queries.GetUserOrgMemberships(c.Request.Context(), callerID); mErr == nil {
+			for _, m := range memberships {
+				orgs = append(orgs, schemas.OrgOption{
+					OrgID:   m.OrgID.String(),
+					OrgName: m.OrgName,
+					Roles:   util.ParsePGTextArray(m.Roles),
+				})
+			}
 		}
 	}
 
@@ -261,7 +263,11 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 
 	// Get the core account identity from the current context token
 	userIDStr := c.MustGet("user_id").(string)
-	userID := util.ParseUUID(userIDStr)
+	userID, err := util.ParseUUID(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid session"})
+		return
+	}
 	currentOrgIDStr := c.MustGet("org_id").(string)
 	emailStr := c.MustGet("email").(string)
 
@@ -269,7 +275,11 @@ func (h *AuthHandler) SwitchRole(c *gin.Context) {
 	if targetOrgIDStr == "" {
 		targetOrgIDStr = currentOrgIDStr
 	}
-	targetOrgID := util.ParseUUID(targetOrgIDStr)
+	targetOrgID, err := util.ParseUUID(targetOrgIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid target org id"})
+		return
+	}
 
 	if targetOrgIDStr != currentOrgIDStr {
 		belongs, err := h.authService.Queries.IsUserInOrg(c.Request.Context(), db.IsUserInOrgParams{UserID: userID, OrgID: targetOrgID})

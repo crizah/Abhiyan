@@ -45,8 +45,8 @@ SELECT DISTINCT ON (u.id)
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
-LEFT JOIN team_members tm ON u.id = tm.user_id
-LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = $2
+LEFT JOIN team_members tm ON u.id = tm.user_id AND tm.team_id IN (SELECT id FROM teams WHERE org_id = $2)
+LEFT JOIN teams t ON tm.team_id = t.id
 WHERE EXISTS (
     SELECT 1 FROM team_members tm2
     JOIN teams t2 ON tm2.team_id = t2.id
@@ -90,8 +90,8 @@ FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = sqlc.arg('org_id') AND om.status = 'ACTIVE'
 CROSS JOIN generate_series(sqlc.arg('from_date')::date, sqlc.arg('to_date')::date, interval '1 day') AS d(day)
 LEFT JOIN attendance_record a ON a.user_id = u.id AND a.org_id = sqlc.arg('org_id') AND a.attendance_date = d.day
-LEFT JOIN team_members tm ON u.id = tm.user_id
-LEFT JOIN teams t ON tm.team_id = t.id AND t.org_id = sqlc.arg('org_id')
+LEFT JOIN team_members tm ON u.id = tm.user_id AND tm.team_id IN (SELECT id FROM teams WHERE org_id = sqlc.arg('org_id'))
+LEFT JOIN teams t ON tm.team_id = t.id
 WHERE EXISTS (
     SELECT 1 FROM team_members tm2
     JOIN teams t2 ON tm2.team_id = t2.id

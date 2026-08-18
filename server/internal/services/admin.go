@@ -34,7 +34,10 @@ func NewAdminService(dbConn *sql.DB, s []byte, oa *app.App) *AdminService {
 
 func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req schemas.InviteUserRequest) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
-	orgID := util.ParseUUID(adminOrgID)
+	orgID, err := util.ParseUUID(adminOrgID)
+	if err != nil {
+		return "", err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -104,19 +107,37 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 }
 
 func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, error) {
-	return s.queries.GetTotalUsersByOrg(ctx, util.ParseUUID(orgID))
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return 0, err
+	}
+	return s.queries.GetTotalUsersByOrg(ctx, parsedOrgID)
 }
 
 func (s *AdminService) GetAdminTeamUsersCount(ctx context.Context, userID string, orgID string) (int64, error) {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return 0, err
+	}
 	return s.queries.GetTotalUsersInAdminTeams(ctx, db.GetTotalUsersInAdminTeamsParams{
-		UserID: util.ParseUUID(userID),
-		OrgID:  util.ParseUUID(orgID),
+		UserID: uID,
+		OrgID:  oID,
 	})
 }
 
 func (s *AdminService) GetAdminDashboardStats(ctx context.Context, userID string, orgID string) (*schemas.AdminDashboardStatsResponse, error) {
-	uID := util.ParseUUID(userID)
-	oID := util.ParseUUID(orgID)
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 
 	// 1. Get overarching total distinct users
 	totalUsers, err := s.queries.GetTotalUsersInAdminTeams(ctx, db.GetTotalUsersInAdminTeamsParams{UserID: uID, OrgID: oID})
@@ -151,7 +172,10 @@ func (s *AdminService) GetAdminDashboardStats(ctx context.Context, userID string
 }
 
 func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, offset int32, searchTerm string, roleFilter string, statusFilter string) (*schemas.PaginatedUsersResponse, error) {
-	parsedOrgID := util.ParseUUID(orgID)
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 
 	if roleFilter == "ALL" {
 		roleFilter = ""
@@ -221,7 +245,14 @@ func (s *AdminService) GetOrgUsers(ctx context.Context, orgID string, limit, off
 }
 
 func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, orgID string, limit, offset int32, search string, teamFilter string, roleFilter string, statusFilter string) (*schemas.PaginatedEmployeesResponse, error) {
-	parsedUserID := util.ParseUUID(userID)
+	parsedUserID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Convert "ALL" filter strings from React to empty strings for SQLC
 	if teamFilter == "ALL" {
@@ -238,7 +269,7 @@ func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, orgI
 		UserID:       parsedUserID,
 		Limit:        limit,
 		Offset:       offset,
-		CallerOrgID:  util.ParseUUID(orgID),
+		CallerOrgID:  parsedOrgID,
 		SearchTerm:   search,
 		TeamFilter:   teamFilter,
 		RoleFilter:   roleFilter,
@@ -284,9 +315,17 @@ func (s *AdminService) GetTeamEmployees(ctx context.Context, userID string, orgI
 }
 
 func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string, orgID string) ([]string, error) {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 	names, err := s.queries.GetAdminTeamNames(ctx, db.GetAdminTeamNamesParams{
-		UserID: util.ParseUUID(userID),
-		OrgID:  util.ParseUUID(orgID),
+		UserID: uID,
+		OrgID:  oID,
 	})
 	if err != nil {
 		return nil, err
@@ -298,8 +337,12 @@ func (s *AdminService) GetAdminTeamNames(ctx context.Context, userID string, org
 }
 
 func (s *AdminService) GetUnassignedOrgUsers(ctx context.Context, orgID string, limit, offset int32) (*schemas.PaginatedUnassignedUsersResponse, error) {
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 	dbUsers, err := s.queries.GetUnassignedOrgUsers(ctx, db.GetUnassignedOrgUsersParams{
-		OrgID:  util.ParseUUID(orgID),
+		OrgID:  parsedOrgID,
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -346,9 +389,18 @@ func (s *AdminService) CreateTeam(ctx context.Context, orgID, name, creatorID st
 
 	qtx := s.queries.WithTx(tx)
 
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return "", err
+	}
+	parsedCreatorID, err := util.ParseUUID(creatorID)
+	if err != nil {
+		return "", err
+	}
+
 	// 1. Create the Team
 	teamID, err := qtx.CreateTeam(ctx, db.CreateTeamParams{
-		OrgID: util.ParseUUID(orgID),
+		OrgID: parsedOrgID,
 		Name:  name,
 	})
 	if err != nil {
@@ -358,7 +410,7 @@ func (s *AdminService) CreateTeam(ctx context.Context, orgID, name, creatorID st
 	// 2. Automatically make the creator the TEAM_ADMIN
 	err = qtx.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
 		TeamID:   teamID,
-		UserID:   util.ParseUUID(creatorID),
+		UserID:   parsedCreatorID,
 		TeamRole: "TEAM_ADMIN", // Or db.TeamRoleEnumTEAM_ADMIN depending on your generated types
 	})
 	if err != nil {
@@ -373,7 +425,11 @@ func (s *AdminService) CreateTeam(ctx context.Context, orgID, name, creatorID st
 }
 
 func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]schemas.TeamResponse, error) {
-	dbTeams, err := s.queries.GetOrgTeams(ctx, util.ParseUUID(orgID))
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
+	dbTeams, err := s.queries.GetOrgTeams(ctx, parsedOrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -393,8 +449,14 @@ func (s *AdminService) GetAllOrgTeams(ctx context.Context, orgID string) ([]sche
 }
 
 func (s *AdminService) GetTeamMembers(ctx context.Context, teamID string, userID string, role string) ([]schemas.TeamMemberResponse, error) {
-	tID := util.ParseUUID(teamID)
-	uID := util.ParseUUID(userID)
+	tID, err := util.ParseUUID(teamID)
+	if err != nil {
+		return nil, err
+	}
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
 
 	// SECURITY GUARD: this is reachable by any authenticated user (not just
 	// admins), so the only thing that matters is org membership — verify the
@@ -440,9 +502,18 @@ func (s *AdminService) fetchTeamMembers(ctx context.Context, tID uuid.UUID) ([]s
 }
 
 func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, role string, isRemoval bool, reqUserID string) error {
-	tID := util.ParseUUID(teamID)
-	uID := util.ParseUUID(userID)
-	reqUID := util.ParseUUID(reqUserID)
+	tID, err := util.ParseUUID(teamID)
+	if err != nil {
+		return err
+	}
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
+	reqUID, err := util.ParseUUID(reqUserID)
+	if err != nil {
+		return err
+	}
 
 	teamOrgID, err := s.queries.GetTeamOrgID(ctx, tID)
 	if err != nil {
@@ -570,10 +641,22 @@ func (s *AdminService) ManageTeamMember(ctx context.Context, teamID, userID, rol
 }
 
 func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTeamID, userID, reqUserID string) error {
-	fID := util.ParseUUID(fromTeamID)
-	tID := util.ParseUUID(toTeamID)
-	uID := util.ParseUUID(userID)
-	reqUID := util.ParseUUID(reqUserID)
+	fID, err := util.ParseUUID(fromTeamID)
+	if err != nil {
+		return err
+	}
+	tID, err := util.ParseUUID(toTeamID)
+	if err != nil {
+		return err
+	}
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
+	reqUID, err := util.ParseUUID(reqUserID)
+	if err != nil {
+		return err
+	}
 
 	// Cross-org guard: requester, target user, source team and destination team
 	// must all belong to the same organization — a SUPER_ADMIN's reach stops at
@@ -627,8 +710,12 @@ func (s *AdminService) TransferTeamMember(ctx context.Context, fromTeamID, toTea
 }
 
 func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, limit, offset int32) (*schemas.PaginatedAssignedUsersResponse, error) {
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 	dbUsers, err := s.queries.GetAssignedOrgUsers(ctx, db.GetAssignedOrgUsersParams{
-		OrgID:  util.ParseUUID(orgID),
+		OrgID:  parsedOrgID,
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -667,9 +754,16 @@ func (s *AdminService) GetAssignedOrgUsers(ctx context.Context, orgID string, li
 }
 
 func (s *AdminService) GetUserTeams(ctx context.Context, userID string, callerOrgID string) ([]schemas.UserTeamResponse, error) {
-	uID := util.ParseUUID(userID)
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return nil, err
+	}
 
-	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: util.ParseUUID(callerOrgID)})
+	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: oID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify user's organization: %w", err)
 	}
@@ -679,7 +773,7 @@ func (s *AdminService) GetUserTeams(ctx context.Context, userID string, callerOr
 
 	dbTeams, err := s.queries.GetUserTeams(ctx, db.GetUserTeamsParams{
 		UserID: uID,
-		OrgID:  util.ParseUUID(callerOrgID),
+		OrgID:  oID,
 	})
 	if err != nil {
 		return nil, err
@@ -703,8 +797,14 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 	if status == "INVITED" {
 		return errors.New("invalid operation: cannot manually revert a user's status to INVITED")
 	}
-	uID := util.ParseUUID(userID)
-	orgID := util.ParseUUID(callerOrgID)
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
+	orgID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return err
+	}
 
 	belongs, err := s.queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: uID, OrgID: orgID})
 	if err != nil {
@@ -745,9 +845,17 @@ func (s *AdminService) UpdateUserSystemProfile(ctx context.Context, userID strin
 }
 
 func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string, orgID string) ([]schemas.TeamResponse, error) {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 	dbTeams, err := s.queries.GetAdminManagedTeams(ctx, db.GetAdminManagedTeamsParams{
-		UserID: util.ParseUUID(userID),
-		OrgID:  util.ParseUUID(orgID),
+		UserID: uID,
+		OrgID:  oID,
 	})
 	if err != nil {
 		return nil, err
@@ -769,8 +877,12 @@ func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string, 
 }
 
 func (s *AdminService) SetAttendanceEnabled(ctx context.Context, orgID string, enabled bool) error {
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return err
+	}
 	return s.queries.SetOrgAttendanceEnabled(ctx, db.SetOrgAttendanceEnabledParams{
-		ID:                util.ParseUUID(orgID),
+		ID:                parsedOrgID,
 		AttendanceEnabled: enabled,
 	})
 

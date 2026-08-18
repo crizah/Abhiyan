@@ -71,14 +71,23 @@ func (h *ScoreHandler) GetAdminLeaderboard(c *gin.Context) {
 	nameMap := make(map[string]string)
 	var allTeamIDs []uuid.UUID
 	for _, t := range allTeams {
-		allTeamIDs = append(allTeamIDs, util.ParseUUID(t.ID))
+		tID, err := util.ParseUUID(t.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+			return
+		}
+		allTeamIDs = append(allTeamIDs, tID)
 		nameMap[t.ID] = t.Name
 	}
 
 	// teamIDs is used for leaderboard entries only (respects filter); visibility always shows all teams
 	var teamIDs []uuid.UUID
 	if teamFilter != "" && teamFilter != "ALL" {
-		filterID := util.ParseUUID(teamFilter)
+		filterID, err := util.ParseUUID(teamFilter)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid team id: must be a team UUID, not a team name"})
+			return
+		}
 		found := false
 		for _, id := range allTeamIDs {
 			if id == filterID {
@@ -199,16 +208,26 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 
 	var allTeamIDs []uuid.UUID
 	for _, t := range allTeams {
-		allTeamIDs = append(allTeamIDs, util.ParseUUID(t.ID))
+		tID, err := util.ParseUUID(t.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+			return
+		}
+		allTeamIDs = append(allTeamIDs, tID)
 	}
 
+	// The team filter here is the team's NAME, not its UUID — the Employees
+	// page's team dropdown is populated from GetAdminTeamNames (team.sql's
+	// GetTeamEmployeesPaginated filters the same way, by t.name), so that's
+	// what actually arrives on this query param. Resolve it against allTeams,
+	// which is already scoped to teams the caller is authorized to see.
 	var teamIDs []uuid.UUID
 	if teamFilter != "" && teamFilter != "ALL" {
-		filterID := util.ParseUUID(teamFilter)
 		found := false
-		for _, id := range allTeamIDs {
-			if id == filterID {
+		for i, t := range allTeams {
+			if t.Name == teamFilter {
 				found = true
+				teamIDs = []uuid.UUID{allTeamIDs[i]}
 				break
 			}
 		}
@@ -216,7 +235,6 @@ func (h *ScoreHandler) DownloadScoreReport(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized: team not in your organization"})
 			return
 		}
-		teamIDs = []uuid.UUID{filterID}
 	} else {
 		teamIDs = allTeamIDs
 	}

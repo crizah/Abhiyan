@@ -142,12 +142,18 @@ func (s *AuthService) RegisterOrganization(ctx context.Context, req schemas.Regi
 }
 
 func (s *AuthService) GetOrganizationName(ctx context.Context, orgID string) (string, error) {
-	parsedUUID := util.ParseUUID(orgID)
+	parsedUUID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return "", err
+	}
 	return s.Queries.GetOrganizationName(ctx, parsedUUID)
 }
 
 func (s *AuthService) GetOrgInfo(ctx context.Context, orgID string) (db.GetOrgInfoRow, error) {
-	parsedUUID := util.ParseUUID(orgID)
+	parsedUUID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return db.GetOrgInfoRow{}, err
+	}
 	return s.Queries.GetOrgInfo(ctx, parsedUUID)
 }
 
@@ -235,8 +241,14 @@ func (s *AuthService) SelectOrg(ctx context.Context, pendingToken string, orgID 
 	if err != nil {
 		return "", errors.New("invalid or expired selection, please log in again")
 	}
-	userID := util.ParseUUID(claims.UserID)
-	targetOrgID := util.ParseUUID(orgID)
+	userID, err := util.ParseUUID(claims.UserID)
+	if err != nil {
+		return "", errors.New("invalid or expired selection, please log in again")
+	}
+	targetOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return "", errors.New("invalid organization")
+	}
 
 	belongs, err := s.Queries.IsUserInOrg(ctx, db.IsUserInOrgParams{UserID: userID, OrgID: targetOrgID})
 	if err != nil {
@@ -420,7 +432,11 @@ func (s *AuthService) PreviewInvite(ctx context.Context, token string) (*schemas
 		return nil, errors.New("invalid or expired invite link")
 	}
 
-	orgName, err := s.Queries.GetOrganizationName(ctx, util.ParseUUID(claims.OrgID))
+	claimsOrgID, err := util.ParseUUID(claims.OrgID)
+	if err != nil {
+		return nil, errors.New("invalid or expired invite link")
+	}
+	orgName, err := s.Queries.GetOrganizationName(ctx, claimsOrgID)
 	if err != nil {
 		return nil, errors.New("invalid or expired invite link")
 	}
@@ -450,7 +466,10 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req schemas.AcceptInvite
 	if err != nil {
 		return errors.New("invalid or expired invite link")
 	}
-	orgID := util.ParseUUID(claims.OrgID)
+	orgID, err := util.ParseUUID(claims.OrgID)
+	if err != nil {
+		return errors.New("invalid or expired invite link")
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -558,9 +577,13 @@ func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken strin
 	}
 
 	// 2. Fetch the user to ensure they exist and haven't already accepted an invite
+	claimsOrgID, err := util.ParseUUID(claims.OrgID)
+	if err != nil {
+		return errors.New("could not verify original invite record")
+	}
 	user, err := s.Queries.GetPendingInvitedUser(ctx, db.GetPendingInvitedUserParams{
 		EmailID: claims.Email,
-		OrgID:   util.ParseUUID(claims.OrgID),
+		OrgID:   claimsOrgID,
 	})
 	if err != nil {
 		return errors.New("could not verify original invite record")

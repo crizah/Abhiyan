@@ -23,8 +23,14 @@ func NewUserService(dbConn *sql.DB) *UserService {
 }
 
 func (s *UserService) GetUserProfile(ctx context.Context, userID string, orgID string) (*schemas.UserProfileResponse, error) {
-	uid := util.ParseUUID(userID)
-	oid := util.ParseUUID(orgID)
+	uid, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oid, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
 
 	// 1. Fetch base profile (org-scoped: status/org_name are per-membership)
 	baseProfile, err := s.queries.GetFullUserProfile(ctx, db.GetFullUserProfileParams{ID: uid, OrgID: oid})
@@ -84,7 +90,10 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req 
 		return errors.New("phone number must be a 10-digit number without the country code")
 	}
 
-	uid := util.ParseUUID(userID)
+	uid, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
 
 	params := db.UpdateUserProfileParams{
 		ID:          uid,
@@ -94,12 +103,15 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, userID string, req 
 		FaceS3Uri:   sql.NullString{String: req.SourceFace.ObjectKey, Valid: req.SourceFace.ObjectKey != ""},
 	}
 
-	_, err := s.queries.UpdateUserProfile(ctx, params)
+	_, err = s.queries.UpdateUserProfile(ctx, params)
 	return err
 }
 
 func (s *UserService) RegisterFace(ctx context.Context, userID string, objectKey string) error {
-	uid := util.ParseUUID(userID)
+	uid, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
 	return s.queries.UpdateUserFace(ctx, db.UpdateUserFaceParams{
 		ID:        uid,
 		FaceS3Uri: sql.NullString{String: objectKey, Valid: true},

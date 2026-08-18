@@ -162,12 +162,17 @@ func (s *ScoreService) RecordReopenTx(ctx context.Context, qtx *db.Queries, task
 }
 
 func (s *ScoreService) GetUserBreakdown(ctx context.Context, userID string, teamFilter string, limit, offset int32, callerOrgID string) (*schemas.ScoreBreakdownResponse, error) {
-	uID := util.ParseUUID(userID)
-	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
 		return nil, err
 	}
-
-	oID := util.ParseUUID(callerOrgID)
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.assertUserInOrg(ctx, uID, oID); err != nil {
+		return nil, err
+	}
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,
@@ -301,28 +306,47 @@ func (s *ScoreService) GetAdminLeaderboard(ctx context.Context, teamIDs []uuid.U
 }
 
 func (s *ScoreService) ToggleLeaderboardVisibility(ctx context.Context, teamID string, visible bool, adminID string, callerOrgID string) error {
-	tID := util.ParseUUID(teamID)
+	tID, err := util.ParseUUID(teamID)
+	if err != nil {
+		return err
+	}
+	orgID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return err
+	}
+	updatedBy, err := util.ParseUUID(adminID)
+	if err != nil {
+		return err
+	}
+
 	teamOrgID, err := s.queries.GetTeamOrgID(ctx, tID)
 	if err != nil {
 		return fmt.Errorf("failed to verify team's organization: %w", err)
 	}
-	if teamOrgID != util.ParseUUID(callerOrgID) {
+	if teamOrgID != orgID {
 		return errors.New("unauthorized: team does not belong to your organization")
 	}
 
 	return s.queries.UpsertLeaderboardVisibility(ctx, db.UpsertLeaderboardVisibilityParams{
 		TeamID:             tID,
 		LeaderboardVisible: visible,
-		UpdatedBy:          uuid.NullUUID{UUID: util.ParseUUID(adminID), Valid: true},
+		UpdatedBy:          uuid.NullUUID{UUID: updatedBy, Valid: true},
 	})
 }
 
 func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string, teamFilter string, callerOrgID string) (*schemas.LeaderboardResponse, error) {
-	uID := util.ParseUUID(userID)
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return nil, err
+	}
 
 	userTeams, err := s.queries.GetEmployeeTeams(ctx, db.GetEmployeeTeamsParams{
 		UserID: uID,
-		OrgID:  util.ParseUUID(callerOrgID),
+		OrgID:  oID,
 	})
 	if err != nil {
 		return nil, err
@@ -334,7 +358,10 @@ func (s *ScoreService) GetEmployeeLeaderboard(ctx context.Context, userID string
 	}
 
 	if teamFilter != "" && teamFilter != "ALL" {
-		filterID := util.ParseUUID(teamFilter)
+		filterID, err := util.ParseUUID(teamFilter)
+		if err != nil {
+			return &schemas.LeaderboardResponse{Entries: []schemas.LeaderboardEntry{}}, nil
+		}
 		found := false
 		for _, id := range teamIDs {
 			if id == filterID {
@@ -408,8 +435,15 @@ type UserNameResult struct {
 }
 
 func (s *ScoreService) GetUserName(ctx context.Context, userID string, callerOrgID string) (*UserNameResult, error) {
-	uID := util.ParseUUID(userID)
-	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.assertUserInOrg(ctx, uID, oID); err != nil {
 		return nil, err
 	}
 
@@ -426,12 +460,17 @@ func (s *ScoreService) GetUserName(ctx context.Context, userID string, callerOrg
 }
 
 func (s *ScoreService) WriteUserScoreReport(ctx context.Context, userID string, userName string, email string, w io.Writer, callerOrgID string) error {
-	uID := util.ParseUUID(userID)
-	if err := s.assertUserInOrg(ctx, uID, util.ParseUUID(callerOrgID)); err != nil {
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
 		return err
 	}
-
-	oID := util.ParseUUID(callerOrgID)
+	oID, err := util.ParseUUID(callerOrgID)
+	if err != nil {
+		return err
+	}
+	if err := s.assertUserInOrg(ctx, uID, oID); err != nil {
+		return err
+	}
 
 	breakdown, err := s.queries.GetUserScoreBreakdown(ctx, db.GetUserScoreBreakdownParams{
 		UserID:     uID,

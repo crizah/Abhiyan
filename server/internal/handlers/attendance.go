@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/crizah/Abhiyan/server/internal/services"
+	"github.com/crizah/Abhiyan/server/internal/util"
 	"github.com/crizah/Onion/app"
 	"github.com/gin-gonic/gin"
 )
@@ -20,8 +21,9 @@ func NewAttendanceHandler(attendanceService *services.AttendanceService, onionAp
 }
 
 func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
-	// Gate: reject before 7am. Server TZ env var should match the org's timezone.
-	if time.Now().Hour() < 7 {
+	// Gate: reject before 7am IST. The host clock isn't reliably IST (e.g.
+	// defaults to UTC), so compare in util.IST rather than the host's zone.
+	if time.Now().In(util.IST).Hour() < 7 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Attendance cannot be marked before 7:00 AM"})
 		return
 	}

@@ -44,7 +44,8 @@ SELECT DISTINCT ON (u.id)
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
@@ -64,12 +65,13 @@ type GetOrgAttendanceByDateParams struct {
 }
 
 type GetOrgAttendanceByDateRow struct {
-	ID               uuid.UUID `json:"id"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	EmailID          string    `json:"email_id"`
-	TeamName         string    `json:"team_name"`
-	AttendanceStatus string    `json:"attendance_status"`
+	ID               uuid.UUID                       `json:"id"`
+	FirstName        string                          `json:"first_name"`
+	LastName         string                          `json:"last_name"`
+	EmailID          string                          `json:"email_id"`
+	TeamName         string                          `json:"team_name"`
+	AttendanceStatus string                          `json:"attendance_status"`
+	Fulfillment      NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
 func (q *Queries) GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendanceByDateParams) ([]GetOrgAttendanceByDateRow, error) {
@@ -88,6 +90,7 @@ func (q *Queries) GetOrgAttendanceByDate(ctx context.Context, arg GetOrgAttendan
 			&i.EmailID,
 			&i.TeamName,
 			&i.AttendanceStatus,
+			&i.Fulfillment,
 		); err != nil {
 			return nil, err
 		}
@@ -113,7 +116,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
@@ -129,12 +133,13 @@ type GetOrgAttendanceByDateAndTeamParams struct {
 }
 
 type GetOrgAttendanceByDateAndTeamRow struct {
-	ID               uuid.UUID `json:"id"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	EmailID          string    `json:"email_id"`
-	TeamName         string    `json:"team_name"`
-	AttendanceStatus string    `json:"attendance_status"`
+	ID               uuid.UUID                       `json:"id"`
+	FirstName        string                          `json:"first_name"`
+	LastName         string                          `json:"last_name"`
+	EmailID          string                          `json:"email_id"`
+	TeamName         string                          `json:"team_name"`
+	AttendanceStatus string                          `json:"attendance_status"`
+	Fulfillment      NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
 func (q *Queries) GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error) {
@@ -153,6 +158,7 @@ func (q *Queries) GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgA
 			&i.EmailID,
 			&i.TeamName,
 			&i.AttendanceStatus,
+			&i.Fulfillment,
 		); err != nil {
 			return nil, err
 		}
@@ -179,7 +185,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $1 AND om.status = 'ACTIVE'
 CROSS JOIN generate_series($2::date, $3::date, interval '1 day') AS d(day)
@@ -201,13 +208,14 @@ type GetOrgAttendanceRangeParams struct {
 }
 
 type GetOrgAttendanceRangeRow struct {
-	ID               uuid.UUID `json:"id"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	EmailID          string    `json:"email_id"`
-	TeamName         string    `json:"team_name"`
-	AttendanceDate   time.Time `json:"attendance_date"`
-	AttendanceStatus string    `json:"attendance_status"`
+	ID               uuid.UUID                       `json:"id"`
+	FirstName        string                          `json:"first_name"`
+	LastName         string                          `json:"last_name"`
+	EmailID          string                          `json:"email_id"`
+	TeamName         string                          `json:"team_name"`
+	AttendanceDate   time.Time                       `json:"attendance_date"`
+	AttendanceStatus string                          `json:"attendance_status"`
+	Fulfillment      NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
 func (q *Queries) GetOrgAttendanceRange(ctx context.Context, arg GetOrgAttendanceRangeParams) ([]GetOrgAttendanceRangeRow, error) {
@@ -227,6 +235,7 @@ func (q *Queries) GetOrgAttendanceRange(ctx context.Context, arg GetOrgAttendanc
 			&i.TeamName,
 			&i.AttendanceDate,
 			&i.AttendanceStatus,
+			&i.Fulfillment,
 		); err != nil {
 			return nil, err
 		}
@@ -253,7 +262,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $1 AND om.status = 'ACTIVE'
 CROSS JOIN generate_series($2::date, $3::date, interval '1 day') AS d(day)
@@ -271,13 +281,14 @@ type GetOrgAttendanceRangeByTeamParams struct {
 }
 
 type GetOrgAttendanceRangeByTeamRow struct {
-	ID               uuid.UUID `json:"id"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	EmailID          string    `json:"email_id"`
-	TeamName         string    `json:"team_name"`
-	AttendanceDate   time.Time `json:"attendance_date"`
-	AttendanceStatus string    `json:"attendance_status"`
+	ID               uuid.UUID                       `json:"id"`
+	FirstName        string                          `json:"first_name"`
+	LastName         string                          `json:"last_name"`
+	EmailID          string                          `json:"email_id"`
+	TeamName         string                          `json:"team_name"`
+	AttendanceDate   time.Time                       `json:"attendance_date"`
+	AttendanceStatus string                          `json:"attendance_status"`
+	Fulfillment      NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
 func (q *Queries) GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAttendanceRangeByTeamParams) ([]GetOrgAttendanceRangeByTeamRow, error) {
@@ -302,6 +313,7 @@ func (q *Queries) GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAtt
 			&i.TeamName,
 			&i.AttendanceDate,
 			&i.AttendanceStatus,
+			&i.Fulfillment,
 		); err != nil {
 			return nil, err
 		}
@@ -342,7 +354,7 @@ func (q *Queries) GetTodayAttendance(ctx context.Context, arg GetTodayAttendance
 }
 
 const getUserAttendanceHistoryRange = `-- name: GetUserAttendanceHistoryRange :many
-SELECT attendance_date, present
+SELECT attendance_date, present, fulfillment
 FROM attendance_record
 WHERE user_id = $1 AND org_id = $2
   AND attendance_date BETWEEN $3::date AND $4::date
@@ -357,8 +369,9 @@ type GetUserAttendanceHistoryRangeParams struct {
 }
 
 type GetUserAttendanceHistoryRangeRow struct {
-	AttendanceDate sql.NullTime `json:"attendance_date"`
-	Present        sql.NullBool `json:"present"`
+	AttendanceDate sql.NullTime                    `json:"attendance_date"`
+	Present        sql.NullBool                    `json:"present"`
+	Fulfillment    NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
 func (q *Queries) GetUserAttendanceHistoryRange(ctx context.Context, arg GetUserAttendanceHistoryRangeParams) ([]GetUserAttendanceHistoryRangeRow, error) {
@@ -375,7 +388,7 @@ func (q *Queries) GetUserAttendanceHistoryRange(ctx context.Context, arg GetUser
 	var items []GetUserAttendanceHistoryRangeRow
 	for rows.Next() {
 		var i GetUserAttendanceHistoryRangeRow
-		if err := rows.Scan(&i.AttendanceDate, &i.Present); err != nil {
+		if err := rows.Scan(&i.AttendanceDate, &i.Present, &i.Fulfillment); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -440,21 +453,29 @@ func (q *Queries) SetAttendanceResult(ctx context.Context, arg SetAttendanceResu
 }
 
 const upsertAttendanceRecord = `-- name: UpsertAttendanceRecord :one
-INSERT INTO attendance_record (user_id, org_id, target_file_uri, status)
-VALUES ($1, $2, $3, 'pending')
+INSERT INTO attendance_record (user_id, org_id, target_file_uri, status, fulfillment)
+VALUES ($1, $2, $3, 'pending', $4)
 ON CONFLICT (user_id, org_id, attendance_date)
-DO UPDATE SET target_file_uri = $3, status = 'pending', updated_at = NOW()
+DO UPDATE SET target_file_uri = $3, status = 'pending', fulfillment = $4, updated_at = NOW()
 RETURNING id
 `
 
 type UpsertAttendanceRecordParams struct {
-	UserID        uuid.UUID      `json:"user_id"`
-	OrgID         uuid.UUID      `json:"org_id"`
-	TargetFileUri sql.NullString `json:"target_file_uri"`
+	UserID        uuid.UUID                       `json:"user_id"`
+	OrgID         uuid.UUID                       `json:"org_id"`
+	TargetFileUri sql.NullString                  `json:"target_file_uri"`
+	Fulfillment   NullAttendanceFulfillmentStatus `json:"fulfillment"`
 }
 
+// Fulfillment is recomputed on every submission (including resubmits after an
+// unmatched attempt) — the most recent mark-time governs, same as status.
 func (q *Queries) UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error) {
-	row := q.db.QueryRowContext(ctx, upsertAttendanceRecord, arg.UserID, arg.OrgID, arg.TargetFileUri)
+	row := q.db.QueryRowContext(ctx, upsertAttendanceRecord,
+		arg.UserID,
+		arg.OrgID,
+		arg.TargetFileUri,
+		arg.Fulfillment,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err

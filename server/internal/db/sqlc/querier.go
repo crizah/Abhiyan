@@ -42,6 +42,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
+	DeleteOrganization(ctx context.Context, id uuid.UUID) error
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
 	DeleteTaskReminders(ctx context.Context, taskID uuid.UUID) error
@@ -73,6 +74,10 @@ type Querier interface {
 	GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error)
 	GetOrgAttendanceRange(ctx context.Context, arg GetOrgAttendanceRangeParams) ([]GetOrgAttendanceRangeRow, error)
 	GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAttendanceRangeByTeamParams) ([]GetOrgAttendanceRangeByTeamRow, error)
+	// Org-scoped (joins through org_memberships, not the legacy users.org_id) so
+	// this can never leak another org's users — used by the super admin dashboard
+	// to show who has/hasn't registered their face for attendance.
+	GetOrgFaceRegistrationStatus(ctx context.Context, orgID uuid.UUID) ([]GetOrgFaceRegistrationStatusRow, error)
 	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
@@ -167,6 +172,8 @@ type Querier interface {
 	// memberships that must be left untouched).
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	// Fulfillment is recomputed on every submission (including resubmits after an
+	// unmatched attempt) — the most recent mark-time governs, same as status.
 	UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error)
 	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error

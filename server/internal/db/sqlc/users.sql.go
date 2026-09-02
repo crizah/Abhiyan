@@ -305,6 +305,56 @@ func (q *Queries) GetMembershipStatus(ctx context.Context, arg GetMembershipStat
 	return status, err
 }
 
+const getOrgFaceRegistrationStatus = `-- name: GetOrgFaceRegistrationStatus :many
+SELECT
+    u.id, u.first_name, u.last_name, u.email_id,
+    (u.face_s3_uri IS NOT NULL)::boolean AS face_registered
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id
+WHERE om.org_id = $1 AND om.status = 'ACTIVE'
+ORDER BY u.first_name, u.last_name
+`
+
+type GetOrgFaceRegistrationStatusRow struct {
+	ID             uuid.UUID      `json:"id"`
+	FirstName      sql.NullString `json:"first_name"`
+	LastName       sql.NullString `json:"last_name"`
+	EmailID        string         `json:"email_id"`
+	FaceRegistered bool           `json:"face_registered"`
+}
+
+// Org-scoped (joins through org_memberships, not the legacy users.org_id) so
+// this can never leak another org's users — used by the super admin dashboard
+// to show who has/hasn't registered their face for attendance.
+func (q *Queries) GetOrgFaceRegistrationStatus(ctx context.Context, orgID uuid.UUID) ([]GetOrgFaceRegistrationStatusRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOrgFaceRegistrationStatus, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrgFaceRegistrationStatusRow
+	for rows.Next() {
+		var i GetOrgFaceRegistrationStatusRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.EmailID,
+			&i.FaceRegistered,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPendingInvitedUser = `-- name: GetPendingInvitedUser :one
 SELECT u.id, u.email_id, om.org_id, om.status, usr.role
 FROM users u

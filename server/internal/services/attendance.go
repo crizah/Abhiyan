@@ -58,7 +58,7 @@ func (s *AttendanceService) assertUserInOrg(ctx context.Context, userID string, 
 	return nil
 }
 
-func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, targetKey string) (string, error) {
+func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, targetKey, fulfillment string) (string, error) {
 	uID, err := util.ParseUUID(userID)
 	if err != nil {
 		return "", err
@@ -71,6 +71,10 @@ func (s *AttendanceService) UpsertRecord(ctx context.Context, userID, orgID, tar
 		UserID:        uID,
 		OrgID:         oID,
 		TargetFileUri: sql.NullString{String: targetKey, Valid: true},
+		Fulfillment: db.NullAttendanceFulfillmentStatus{
+			AttendanceFulfillmentStatus: db.AttendanceFulfillmentStatus(fulfillment),
+			Valid:                       true,
+		},
 	})
 	if err != nil {
 		return "", err
@@ -144,6 +148,7 @@ type AttendanceRow struct {
 	TeamName         string `json:"team_name"`
 	AttendanceStatus string `json:"attendance_status"`
 	AttendanceDate   string `json:"attendance_date,omitempty"`
+	Fulfillment      string `json:"fulfillment"`
 }
 
 // resolveStatus turns the SQL-level 'no_record' placeholder into a status the
@@ -161,6 +166,16 @@ func resolveStatus(rawStatus string, attendanceEnabled bool) string {
 		return "not_applicable"
 	}
 	return "absent"
+}
+
+// resolveFulfillment surfaces full/half-day only for a day the user is
+// actually present — an absent/unmatched/no-record day never had a real
+// mark-time to derive one from, so showing a value there would be misleading.
+func resolveFulfillment(resolvedStatus string, raw db.NullAttendanceFulfillmentStatus) string {
+	if resolvedStatus != "present" || !raw.Valid {
+		return ""
+	}
+	return string(raw.AttendanceFulfillmentStatus)
 }
 
 func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr, teamID string) ([]AttendanceRow, error) {
@@ -194,13 +209,15 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 		}
 		out := make([]AttendanceRow, len(rows))
 		for i, r := range rows {
+			status := resolveStatus(r.AttendanceStatus, enabled)
 			out[i] = AttendanceRow{
 				ID:               r.ID.String(),
 				FirstName:        r.FirstName,
 				LastName:         r.LastName,
 				Email:            r.EmailID,
 				TeamName:         r.TeamName,
-				AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+				AttendanceStatus: status,
+				Fulfillment:      resolveFulfillment(status, r.Fulfillment),
 			}
 		}
 		return out, nil
@@ -215,13 +232,15 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 	}
 	out := make([]AttendanceRow, len(rows))
 	for i, r := range rows {
+		status := resolveStatus(r.AttendanceStatus, enabled)
 		out[i] = AttendanceRow{
 			ID:               r.ID.String(),
 			FirstName:        r.FirstName,
 			LastName:         r.LastName,
 			Email:            r.EmailID,
 			TeamName:         r.TeamName,
-			AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+			AttendanceStatus: status,
+			Fulfillment:      resolveFulfillment(status, r.Fulfillment),
 		}
 	}
 	return out, nil
@@ -269,14 +288,16 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 		}
 		out := make([]AttendanceRow, len(rows))
 		for i, r := range rows {
+			status := resolveStatus(r.AttendanceStatus, enabled)
 			out[i] = AttendanceRow{
 				ID:               r.ID.String(),
 				FirstName:        r.FirstName,
 				LastName:         r.LastName,
 				Email:            r.EmailID,
 				TeamName:         r.TeamName,
-				AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+				AttendanceStatus: status,
 				AttendanceDate:   r.AttendanceDate.Format("2006-01-02"),
+				Fulfillment:      resolveFulfillment(status, r.Fulfillment),
 			}
 		}
 		return out, nil
@@ -292,14 +313,16 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 	}
 	out := make([]AttendanceRow, len(rows))
 	for i, r := range rows {
+		status := resolveStatus(r.AttendanceStatus, enabled)
 		out[i] = AttendanceRow{
 			ID:               r.ID.String(),
 			FirstName:        r.FirstName,
 			LastName:         r.LastName,
 			Email:            r.EmailID,
 			TeamName:         r.TeamName,
-			AttendanceStatus: resolveStatus(r.AttendanceStatus, enabled),
+			AttendanceStatus: status,
 			AttendanceDate:   r.AttendanceDate.Format("2006-01-02"),
+			Fulfillment:      resolveFulfillment(status, r.Fulfillment),
 		}
 	}
 	return out, nil
@@ -313,8 +336,9 @@ type UserAttendanceSummary struct {
 }
 
 type UserAttendanceHistory struct {
-	Date    string `json:"date"`
-	Present bool   `json:"present"`
+	Date        string `json:"date"`
+	Present     bool   `json:"present"`
+	Fulfillment string `json:"fulfillment"`
 }
 
 // GetUserSummary reports a user's present/absent counts and daily history
@@ -369,9 +393,14 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOr
 
 	h := make([]UserAttendanceHistory, len(history))
 	for i, r := range history {
+		status := "absent"
+		if r.Present.Bool {
+			status = "present"
+		}
 		h[i] = UserAttendanceHistory{
-			Date:    r.AttendanceDate.Time.Format("2006-01-02"),
-			Present: r.Present.Bool,
+			Date:        r.AttendanceDate.Time.Format("2006-01-02"),
+			Present:     r.Present.Bool,
+			Fulfillment: resolveFulfillment(status, r.Fulfillment),
 		}
 	}
 
@@ -393,6 +422,21 @@ func csvStatusLabel(status string) string {
 	return status
 }
 
+// csvFulfillmentLabel renders the internal FULL_DAY/HALF_DAY vocabulary for
+// CSV output; blank (never "N/A") when there's nothing to report, since a
+// blank cell reads correctly whether the day was absent, unmatched, or simply
+// has no record.
+func csvFulfillmentLabel(fulfillment string) string {
+	switch fulfillment {
+	case "FULL_DAY":
+		return "Full Day"
+	case "HALF_DAY":
+		return "Half Day"
+	default:
+		return ""
+	}
+}
+
 func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, teamID string, w io.Writer) error {
 	rows, err := s.GetOrgAttendance(ctx, orgID, dateStr, teamID)
 	if err != nil {
@@ -404,7 +448,7 @@ func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, 
 
 	cw.Write([]string{fmt.Sprintf("Attendance Report - %s - Generated: %s", dateStr, time.Now().Format(time.RFC3339))})
 	cw.Write([]string{})
-	cw.Write([]string{"Name", "Email", "Team", "Status"})
+	cw.Write([]string{"Name", "Email", "Team", "Status", "Fulfillment"})
 
 	for _, r := range rows {
 		cw.Write([]string{
@@ -412,6 +456,7 @@ func (s *AttendanceService) WriteOrgReport(ctx context.Context, orgID, dateStr, 
 			r.Email,
 			r.TeamName,
 			csvStatusLabel(r.AttendanceStatus),
+			csvFulfillmentLabel(r.Fulfillment),
 		})
 	}
 	return nil
@@ -431,7 +476,7 @@ func (s *AttendanceService) WriteOrgReportRange(ctx context.Context, orgID, from
 
 	cw.Write([]string{fmt.Sprintf("Attendance Report - %s to %s - Generated: %s", fromStr, toStr, time.Now().Format(time.RFC3339))})
 	cw.Write([]string{})
-	cw.Write([]string{"Name", "Email", "Team", "Date", "Status"})
+	cw.Write([]string{"Name", "Email", "Team", "Date", "Status", "Fulfillment"})
 
 	for _, r := range rows {
 		cw.Write([]string{
@@ -440,6 +485,7 @@ func (s *AttendanceService) WriteOrgReportRange(ctx context.Context, orgID, from
 			r.TeamName,
 			r.AttendanceDate,
 			csvStatusLabel(r.AttendanceStatus),
+			csvFulfillmentLabel(r.Fulfillment),
 		})
 	}
 	return nil
@@ -463,13 +509,13 @@ func (s *AttendanceService) WriteUserReport(ctx context.Context, userID, callerO
 	cw.Write([]string{"Present", "Absent"})
 	cw.Write([]string{fmt.Sprintf("%d", summary.PresentCount), fmt.Sprintf("%d", summary.AbsentCount)})
 	cw.Write([]string{})
-	cw.Write([]string{"Date", "Status"})
+	cw.Write([]string{"Date", "Status", "Fulfillment"})
 	for _, h := range summary.History {
 		status := "absent"
 		if h.Present {
 			status = "present"
 		}
-		cw.Write([]string{h.Date, status})
+		cw.Write([]string{h.Date, status, csvFulfillmentLabel(h.Fulfillment)})
 	}
 	return nil
 }

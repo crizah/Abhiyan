@@ -23,7 +23,10 @@ func NewAttendanceHandler(attendanceService *services.AttendanceService, onionAp
 func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 	// Gate: reject before 7am IST. The host clock isn't reliably IST (e.g.
 	// defaults to UTC), so compare in util.IST rather than the host's zone.
-	if time.Now().In(util.IST).Hour() < 7 {
+	// Captured once and reused for the fulfillment decision below so the two
+	// checks can't straddle the noon/7am boundary against each other.
+	nowIST := time.Now().In(util.IST)
+	if nowIST.Hour() < 7 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Attendance cannot be marked before 7:00 AM"})
 		return
 	}
@@ -51,7 +54,7 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 		return
 	}
 
-	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, orgID, req.TargetObjectKey)
+	recordID, err := h.attendanceService.UpsertRecord(c.Request.Context(), userID, orgID, req.TargetObjectKey, util.AttendanceFulfillment(nowIST))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create attendance record"})
 		return

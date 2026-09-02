@@ -26,6 +26,16 @@ const STATUS_TAG = {
   not_applicable: <Tag color={NA_COLOR}>N/A</Tag>,
 };
 
+// Full Day reuses the same green as Present; Half Day reuses the same purple
+// used for "pending" elsewhere in the app (reviewStatusColor('PENDING')).
+const FULL_DAY_COLOR = PRESENT_COLOR;
+const HALF_DAY_COLOR = reviewStatusColor('PENDING');
+
+const FULFILLMENT_TAG = {
+  FULL_DAY: <Tag color={FULL_DAY_COLOR}>Full Day</Tag>,
+  HALF_DAY: <Tag color={HALF_DAY_COLOR}>Half Day</Tag>,
+};
+
 const DEFAULT_DRAWER_RANGE = [dayjs().subtract(29, 'day'), dayjs()];
 const disableFutureDate = (d) => d.isAfter(dayjs(), 'day');
 const COMPACT_DATE_FORMAT = 'DD/MM/YY';
@@ -193,6 +203,17 @@ export default function AttendancePage() {
         { text: 'N/A', value: 'not_applicable' },
       ],
       onFilter: (value, record) => record.attendance_status === value,
+    },
+    {
+      title: 'Fulfillment',
+      dataIndex: 'fulfillment',
+      key: 'fulfillment',
+      render: (f) => FULFILLMENT_TAG[f] ?? <Text type="secondary">—</Text>,
+      filters: [
+        { text: 'Full Day', value: 'FULL_DAY' },
+        { text: 'Half Day', value: 'HALF_DAY' },
+      ],
+      onFilter: (value, record) => record.fulfillment === value,
     },
     {
       title: '',
@@ -387,7 +408,10 @@ export default function AttendancePage() {
                             style={{ padding: '8px 12px', borderRadius: 8, backgroundColor: '#fafafa' }}
                           >
                             <Text style={{ fontSize: 13 }}>{dayjs(h.date).format('MMM D, YYYY')}</Text>
-                            {STATUS_TAG[h.present ? 'present' : 'absent']}
+                            <Flex align="center" gap={6}>
+                              {h.present && FULFILLMENT_TAG[h.fulfillment]}
+                              {STATUS_TAG[h.present ? 'present' : 'absent']}
+                            </Flex>
                           </Flex>
                         ))}
                         {!userSummary.history?.length && <Text type="secondary">No history found.</Text>}

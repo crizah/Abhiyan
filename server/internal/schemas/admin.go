@@ -97,6 +97,13 @@ type TeamStatResponse struct {
 	MemberCount int    `json:"member_count"`
 }
 
+type FaceRegistrationStatusResponse struct {
+	ID             string `json:"id"`
+	FullName       string `json:"full_name"`
+	EmailID        string `json:"email_id"`
+	FaceRegistered bool   `json:"face_registered"`
+}
+
 type AdminDashboardStatsResponse struct {
 	TotalUsers int64              `json:"total_users"`
 	Teams      []TeamStatResponse `json:"teams"`

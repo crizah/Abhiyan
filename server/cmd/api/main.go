@@ -186,6 +186,7 @@ func main() {
 			superAdminGroup.GET("/users/:user_id/score-breakdown", scoreHandler.GetUserScoreBreakdown)
 			superAdminGroup.PUT("/attendance", adminHandler.ToggleAttendance)
 			superAdminGroup.DELETE("/organization", adminHandler.DeleteOrganization)
+			superAdminGroup.GET("/face-registration-status", adminHandler.GetFaceRegistrationStatus)
 			superAdminGroup.GET("/attendance", attendanceHandler.GetOrgAttendance)
 			superAdminGroup.GET("/attendance/report", attendanceHandler.DownloadOrgReport)
 			superAdminGroup.GET("/attendance/users/:user_id/summary", attendanceHandler.GetUserAttendanceSummary)

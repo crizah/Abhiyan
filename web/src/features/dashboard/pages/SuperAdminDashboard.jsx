@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Spin, message, theme, Switch, Card, Flex, Button, Modal } from 'antd';
-import { TeamOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { Typography, Spin, message, theme, Switch, Card, Flex, Button, Modal, Tag } from 'antd';
+import { TeamOutlined, ClockCircleOutlined, WarningOutlined, ScanOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
 import InfoTooltip from '../../../components/InfoTooltip';
+import ResponsiveTable from '../../../components/ResponsiveTable';
 import { attendanceAPI, orgAPI } from '../../auth/api';
 
 const { Title, Paragraph, Text } = Typography;
@@ -20,6 +21,8 @@ export default function SuperAdminDashboard() {
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
   const [attendanceToggling, setAttendanceToggling] = useState(false);
   const [deletingOrg, setDeletingOrg] = useState(false);
+  const [faceStatus, setFaceStatus] = useState([]);
+  const [faceStatusLoading, setFaceStatusLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -59,6 +62,25 @@ export default function SuperAdminDashboard() {
     fetchLeaderboard();
   }, [leaderboardTeamFilter]);
 
+  useEffect(() => {
+    if (!user?.attendance_enabled) {
+      setFaceStatusLoading(false);
+      return;
+    }
+    const fetchFaceStatus = async () => {
+      setFaceStatusLoading(true);
+      try {
+        const res = await orgAPI.getFaceRegistrationStatus();
+        setFaceStatus(res || []);
+      } catch {
+        message.error('Failed to load face registration status');
+      } finally {
+        setFaceStatusLoading(false);
+      }
+    };
+    fetchFaceStatus();
+  }, [user?.attendance_enabled]);
+
   const handleAttendanceToggle = async (enabled) => {
     setAttendanceToggling(true);
     try {
@@ -95,6 +117,32 @@ export default function SuperAdminDashboard() {
       },
     });
   };
+
+  const faceStatusColumns = [
+    {
+      title: 'User',
+      key: 'user',
+      render: (_, r) => (
+        <Flex vertical>
+          <Text strong>{r.full_name}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{r.email_id}</Text>
+        </Flex>
+      ),
+    },
+    {
+      title: 'Face Registered',
+      dataIndex: 'face_registered',
+      key: 'face_registered',
+      render: (registered) => (
+        registered ? <Tag color="success">Yes</Tag> : <Tag color="error">No</Tag>
+      ),
+      filters: [
+        { text: 'Yes', value: true },
+        { text: 'No', value: false },
+      ],
+      onFilter: (value, record) => record.face_registered === value,
+    },
+  ];
 
   return (
     <div>
@@ -202,6 +250,33 @@ export default function SuperAdminDashboard() {
           />
         </div>
       </Flex>
+
+      {/* Face Registration Status */}
+      {user?.attendance_enabled && (
+        <Card
+          style={{
+            marginTop: token.marginXL,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadiusLG,
+            backgroundColor: token.colorBgLayout,
+          }}
+        >
+          <Flex align="center" gap={8} style={{ marginBottom: token.marginSM }}>
+            <ScanOutlined style={{ color: token.colorPrimary }} />
+            <Text strong style={{ fontSize: '14px' }}>Face Registration Status</Text>
+            <InfoTooltip title="Users need to register their face before attendance can be tracked for them." />
+          </Flex>
+          <ResponsiveTable
+            rowKey="id"
+            columns={faceStatusColumns}
+            primaryColumnKeys={['user']}
+            dataSource={faceStatus}
+            loading={faceStatusLoading}
+            pagination={{ pageSize: 10 }}
+            size="middle"
+          />
+        </Card>
+      )}
 
       <style>{`
         @media (max-width: 640px) {

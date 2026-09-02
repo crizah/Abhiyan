@@ -234,3 +234,15 @@ SELECT EXISTS (
 UPDATE user_credentials
 SET password_hash = $2, updated_at = NOW()
 WHERE user_id = $1;
+
+-- name: GetOrgFaceRegistrationStatus :many
+-- Org-scoped (joins through org_memberships, not the legacy users.org_id) so
+-- this can never leak another org's users — used by the super admin dashboard
+-- to show who has/hasn't registered their face for attendance.
+SELECT
+    u.id, u.first_name, u.last_name, u.email_id,
+    (u.face_s3_uri IS NOT NULL)::boolean AS face_registered
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id
+WHERE om.org_id = $1 AND om.status = 'ACTIVE'
+ORDER BY u.first_name, u.last_name;

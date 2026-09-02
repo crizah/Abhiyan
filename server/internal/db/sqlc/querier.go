@@ -74,6 +74,10 @@ type Querier interface {
 	GetOrgAttendanceByDateAndTeam(ctx context.Context, arg GetOrgAttendanceByDateAndTeamParams) ([]GetOrgAttendanceByDateAndTeamRow, error)
 	GetOrgAttendanceRange(ctx context.Context, arg GetOrgAttendanceRangeParams) ([]GetOrgAttendanceRangeRow, error)
 	GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAttendanceRangeByTeamParams) ([]GetOrgAttendanceRangeByTeamRow, error)
+	// Org-scoped (joins through org_memberships, not the legacy users.org_id) so
+	// this can never leak another org's users — used by the super admin dashboard
+	// to show who has/hasn't registered their face for attendance.
+	GetOrgFaceRegistrationStatus(ctx context.Context, orgID uuid.UUID) ([]GetOrgFaceRegistrationStatusRow, error)
 	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)

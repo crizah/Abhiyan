@@ -81,6 +81,11 @@ export const orgAPI = {
         const response = await apiClient.delete('/admin/organization');
         return response.data;
     },
+
+    getFaceRegistrationStatus: async () => {
+        const response = await apiClient.get('/admin/face-registration-status');
+        return response.data;
+    },
 };
 
 export const uploadAPI = {

@@ -876,6 +876,38 @@ func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string, 
 	return teams, nil
 }
 
+func (s *AdminService) GetOrgFaceRegistrationStatus(ctx context.Context, orgID string) ([]schemas.FaceRegistrationStatusResponse, error) {
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	dbUsers, err := s.queries.GetOrgFaceRegistrationStatus(ctx, parsedOrgID)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []schemas.FaceRegistrationStatusResponse
+	for _, u := range dbUsers {
+		fullName := strings.TrimSpace(u.FirstName.String + " " + u.LastName.String)
+		if fullName == "" {
+			fullName = "Pending Acceptance"
+		}
+		users = append(users, schemas.FaceRegistrationStatusResponse{
+			ID:             u.ID.String(),
+			FullName:       fullName,
+			EmailID:        u.EmailID,
+			FaceRegistered: u.FaceRegistered,
+		})
+	}
+
+	if users == nil {
+		users = []schemas.FaceRegistrationStatusResponse{}
+	}
+
+	return users, nil
+}
+
 func (s *AdminService) DeleteOrganization(ctx context.Context, orgID string) error {
 	parsedOrgID, err := util.ParseUUID(orgID)
 	if err != nil {

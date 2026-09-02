@@ -346,6 +346,18 @@ func (h *AdminHandler) GetAdminManagedTeams(c *gin.Context) {
 	c.JSON(http.StatusOK, teams)
 }
 
+func (h *AdminHandler) GetFaceRegistrationStatus(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	users, err := h.adminService.GetOrgFaceRegistrationStatus(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch face registration status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
 func (h *AdminHandler) DeleteOrganization(c *gin.Context) {
 	orgID := c.MustGet("org_id").(string)
 

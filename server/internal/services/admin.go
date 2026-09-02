@@ -876,6 +876,14 @@ func (s *AdminService) GetAdminManagedTeams(ctx context.Context, userID string, 
 	return teams, nil
 }
 
+func (s *AdminService) DeleteOrganization(ctx context.Context, orgID string) error {
+	parsedOrgID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return err
+	}
+	return s.queries.DeleteOrganization(ctx, parsedOrgID)
+}
+
 func (s *AdminService) SetAttendanceEnabled(ctx context.Context, orgID string, enabled bool) error {
 	parsedOrgID, err := util.ParseUUID(orgID)
 	if err != nil {

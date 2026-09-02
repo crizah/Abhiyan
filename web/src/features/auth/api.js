@@ -76,6 +76,13 @@ export const attendanceAPI = {
     },
 };
 
+export const orgAPI = {
+    deleteOrganization: async () => {
+        const response = await apiClient.delete('/admin/organization');
+        return response.data;
+    },
+};
+
 export const uploadAPI = {
     validateFace: async (objectKey) => {
         const response = await apiClient.post('/upload/validate-face', { object_key: objectKey });

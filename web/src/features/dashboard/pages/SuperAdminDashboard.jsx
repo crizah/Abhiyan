@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Spin, message, theme, Switch, Card, Flex } from 'antd';
-import { TeamOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Typography, Spin, message, theme, Switch, Card, Flex, Button, Modal } from 'antd';
+import { TeamOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../config/axios';
 import Leaderboard from '../../../components/Leaderboard';
 import InfoTooltip from '../../../components/InfoTooltip';
-import { attendanceAPI } from '../../auth/api';
+import { attendanceAPI, orgAPI } from '../../auth/api';
 
 const { Title, Paragraph, Text } = Typography;
 
 export default function SuperAdminDashboard() {
-  const { user, login } = useAuth();
+  const { user, login, logout } = useAuth();
   const { token } = theme.useToken();
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,6 +19,7 @@ export default function SuperAdminDashboard() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [leaderboardTeamFilter, setLeaderboardTeamFilter] = useState('ALL');
   const [attendanceToggling, setAttendanceToggling] = useState(false);
+  const [deletingOrg, setDeletingOrg] = useState(false);
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -70,6 +71,29 @@ export default function SuperAdminDashboard() {
     } finally {
       setAttendanceToggling(false);
     }
+  };
+
+  const handleDeleteOrg = () => {
+    Modal.confirm({
+      title: 'Delete this organisation?',
+      icon: <WarningOutlined style={{ color: token.colorError }} />,
+      content: 'Deleting this organisation will permanently remove all its data, are you sure you want to continue?',
+      okText: 'Delete',
+      okButtonProps: { danger: true, loading: deletingOrg },
+      cancelText: 'Cancel',
+      onOk: async () => {
+        setDeletingOrg(true);
+        try {
+          await orgAPI.deleteOrganization();
+          message.success('Organisation deleted.');
+          logout();
+        } catch {
+          message.error('Failed to delete organisation.');
+        } finally {
+          setDeletingOrg(false);
+        }
+      },
+    });
   };
 
   return (
@@ -132,6 +156,35 @@ export default function SuperAdminDashboard() {
                   checkedChildren="On"
                   unCheckedChildren="Off"
                 />
+              </Flex>
+            </Card>
+
+            {/* Danger Zone Card */}
+            <Card
+              size="small"
+              style={{
+                border: `1px solid ${token.colorErrorBorder}`,
+                borderRadius: token.borderRadiusLG,
+                backgroundColor: token.colorErrorBg,
+                minWidth: 240,
+              }}
+            >
+              <Flex vertical gap={8}>
+                <Flex align="center" gap={8}>
+                  <WarningOutlined style={{ color: token.colorError }} />
+                  <Text strong style={{ fontSize: '14px', color: token.colorError }}>Danger Zone</Text>
+                </Flex>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  Permanently delete this organisation and all of its data. This cannot be undone.
+                </Text>
+                <Button
+                  danger
+                  block
+                  loading={deletingOrg}
+                  onClick={handleDeleteOrg}
+                >
+                  Delete this organisation
+                </Button>
               </Flex>
             </Card>
           </Flex>

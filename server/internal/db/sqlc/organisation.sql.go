@@ -39,6 +39,15 @@ func (q *Queries) CreateOrganizations(ctx context.Context, arg CreateOrganizatio
 	return i, err
 }
 
+const deleteOrganization = `-- name: DeleteOrganization :exec
+DELETE FROM organizations WHERE id = $1
+`
+
+func (q *Queries) DeleteOrganization(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteOrganization, id)
+	return err
+}
+
 const getOrgInfo = `-- name: GetOrgInfo :one
 SELECT name, attendance_enabled FROM organizations
 WHERE id = $1 LIMIT 1

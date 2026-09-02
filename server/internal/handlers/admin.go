@@ -346,6 +346,17 @@ func (h *AdminHandler) GetAdminManagedTeams(c *gin.Context) {
 	c.JSON(http.StatusOK, teams)
 }
 
+func (h *AdminHandler) DeleteOrganization(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	if err := h.adminService.DeleteOrganization(c.Request.Context(), orgID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete organization"})
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
 func (h *AdminHandler) ToggleAttendance(c *gin.Context) {
 	orgID := c.MustGet("org_id").(string)
 

@@ -13,6 +13,48 @@ import (
 	"github.com/google/uuid"
 )
 
+type AttendanceFulfillmentStatus string
+
+const (
+	AttendanceFulfillmentStatusFULLDAY AttendanceFulfillmentStatus = "FULL_DAY"
+	AttendanceFulfillmentStatusHALFDAY AttendanceFulfillmentStatus = "HALF_DAY"
+)
+
+func (e *AttendanceFulfillmentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AttendanceFulfillmentStatus(s)
+	case string:
+		*e = AttendanceFulfillmentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AttendanceFulfillmentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullAttendanceFulfillmentStatus struct {
+	AttendanceFulfillmentStatus AttendanceFulfillmentStatus `json:"attendance_fulfillment_status"`
+	Valid                       bool                        `json:"valid"` // Valid is true if AttendanceFulfillmentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAttendanceFulfillmentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.AttendanceFulfillmentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AttendanceFulfillmentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAttendanceFulfillmentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AttendanceFulfillmentStatus), nil
+}
+
 type AudioTranscodeStatus string
 
 const (
@@ -587,15 +629,16 @@ type Attachment struct {
 }
 
 type AttendanceRecord struct {
-	ID             uuid.UUID      `json:"id"`
-	UserID         uuid.UUID      `json:"user_id"`
-	OrgID          uuid.UUID      `json:"org_id"`
-	TargetFileUri  sql.NullString `json:"target_file_uri"`
-	Present        sql.NullBool   `json:"present"`
-	Status         string         `json:"status"`
-	AttendanceDate sql.NullTime   `json:"attendance_date"`
-	CreatedAt      sql.NullTime   `json:"created_at"`
-	UpdatedAt      sql.NullTime   `json:"updated_at"`
+	ID             uuid.UUID                       `json:"id"`
+	UserID         uuid.UUID                       `json:"user_id"`
+	OrgID          uuid.UUID                       `json:"org_id"`
+	TargetFileUri  sql.NullString                  `json:"target_file_uri"`
+	Present        sql.NullBool                    `json:"present"`
+	Status         string                          `json:"status"`
+	Fulfillment    NullAttendanceFulfillmentStatus `json:"fulfillment"`
+	AttendanceDate sql.NullTime                    `json:"attendance_date"`
+	CreatedAt      sql.NullTime                    `json:"created_at"`
+	UpdatedAt      sql.NullTime                    `json:"updated_at"`
 }
 
 type AudioTranscode struct {

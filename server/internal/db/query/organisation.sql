@@ -17,3 +17,6 @@ WHERE id = $1 LIMIT 1;
 -- name: SetOrgAttendanceEnabled :exec
 UPDATE organizations SET attendance_enabled = $2 WHERE id = $1;
 
+-- name: DeleteOrganization :exec
+DELETE FROM organizations WHERE id = $1;
+

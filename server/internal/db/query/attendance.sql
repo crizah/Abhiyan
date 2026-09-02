@@ -1,8 +1,10 @@
 -- name: UpsertAttendanceRecord :one
-INSERT INTO attendance_record (user_id, org_id, target_file_uri, status)
-VALUES ($1, $2, $3, 'pending')
+-- Fulfillment is recomputed on every submission (including resubmits after an
+-- unmatched attempt) — the most recent mark-time governs, same as status.
+INSERT INTO attendance_record (user_id, org_id, target_file_uri, status, fulfillment)
+VALUES ($1, $2, $3, 'pending', $4)
 ON CONFLICT (user_id, org_id, attendance_date)
-DO UPDATE SET target_file_uri = $3, status = 'pending', updated_at = NOW()
+DO UPDATE SET target_file_uri = $3, status = 'pending', fulfillment = $4, updated_at = NOW()
 RETURNING id;
 
 -- name: GetTodayAttendance :one
@@ -41,7 +43,8 @@ SELECT DISTINCT ON (u.id)
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
@@ -65,7 +68,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = $2 AND om.status = 'ACTIVE'
 LEFT JOIN attendance_record a ON u.id = a.user_id AND a.org_id = $2 AND a.attendance_date = $1
@@ -85,7 +89,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = sqlc.arg('org_id') AND om.status = 'ACTIVE'
 CROSS JOIN generate_series(sqlc.arg('from_date')::date, sqlc.arg('to_date')::date, interval '1 day') AS d(day)
@@ -111,7 +116,8 @@ SELECT
         WHEN a.present = true THEN 'present'
         WHEN a.present = false THEN 'absent'
         ELSE 'no_record'
-    END AS attendance_status
+    END AS attendance_status,
+    a.fulfillment
 FROM users u
 JOIN org_memberships om ON om.user_id = u.id AND om.org_id = sqlc.arg('org_id') AND om.status = 'ACTIVE'
 CROSS JOIN generate_series(sqlc.arg('from_date')::date, sqlc.arg('to_date')::date, interval '1 day') AS d(day)
@@ -129,7 +135,7 @@ WHERE user_id = $1 AND org_id = $2
   AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date;
 
 -- name: GetUserAttendanceHistoryRange :many
-SELECT attendance_date, present
+SELECT attendance_date, present, fulfillment
 FROM attendance_record
 WHERE user_id = $1 AND org_id = $2
   AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date

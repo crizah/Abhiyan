@@ -1,4 +1,4 @@
-h1:stJlNlwLDmxMlRGiCygKF80RPfg8rvZH/0zuJIynh8A=
+h1:esapvB0jexjkpHaLgc475k+I2mGl+6Uhja4OCK72+2w=
 20260609122837_initial_db_schemas.sql h1:Qlt9JvF4auI2yCUz7oDluImiRst+uVpfBkBVc7ToUYM=
 20260609125210_add_user_status_column.sql h1:NdZtJ6Bw7BEOZXUULmLGqKTbbs3FB8aLfoTjAdOZ55s=
 20260609132310_make_domain_nullable.sql h1:XIcLOCpbS2hEgRxp0f7PZZCZQZZtxl3hN//05Sv4hr8=
@@ -27,3 +27,4 @@ h1:stJlNlwLDmxMlRGiCygKF80RPfg8rvZH/0zuJIynh8A=
 20260728093253_add_user_id_face_validation.sql h1:K17Wge5mZJ8vJVFCRXpKx5PJlyNPuPk6ibFLIWazEZI=
 20260728094706_add_org_id_to_notifications.sql h1:pYqWDIAh05HwzcZfuOQDv3qPoOlUEbZWuTp7aFaOEQk=
 20260807154401_drop_not_null_constraint.sql h1:Aac+zSwFq6SeR5c4deCQ6W/aYlrq5+vbBCXqE/Klzmw=
+20260902082300_add_fulfillment_to_attendance.sql h1:AeM2CyYyUIB+WcZsk9WGpVwb24sYi/Qiz97At1ZIzEw=

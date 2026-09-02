@@ -69,6 +69,18 @@ func ParsePGTextArray(v interface{}) []string {
 	return strings.Split(raw, ",")
 }
 
+// AttendanceFulfillment returns "FULL_DAY" for a mark-time before 12pm IST
+// (the 7am gate already rules out anything earlier), "HALF_DAY" from 12pm
+// onward. Pass the same IST-located time used for that gate check rather than
+// taking a fresh time.Now() here, so the two decisions can't straddle the
+// boundary against each other.
+func AttendanceFulfillment(markTime time.Time) string {
+	if markTime.In(IST).Hour() < 12 {
+		return "FULL_DAY"
+	}
+	return "HALF_DAY"
+}
+
 func FormatDeadline(nt sql.NullTime) string {
 	if !nt.Valid {
 		return "No deadline set"

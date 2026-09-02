@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS attendance_record (
     target_file_uri TEXT,
     present BOOLEAN,
     status TEXT NOT NULL DEFAULT 'pending', -- pending | matched | unmatched
+    -- Set at mark-time from the submission's IST clock (7am-12pm = FULL_DAY,
+    -- after 12pm = HALF_DAY); NULL until the user has actually submitted.
+    fulfillment attendance_fulfillment_status,
     attendance_date DATE DEFAULT CURRENT_DATE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),

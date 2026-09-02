@@ -172,6 +172,8 @@ type Querier interface {
 	// memberships that must be left untouched).
 	UpdateUserOnboarding(ctx context.Context, arg UpdateUserOnboardingParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	// Fulfillment is recomputed on every submission (including resubmits after an
+	// unmatched attempt) — the most recent mark-time governs, same as status.
 	UpsertAttendanceRecord(ctx context.Context, arg UpsertAttendanceRecordParams) (uuid.UUID, error)
 	UpsertLeaderboardVisibility(ctx context.Context, arg UpsertLeaderboardVisibilityParams) error
 	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error

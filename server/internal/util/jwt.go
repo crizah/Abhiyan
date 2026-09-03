@@ -129,6 +129,29 @@ func ParseInviteToken(tokenStr string, secret []byte) (*InviteClaims, error) {
 	return nil, errors.New("invalid invite token")
 }
 
+// ParseInviteTokenAllowExpired validates an invite token's signature and
+// purpose but skips the expiry check — for the resend flow only, which reads
+// email/org out of a token that is *expected* to have expired so it can
+// issue a fresh one. Never use this to authorize the invite itself.
+func ParseInviteTokenAllowExpired(tokenStr string, secret []byte) (*InviteClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &InviteClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return secret, nil
+	}, jwt.WithoutClaimsValidation())
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*InviteClaims)
+	if !ok {
+		return nil, errors.New("invalid invite token")
+	}
+	if claims.Purpose != TokenPurposeInvite {
+		return nil, errors.New("wrong token purpose")
+	}
+	return claims, nil
+}
+
 type PasswordResetClaims struct {
 	Email   string `json:"email"`
 	Purpose string `json:"purpose"`

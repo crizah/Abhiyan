@@ -38,6 +38,22 @@ func (h *AdminHandler) InviteUser(c *gin.Context) {
 	})
 }
 
+func (h *AdminHandler) ResendInvite(c *gin.Context) {
+	userID := c.Param("user_id")
+	adminOrgID := c.MustGet("org_id").(string)
+
+	token, err := h.adminService.ResendInvite(c.Request.Context(), adminOrgID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Invite resent successfully",
+		"debug_token": token,
+	})
+}
+
 func (h *AdminHandler) GetDashboardStats(c *gin.Context) {
 	orgID := c.MustGet("org_id").(string)
 

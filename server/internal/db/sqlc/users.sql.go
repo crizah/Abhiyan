@@ -289,6 +289,34 @@ func (q *Queries) GetFullUserProfile(ctx context.Context, arg GetFullUserProfile
 	return i, err
 }
 
+const getInvitedMembership = `-- name: GetInvitedMembership :one
+SELECT u.email_id, om.status, usr.role
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id
+JOIN user_system_roles usr ON u.id = usr.user_id AND usr.org_id = om.org_id
+WHERE u.id = $1 AND om.org_id = $2
+`
+
+type GetInvitedMembershipParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+type GetInvitedMembershipRow struct {
+	EmailID string     `json:"email_id"`
+	Status  UserStatus `json:"status"`
+	Role    SystemRole `json:"role"`
+}
+
+// Same shape as GetPendingInvitedUser but keyed by user ID — used by the
+// admin-triggered resend, which knows the user's row (not their raw token).
+func (q *Queries) GetInvitedMembership(ctx context.Context, arg GetInvitedMembershipParams) (GetInvitedMembershipRow, error) {
+	row := q.db.QueryRowContext(ctx, getInvitedMembership, arg.ID, arg.OrgID)
+	var i GetInvitedMembershipRow
+	err := row.Scan(&i.EmailID, &i.Status, &i.Role)
+	return i, err
+}
+
 const getMembershipStatus = `-- name: GetMembershipStatus :one
 SELECT status FROM org_memberships WHERE user_id = $1 AND org_id = $2
 `

@@ -106,6 +106,50 @@ func (s *AdminService) InviteUser(ctx context.Context, adminOrgID string, req sc
 	return token, nil
 }
 
+// ResendInvite re-issues a fresh 48h invite token for a user still sitting in
+// INVITED status — no new users/org_memberships rows, just a new token +
+// email. Errors if the user isn't found in this org, or has already accepted.
+func (s *AdminService) ResendInvite(ctx context.Context, adminOrgID string, userID string) (string, error) {
+	orgID, err := util.ParseUUID(adminOrgID)
+	if err != nil {
+		return "", err
+	}
+	parsedUserID, err := util.ParseUUID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	membership, err := s.queries.GetInvitedMembership(ctx, db.GetInvitedMembershipParams{
+		ID:    parsedUserID,
+		OrgID: orgID,
+	})
+	if err != nil {
+		return "", errors.New("user not found in this organization")
+	}
+
+	if membership.Status != db.UserStatusINVITED {
+		return "", errors.New("this user has already accepted their invite")
+	}
+
+	token, err := util.GenerateInviteToken(membership.EmailID, adminOrgID, string(membership.Role), s.JwtSecret, 48*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	orgName, err := s.queries.GetOrganizationName(ctx, orgID)
+	if err != nil {
+		return "", err
+	}
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	link := fmt.Sprintf("%s/accept-invite?token=%s", frontendURL, token)
+	if err := s.onionApp.Enqueue(ctx, "send_invite_email", map[string]any{"email": membership.EmailID, "orgName": orgName, "link": link}); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
 func (s *AdminService) GetTotalUsers(ctx context.Context, orgID string) (int64, error) {
 	parsedOrgID, err := util.ParseUUID(orgID)
 	if err != nil {

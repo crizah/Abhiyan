@@ -174,6 +174,7 @@ func main() {
 		superAdminGroup.Use(middleware.RequireRole("SUPER_ADMIN"))
 		{
 			superAdminGroup.POST("/users/invite", costLimiter, adminHandler.InviteUser)
+			superAdminGroup.POST("/users/:user_id/resend-invite", costLimiter, adminHandler.ResendInvite)
 			superAdminGroup.GET("/users", adminHandler.GetOrgUsers) // needs to be paginated
 			superAdminGroup.GET("/stats", adminHandler.GetDashboardStats)
 			superAdminGroup.GET("/users/unassigned", adminHandler.GetUnassignedUsers) // needs to be paginated

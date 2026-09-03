@@ -201,6 +201,15 @@ JOIN org_memberships om ON om.user_id = u.id
 JOIN user_system_roles usr ON u.id = usr.user_id AND usr.org_id = om.org_id
 WHERE u.email_id = $1 AND om.org_id = $2;
 
+-- name: GetInvitedMembership :one
+-- Same shape as GetPendingInvitedUser but keyed by user ID — used by the
+-- admin-triggered resend, which knows the user's row (not their raw token).
+SELECT u.email_id, om.status, usr.role
+FROM users u
+JOIN org_memberships om ON om.user_id = u.id
+JOIN user_system_roles usr ON u.id = usr.user_id AND usr.org_id = om.org_id
+WHERE u.id = $1 AND om.org_id = $2;
+
 -- name: GetUserFaceURI :one
 SELECT face_s3_uri FROM users WHERE id = $1;
 

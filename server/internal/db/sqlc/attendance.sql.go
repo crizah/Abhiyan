@@ -20,6 +20,10 @@ FROM org_memberships om
 JOIN organizations o ON om.org_id = o.id
 WHERE om.status = 'ACTIVE'
   AND o.attendance_enabled = true
+  AND NOT (o.weekends_off AND EXTRACT(DOW FROM CURRENT_DATE) IN (0, 6))
+  AND NOT EXISTS (
+      SELECT 1 FROM org_holidays oh WHERE oh.org_id = o.id AND oh.date = CURRENT_DATE
+  )
   AND EXISTS (
       SELECT 1 FROM team_members tm
       JOIN teams t ON tm.team_id = t.id
@@ -28,6 +32,9 @@ WHERE om.status = 'ACTIVE'
 ON CONFLICT (user_id, org_id, attendance_date) DO NOTHING
 `
 
+// Skips users whose org has today marked as a holiday (a configured one-off
+// date, or a weekend when the org has weekends off) — no absent row is ever
+// created for a holiday, so there's nothing to "unmark" later.
 func (q *Queries) BatchInsertAbsentAttendance(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, batchInsertAbsentAttendance)
 	return err

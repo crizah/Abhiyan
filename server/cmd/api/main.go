@@ -195,6 +195,10 @@ func main() {
 			superAdminGroup.GET("/attendance/report", attendanceHandler.DownloadOrgReport)
 			superAdminGroup.GET("/attendance/users/:user_id/summary", attendanceHandler.GetUserAttendanceSummary)
 			superAdminGroup.GET("/attendance/users/:user_id/report", attendanceHandler.DownloadUserReport)
+			superAdminGroup.GET("/attendance/holidays", attendanceHandler.GetHolidaySettings)
+			superAdminGroup.POST("/attendance/holidays", attendanceHandler.AddHoliday)
+			superAdminGroup.DELETE("/attendance/holidays/:holiday_id", attendanceHandler.RemoveHoliday)
+			superAdminGroup.PUT("/attendance/holidays/weekends", attendanceHandler.SetWeekendsOff)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

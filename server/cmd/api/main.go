@@ -160,6 +160,7 @@ func main() {
 			general.GET("/upload/validate-face/:job_id", uploadHandler.GetValidationStatus) // polling
 			general.POST("/attendance/mark", attendanceHandler.MarkAttendance)
 			general.GET("/attendance/today", attendanceHandler.GetTodayAttendance) // polling
+			general.GET("/attendance/me/summary", attendanceHandler.GetMyAttendanceSummary)
 			general.GET("/leaderboard", scoreHandler.GetEmployeeLeaderboard)
 		}
 

@@ -66,6 +66,9 @@ type Querier interface {
 	GetEmployeeTasks(ctx context.Context, arg GetEmployeeTasksParams) ([]GetEmployeeTasksRow, error)
 	GetEmployeeTeams(ctx context.Context, arg GetEmployeeTeamsParams) ([]GetEmployeeTeamsRow, error)
 	GetFullUserProfile(ctx context.Context, arg GetFullUserProfileParams) (GetFullUserProfileRow, error)
+	// Same shape as GetPendingInvitedUser but keyed by user ID — used by the
+	// admin-triggered resend, which knows the user's row (not their raw token).
+	GetInvitedMembership(ctx context.Context, arg GetInvitedMembershipParams) (GetInvitedMembershipRow, error)
 	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
 	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
 	GetMembershipStatus(ctx context.Context, arg GetMembershipStatusParams) (UserStatus, error)

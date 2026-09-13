@@ -571,7 +571,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 
 func (s *AuthService) ResendPublicInvite(ctx context.Context, expiredToken string) error {
 	// 1. Safely extract claims from the expired-but-validly-signed token
-	claims, err := util.ParseInviteToken(expiredToken, s.JwtSecret)
+	claims, err := util.ParseInviteTokenAllowExpired(expiredToken, s.JwtSecret)
 	if err != nil {
 		return err // Fails if tampered with
 	}

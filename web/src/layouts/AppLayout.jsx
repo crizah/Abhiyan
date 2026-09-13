@@ -553,6 +553,7 @@ export default function AppLayout() {
     ] : []),
     ...(activeRole === 'EMPLOYEE' ? [
       { label: 'Tasks', icon: <CheckSquareOutlined style={{ fontSize: 20 }} />, path: '/employee-tasks' },
+      { label: 'Attendance', icon: <ScanOutlined style={{ fontSize: 20 }} />, path: '/employee-attendance' },
     ] : []),
   ];
 
@@ -607,6 +608,7 @@ export default function AppLayout() {
           {activeRole === 'EMPLOYEE' && (
             <>
               <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employee-tasks'); }} active={location.pathname === '/employee-tasks'}><CheckSquareOutlined className="nav-icon" /> Tasks</CNavItem>
+              <CNavItem href="#" onClick={(e) => { e.preventDefault(); navigate('/employee-attendance'); }} active={location.pathname === '/employee-attendance'}><ScanOutlined className="nav-icon" /> Attendance</CNavItem>
             </>
           )}
 

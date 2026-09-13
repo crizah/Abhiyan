@@ -82,6 +82,24 @@ func (h *AttendanceHandler) GetTodayAttendance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": status})
 }
 
+// GetMyAttendanceSummary is the self-service counterpart to
+// GetUserAttendanceSummary: it always scopes to the calling user (from the
+// auth context, never a URL param) so an employee can only ever see their own
+// attendance history and counts.
+func (h *AttendanceHandler) GetMyAttendanceSummary(c *gin.Context) {
+	userID := c.MustGet("user_id").(string)
+	orgID := c.MustGet("org_id").(string)
+	from, to := defaultAttendanceRange(c)
+
+	summary, err := h.attendanceService.GetUserSummary(c.Request.Context(), userID, orgID, from, to)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, summary)
+}
+
 // Admin endpoints
 
 func (h *AttendanceHandler) GetOrgAttendance(c *gin.Context) {

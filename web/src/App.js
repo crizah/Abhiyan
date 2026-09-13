@@ -21,6 +21,7 @@ import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage';
 import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
 import AdminTeamsPage from './features/users/AdminTeamsPage';
 import AttendancePage from './features/users/AttendancePage';
+import MyAttendancePage from './features/users/MyAttendancePage';
 
 // Dashboards
 import SuperAdminDashboard from './features/dashboard/pages/SuperAdminDashboard';
@@ -85,6 +86,7 @@ export default function App() {
                 <Route path="employee-tasks" element={<EmployeeTasksPage />} />
                 <Route path="admin-teams" element={<AdminTeamsPage />} />
                 <Route path="attendance" element={<AttendancePage />} />
+                <Route path="employee-attendance" element={<MyAttendancePage />} />
                 
 
                 

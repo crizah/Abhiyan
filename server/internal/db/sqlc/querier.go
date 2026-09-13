@@ -18,6 +18,9 @@ type Querier interface {
 	// Assigns a system role to a user, scoped to one org.
 	AddUserSystemRole(ctx context.Context, arg AddUserSystemRoleParams) (UserSystemRole, error)
 	ApproveTaskState(ctx context.Context, id uuid.UUID) error
+	// Skips users whose org has today marked as a holiday (a configured one-off
+	// date, or a weekend when the org has weekends off) — no absent row is ever
+	// created for a holiday, so there's nothing to "unmark" later.
 	BatchInsertAbsentAttendance(ctx context.Context) error
 	CancelTaskReminders(ctx context.Context, taskID uuid.UUID) error
 	CheckTeamAdminStatus(ctx context.Context, arg CheckTeamAdminStatusParams) (bool, error)
@@ -32,6 +35,7 @@ type Querier interface {
 	// separately by the caller in the same transaction.
 	CreateInvitedUser(ctx context.Context, emailID string) (User, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
+	CreateOrgHoliday(ctx context.Context, arg CreateOrgHolidayParams) (OrgHoliday, error)
 	CreateOrgMembership(ctx context.Context, arg CreateOrgMembershipParams) (OrgMembership, error)
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
@@ -42,6 +46,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
+	DeleteOrgHoliday(ctx context.Context, arg DeleteOrgHolidayParams) error
 	DeleteOrganization(ctx context.Context, id uuid.UUID) error
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
@@ -144,12 +149,16 @@ type Querier interface {
 	InsertScoreEvent(ctx context.Context, arg InsertScoreEventParams) (EmployeeScore, error)
 	InsertTranscription(ctx context.Context, attachmentID uuid.UUID) error
 	InsertUserSystemRole(ctx context.Context, arg InsertUserSystemRoleParams) error
+	// Single check used to gate mark-attendance and today's status: a holiday if
+	// it's a configured one-off date, or a weekend and the org has weekends off.
+	IsOrgHolidayToday(ctx context.Context, id uuid.UUID) (bool, error)
 	IsTaskAssignee(ctx context.Context, arg IsTaskAssigneeParams) (bool, error)
 	// Multi-org membership check: replaces the old single-users.org_id lookup this
 	// was originally added as (this session's cross-org authorization fixes) — a
 	// person can now belong to several orgs, so "the user's org" isn't a single
 	// value anymore, only "is this user an active member of THIS org" is.
 	IsUserInOrg(ctx context.Context, arg IsUserInOrgParams) (bool, error)
+	ListOrgHolidays(ctx context.Context, orgID uuid.UUID) ([]OrgHoliday, error)
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
@@ -160,6 +169,7 @@ type Querier interface {
 	SetAttendanceResult(ctx context.Context, arg SetAttendanceResultParams) error
 	SetAudioTranscodeProcessing(ctx context.Context, id uuid.UUID) error
 	SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error
+	SetOrgWeekendsOff(ctx context.Context, arg SetOrgWeekendsOffParams) error
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error
 	SupersedeScoreEvents(ctx context.Context, arg SupersedeScoreEventsParams) error

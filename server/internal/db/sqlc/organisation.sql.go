@@ -8,9 +8,36 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const createOrgHoliday = `-- name: CreateOrgHoliday :one
+INSERT INTO org_holidays (org_id, date, label)
+VALUES ($1, $2, $3)
+ON CONFLICT (org_id, date) DO UPDATE SET label = $3
+RETURNING id, org_id, date, label, created_at
+`
+
+type CreateOrgHolidayParams struct {
+	OrgID uuid.UUID      `json:"org_id"`
+	Date  time.Time      `json:"date"`
+	Label sql.NullString `json:"label"`
+}
+
+func (q *Queries) CreateOrgHoliday(ctx context.Context, arg CreateOrgHolidayParams) (OrgHoliday, error) {
+	row := q.db.QueryRowContext(ctx, createOrgHoliday, arg.OrgID, arg.Date, arg.Label)
+	var i OrgHoliday
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Date,
+		&i.Label,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const createOrganizations = `-- name: CreateOrganizations :one
 INSERT INTO organizations (
@@ -18,7 +45,7 @@ INSERT INTO organizations (
 ) VALUES (
     $1, $2
 )
-RETURNING id, name, domain, attendance_enabled, created_at
+RETURNING id, name, domain, attendance_enabled, weekends_off, created_at
 `
 
 type CreateOrganizationsParams struct {
@@ -34,9 +61,24 @@ func (q *Queries) CreateOrganizations(ctx context.Context, arg CreateOrganizatio
 		&i.Name,
 		&i.Domain,
 		&i.AttendanceEnabled,
+		&i.WeekendsOff,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteOrgHoliday = `-- name: DeleteOrgHoliday :exec
+DELETE FROM org_holidays WHERE id = $1 AND org_id = $2
+`
+
+type DeleteOrgHolidayParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) DeleteOrgHoliday(ctx context.Context, arg DeleteOrgHolidayParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOrgHoliday, arg.ID, arg.OrgID)
+	return err
 }
 
 const deleteOrganization = `-- name: DeleteOrganization :exec
@@ -49,19 +91,20 @@ func (q *Queries) DeleteOrganization(ctx context.Context, id uuid.UUID) error {
 }
 
 const getOrgInfo = `-- name: GetOrgInfo :one
-SELECT name, attendance_enabled FROM organizations
+SELECT name, attendance_enabled, weekends_off FROM organizations
 WHERE id = $1 LIMIT 1
 `
 
 type GetOrgInfoRow struct {
 	Name              string `json:"name"`
 	AttendanceEnabled bool   `json:"attendance_enabled"`
+	WeekendsOff       bool   `json:"weekends_off"`
 }
 
 func (q *Queries) GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error) {
 	row := q.db.QueryRowContext(ctx, getOrgInfo, id)
 	var i GetOrgInfoRow
-	err := row.Scan(&i.Name, &i.AttendanceEnabled)
+	err := row.Scan(&i.Name, &i.AttendanceEnabled, &i.WeekendsOff)
 	return i, err
 }
 
@@ -77,6 +120,58 @@ func (q *Queries) GetOrganizationName(ctx context.Context, id uuid.UUID) (string
 	return name, err
 }
 
+const isOrgHolidayToday = `-- name: IsOrgHolidayToday :one
+SELECT EXISTS (
+    SELECT 1 FROM organizations o
+    WHERE o.id = $1 AND (
+        (o.weekends_off AND EXTRACT(DOW FROM CURRENT_DATE) IN (0, 6))
+        OR EXISTS (SELECT 1 FROM org_holidays oh WHERE oh.org_id = o.id AND oh.date = CURRENT_DATE)
+    )
+)
+`
+
+// Single check used to gate mark-attendance and today's status: a holiday if
+// it's a configured one-off date, or a weekend and the org has weekends off.
+func (q *Queries) IsOrgHolidayToday(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isOrgHolidayToday, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const listOrgHolidays = `-- name: ListOrgHolidays :many
+SELECT id, org_id, date, label, created_at FROM org_holidays WHERE org_id = $1 ORDER BY date
+`
+
+func (q *Queries) ListOrgHolidays(ctx context.Context, orgID uuid.UUID) ([]OrgHoliday, error) {
+	rows, err := q.db.QueryContext(ctx, listOrgHolidays, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrgHoliday
+	for rows.Next() {
+		var i OrgHoliday
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Date,
+			&i.Label,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setOrgAttendanceEnabled = `-- name: SetOrgAttendanceEnabled :exec
 UPDATE organizations SET attendance_enabled = $2 WHERE id = $1
 `
@@ -88,5 +183,19 @@ type SetOrgAttendanceEnabledParams struct {
 
 func (q *Queries) SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error {
 	_, err := q.db.ExecContext(ctx, setOrgAttendanceEnabled, arg.ID, arg.AttendanceEnabled)
+	return err
+}
+
+const setOrgWeekendsOff = `-- name: SetOrgWeekendsOff :exec
+UPDATE organizations SET weekends_off = $2 WHERE id = $1
+`
+
+type SetOrgWeekendsOffParams struct {
+	ID          uuid.UUID `json:"id"`
+	WeekendsOff bool      `json:"weekends_off"`
+}
+
+func (q *Queries) SetOrgWeekendsOff(ctx context.Context, arg SetOrgWeekendsOffParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgWeekendsOff, arg.ID, arg.WeekendsOff)
 	return err
 }

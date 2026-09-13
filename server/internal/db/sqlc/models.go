@@ -684,6 +684,14 @@ type Notification struct {
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
+type OrgHoliday struct {
+	ID        uuid.UUID      `json:"id"`
+	OrgID     uuid.UUID      `json:"org_id"`
+	Date      time.Time      `json:"date"`
+	Label     sql.NullString `json:"label"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+}
+
 type OrgMembership struct {
 	ID        uuid.UUID    `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
@@ -697,6 +705,7 @@ type Organization struct {
 	Name              string         `json:"name"`
 	Domain            sql.NullString `json:"domain"`
 	AttendanceEnabled bool           `json:"attendance_enabled"`
+	WeekendsOff       bool           `json:"weekends_off"`
 	CreatedAt         sql.NullTime   `json:"created_at"`
 }
 

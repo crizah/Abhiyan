@@ -48,6 +48,16 @@ func (h *AttendanceHandler) MarkAttendance(c *gin.Context) {
 		return
 	}
 
+	isHoliday, err := h.attendanceService.IsHolidayToday(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check holiday status"})
+		return
+	}
+	if isHoliday {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Attendance is not tracked today — it's a holiday"})
+		return
+	}
+
 	sourceKey, err := h.attendanceService.GetUserFaceURI(c.Request.Context(), userID)
 	if err != nil || sourceKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No registered face found. Please register your face first."})
@@ -149,6 +159,70 @@ func (h *AttendanceHandler) GetUserAttendanceSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, summary)
+}
+
+func (h *AttendanceHandler) GetHolidaySettings(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	settings, err := h.attendanceService.GetHolidaySettings(c.Request.Context(), orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch holiday settings"})
+		return
+	}
+
+	c.JSON(http.StatusOK, settings)
+}
+
+func (h *AttendanceHandler) AddHoliday(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	var req struct {
+		Date  string `json:"date" binding:"required"`
+		Label string `json:"label"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date is required (YYYY-MM-DD)"})
+		return
+	}
+
+	holiday, err := h.attendanceService.AddHoliday(c.Request.Context(), orgID, req.Date, req.Label)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, holiday)
+}
+
+func (h *AttendanceHandler) RemoveHoliday(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+	holidayID := c.Param("holiday_id")
+
+	if err := h.attendanceService.RemoveHoliday(c.Request.Context(), orgID, holidayID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (h *AttendanceHandler) SetWeekendsOff(c *gin.Context) {
+	orgID := c.MustGet("org_id").(string)
+
+	var req struct {
+		Off bool `json:"off"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "off field is required"})
+		return
+	}
+
+	if err := h.attendanceService.SetWeekendsOff(c.Request.Context(), orgID, req.Off); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update weekends setting"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"weekends_off": req.Off})
 }
 
 func (h *AttendanceHandler) DownloadUserReport(c *gin.Context) {

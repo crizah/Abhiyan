@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table, Select, DatePicker, Button, Tag, Flex, Typography,
-  message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented, ConfigProvider
+  message, theme, Avatar, Card, Tooltip as AntTooltip, Segmented, ConfigProvider,
+  Alert, Switch, Input, Popconfirm, Empty
 } from 'antd';
 import {
-  DownloadOutlined, UserOutlined, CalendarOutlined,
+  DownloadOutlined, UserOutlined, CalendarOutlined, SettingOutlined, DeleteOutlined, PlusOutlined,
 } from '@ant-design/icons';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import dayjs from 'dayjs';
@@ -12,6 +13,7 @@ import apiClient from '../../config/axios';
 import { SlidingCardModal } from '../../components/SlidingCardModal';
 import InfoTooltip from '../../components/InfoTooltip';
 import { fulfillmentColor, reviewStatusColor } from '../../utils/taskColors';
+import { attendanceAPI } from '../auth/api';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -63,6 +65,17 @@ export default function AttendancePage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
   const [drawerRange, setDrawerRange] = useState(DEFAULT_DRAWER_RANGE);
+
+  // Configure Holidays
+  const [holidaysModalOpen, setHolidaysModalOpen] = useState(false);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+  const [weekendsOff, setWeekendsOff] = useState(false);
+  const [weekendsToggling, setWeekendsToggling] = useState(false);
+  const [holidays, setHolidays] = useState([]);
+  const [newHolidayDate, setNewHolidayDate] = useState(null);
+  const [newHolidayLabel, setNewHolidayLabel] = useState('');
+  const [addingHoliday, setAddingHoliday] = useState(false);
+  const [removingHolidayId, setRemovingHolidayId] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -167,6 +180,76 @@ export default function AttendancePage() {
       message.error('Failed to download user report');
     } finally {
       setDownloadingUserReport(false);
+    }
+  };
+
+  const fetchHolidaySettings = async () => {
+    setHolidaysLoading(true);
+    try {
+      const res = await attendanceAPI.getHolidaySettings();
+      setWeekendsOff(!!res.weekends_off);
+      setHolidays(res.holidays || []);
+    } catch {
+      message.error('Failed to load holiday settings');
+    } finally {
+      setHolidaysLoading(false);
+    }
+  };
+
+  const openHolidaysModal = () => {
+    setHolidaysModalOpen(true);
+    fetchHolidaySettings();
+  };
+
+  const handleToggleWeekends = async () => {
+    const next = !weekendsOff;
+    setWeekendsToggling(true);
+    try {
+      await attendanceAPI.setWeekendsOff(next);
+      setWeekendsOff(next);
+      message.success(next ? 'Weekends marked as non-working.' : 'Weekends marked as working days.');
+    } catch {
+      message.error('Failed to update weekends setting');
+    } finally {
+      setWeekendsToggling(false);
+    }
+  };
+
+  const addHolidayDate = async (dateStr, label) => {
+    setAddingHoliday(true);
+    try {
+      const holiday = await attendanceAPI.addHoliday(dateStr, label);
+      setHolidays((prev) => {
+        const withoutDupe = prev.filter((h) => h.date !== dateStr);
+        return [...withoutDupe, holiday].sort((a, b) => a.date.localeCompare(b.date));
+      });
+      message.success('Holiday added.');
+    } catch {
+      message.error('Failed to add holiday');
+    } finally {
+      setAddingHoliday(false);
+    }
+  };
+
+  const handleAddToday = () => addHolidayDate(dayjs().format('YYYY-MM-DD'), '');
+
+  const handleAddPickedDate = async () => {
+    if (!newHolidayDate) return;
+    await addHolidayDate(newHolidayDate.format('YYYY-MM-DD'), newHolidayLabel.trim());
+    setNewHolidayDate(null);
+    setNewHolidayLabel('');
+  };
+
+  const handleRemoveHoliday = async (id) => {
+    setRemovingHolidayId(id);
+    try {
+      await attendanceAPI.removeHoliday(id);
+      setHolidays((prev) => prev.filter((h) => h.id !== id));
+      message.success('Holiday removed.');
+    } catch {
+      message.error('Failed to remove holiday');
+    } finally {
+      setRemovingHolidayId(null);
     }
   };
 
@@ -295,6 +378,14 @@ export default function AttendancePage() {
               Generate Report
             </Button>
           </AntTooltip>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={openHolidaysModal}
+            block={isMobile}
+            size={isMobile ? 'small' : 'middle'}
+          >
+            Configure Holidays
+          </Button>
         </Flex>
       </Flex>
 
@@ -409,8 +500,8 @@ export default function AttendancePage() {
                           >
                             <Text style={{ fontSize: 13 }}>{dayjs(h.date).format('MMM D, YYYY')}</Text>
                             <Flex align="center" gap={6}>
-                              {h.present && FULFILLMENT_TAG[h.fulfillment]}
-                              {STATUS_TAG[h.present ? 'present' : 'absent']}
+                              {h.status === 'present' && FULFILLMENT_TAG[h.fulfillment]}
+                              {STATUS_TAG[h.status] ?? <Tag>{h.status}</Tag>}
                             </Flex>
                           </Flex>
                         ))}
@@ -420,6 +511,115 @@ export default function AttendancePage() {
                   </Flex>
                 )}
               </div>
+            ),
+          },
+        ]}
+      />
+
+      <SlidingCardModal
+        open={holidaysModalOpen}
+        onClose={() => setHolidaysModalOpen(false)}
+        title="Configure Holidays"
+        defaultWidth={520}
+        tabs={[
+          {
+            key: 'holidays',
+            label: 'Holidays',
+            content: (
+              <Flex vertical gap={16}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="You can configure holidays for users where attendance will not be taken and won't be tracked."
+                />
+
+                <Flex vertical gap={8}>
+                  <Text strong style={{ fontSize: 13 }}>Weekends</Text>
+                  <Flex align="center" gap={10}>
+                    <Switch
+                      checked={weekendsOff}
+                      loading={weekendsToggling}
+                      onChange={handleToggleWeekends}
+                    />
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {weekendsOff ? 'Saturdays & Sundays are non-working days.' : 'Saturdays & Sundays are working days.'}
+                    </Text>
+                  </Flex>
+                </Flex>
+
+                <Flex vertical gap={8}>
+                  <Text strong style={{ fontSize: 13 }}>Add a Holiday</Text>
+                  <Flex gap={8} wrap="wrap">
+                    <Button size="small" loading={addingHoliday} onClick={handleAddToday}>
+                      Today
+                    </Button>
+                    <DatePicker
+                      size="small"
+                      value={newHolidayDate}
+                      onChange={setNewHolidayDate}
+                      allowClear
+                      style={{ minWidth: 130 }}
+                    />
+                    <Input
+                      size="small"
+                      placeholder="Label (optional)"
+                      value={newHolidayLabel}
+                      onChange={(e) => setNewHolidayLabel(e.target.value)}
+                      style={{ minWidth: 140, flex: 1 }}
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      loading={addingHoliday}
+                      disabled={!newHolidayDate}
+                      onClick={handleAddPickedDate}
+                      style={{ background: '#B3455C', border: 'none' }}
+                    >
+                      Add
+                    </Button>
+                  </Flex>
+                </Flex>
+
+                <Flex vertical gap={8}>
+                  <Text strong style={{ fontSize: 13 }}>Configured Holidays</Text>
+                  {holidaysLoading ? (
+                    <Text type="secondary">Loading…</Text>
+                  ) : holidays.length === 0 ? (
+                    <Empty description="No holidays configured" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  ) : (
+                    <Flex vertical gap={6}>
+                      {holidays.map((h) => (
+                        <Flex
+                          key={h.id}
+                          justify="space-between"
+                          align="center"
+                          style={{ padding: '8px 12px', borderRadius: 8, backgroundColor: '#fafafa' }}
+                        >
+                          <Flex vertical>
+                            <Text style={{ fontSize: 13 }}>{dayjs(h.date).format('MMM D, YYYY')}</Text>
+                            {h.label && <Text type="secondary" style={{ fontSize: 12 }}>{h.label}</Text>}
+                          </Flex>
+                          <Popconfirm
+                            title="Remove this holiday?"
+                            onConfirm={() => handleRemoveHoliday(h.id)}
+                            okText="Remove"
+                            cancelText="Cancel"
+                          >
+                            <Button
+                              size="small"
+                              danger
+                              type="text"
+                              icon={<DeleteOutlined />}
+                              loading={removingHolidayId === h.id}
+                            />
+                          </Popconfirm>
+                        </Flex>
+                      ))}
+                    </Flex>
+                  )}
+                </Flex>
+              </Flex>
             ),
           },
         ]}

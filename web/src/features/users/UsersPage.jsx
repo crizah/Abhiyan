@@ -31,6 +31,7 @@ export default function UsersPage() {
   const [teamToAssign, setTeamToAssign] = useState(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [downloadingUserReport, setDownloadingUserReport] = useState(false);
+  const [resendingId, setResendingId] = useState(null);
 
   // Only scope the table to a horizontal scroll container on narrow screens —
   // without it, the browser squeezes the User column's name/email down to
@@ -179,6 +180,18 @@ export default function UsersPage() {
     }
   };
 
+  const handleResendInvite = async (userId) => {
+    setResendingId(userId);
+    try {
+      await apiClient.post(`/admin/users/${userId}/resend-invite`);
+      message.success('Invite resent successfully');
+    } catch (err) {
+      message.error(err.response?.data?.error || 'Failed to resend invite');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const removeTeamMember = async (teamId) => {
     try {
       await apiClient.delete(`/admin/teams/${teamId}/members/${selectedUser.id}`);
@@ -224,6 +237,21 @@ export default function UsersPage() {
       key: 'status',
       render: (status) => <Tag color={STATUS_COLORS[status] || 'default'}>{status}</Tag>,
     },
+    ...(statusFilter === 'INVITED' ? [{
+      title: 'Resend Invite',
+      key: 'resend',
+      width: 160,
+      render: (_, record) => (
+        <Button
+          size="small"
+          loading={resendingId === record.id}
+          onClick={() => handleResendInvite(record.id)}
+          style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}
+        >
+          Resend Invite
+        </Button>
+      ),
+    }] : []),
     {
       title: 'Action',
       key: 'actions',

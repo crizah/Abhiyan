@@ -42,6 +42,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCredentials(ctx context.Context, arg CreateUserCredentialsParams) (UserCredential, error)
 	DeleteAttachmentsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]string, error)
+	DeleteExpiredKV(ctx context.Context) error
 	DeleteOrganization(ctx context.Context, id uuid.UUID) error
 	DeleteTaskAttachments(ctx context.Context, taskID uuid.NullUUID) error
 	DeleteTaskParticipants(ctx context.Context, taskID uuid.UUID) error
@@ -69,6 +70,7 @@ type Querier interface {
 	// Same shape as GetPendingInvitedUser but keyed by user ID — used by the
 	// admin-triggered resend, which knows the user's row (not their raw token).
 	GetInvitedMembership(ctx context.Context, arg GetInvitedMembershipParams) (GetInvitedMembershipRow, error)
+	GetKV(ctx context.Context, key string) (string, error)
 	GetLeaderboardVisibility(ctx context.Context, teamID uuid.UUID) (bool, error)
 	GetLeaderboardVisibilityBulk(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLeaderboardVisibilityBulkRow, error)
 	GetMembershipStatus(ctx context.Context, arg GetMembershipStatusParams) (UserStatus, error)
@@ -153,12 +155,14 @@ type Querier interface {
 	ListTasksByTeam(ctx context.Context, teamID uuid.UUID) ([]Task, error)
 	MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) error
 	MarkOneNotificationRead(ctx context.Context, arg MarkOneNotificationReadParams) error
+	RateLimitHit(ctx context.Context, arg RateLimitHitParams) (RateLimitHitRow, error)
 	RejectTaskState(ctx context.Context, arg RejectTaskStateParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	ReopenTaskState(ctx context.Context, arg ReopenTaskStateParams) error
 	RescheduleReminder(ctx context.Context, arg RescheduleReminderParams) error
 	SetAttendanceResult(ctx context.Context, arg SetAttendanceResultParams) error
 	SetAudioTranscodeProcessing(ctx context.Context, id uuid.UUID) error
+	SetKV(ctx context.Context, arg SetKVParams) error
 	SetOrgAttendanceEnabled(ctx context.Context, arg SetOrgAttendanceEnabledParams) error
 	SetTranscriptionProcessing(ctx context.Context, id uuid.UUID) error
 	SubmitTaskState(ctx context.Context, id uuid.UUID) error

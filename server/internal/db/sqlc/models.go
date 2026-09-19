@@ -615,6 +615,13 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type AppKv struct {
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	Count     int32     `json:"count"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type Attachment struct {
 	ID            uuid.UUID     `json:"id"`
 	TaskID        uuid.NullUUID `json:"task_id"`

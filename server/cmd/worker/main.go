@@ -16,7 +16,6 @@ import (
 	broker "github.com/crizah/Onion/broker"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -65,10 +64,8 @@ func main() {
 	whisperService := services.NewWhisperService()
 
 	// 2. Initialize Onion App
-	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
 	br := app.BrokerAddr{Broker: broker.BrokerPostgres, Addr: dbURL}
 	ba := app.BackendURL{DB: backend.DBTypePostgres, ConnectionString: dbURL}
 
@@ -113,7 +110,10 @@ func main() {
 	onionApp.Register("poll_missed_deadlines", tasks.NewPollMissedDeadlinesTask(queries))
 
 	// register google auth verification
-	onionApp.Register("verify_google_token", tasks.NewVerifyGoogleTokenTask(rdb, googleClientID))
+	onionApp.Register("verify_google_token", tasks.NewVerifyGoogleTokenTask(queries, googleClientID))
+
+	// register app_kv cleanup (rate-limit counters + google auth handoff rows)
+	onionApp.Register("cleanup_expired_kv", tasks.NewCleanupExpiredKVTask(queries))
 
 	// register face validation
 	rekognitionService, err := services.NewRekognitionService(context.Background())
@@ -156,6 +156,7 @@ func main() {
 			"validate_face":                 "default",
 			"compare_faces":                 "default",
 			"batch_insert_attendance":       "polling",
+			"cleanup_expired_kv":            "polling",
 		},
 	})
 
@@ -183,6 +184,11 @@ func main() {
 	err = onionApp.Schedule("system_attendance_tick", "batch_insert_attendance", "1 0 * * *", nil)
 	if err != nil {
 		log.Fatalf("failed to schedule attendance tick: %v", err)
+	}
+
+	err = onionApp.Schedule("system_kv_cleanup_tick", "cleanup_expired_kv", "@every 10m", nil)
+	if err != nil {
+		log.Fatalf("failed to schedule kv cleanup tick: %v", err)
 	}
 
 	// 4. Start Worker

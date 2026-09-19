@@ -19,12 +19,19 @@ SET present = $2, status = $3, updated_at = NOW()
 WHERE id = $1;
 
 -- name: BatchInsertAbsentAttendance :exec
+-- Skips users whose org has today marked as a holiday (a configured one-off
+-- date, or a weekend when the org has weekends off) — no absent row is ever
+-- created for a holiday, so there's nothing to "unmark" later.
 INSERT INTO attendance_record (user_id, org_id, present, status)
 SELECT om.user_id, om.org_id, false, 'absent'
 FROM org_memberships om
 JOIN organizations o ON om.org_id = o.id
 WHERE om.status = 'ACTIVE'
   AND o.attendance_enabled = true
+  AND NOT (o.weekends_off AND EXTRACT(DOW FROM CURRENT_DATE) IN (0, 6))
+  AND NOT EXISTS (
+      SELECT 1 FROM org_holidays oh WHERE oh.org_id = o.id AND oh.date = CURRENT_DATE
+  )
   AND EXISTS (
       SELECT 1 FROM team_members tm
       JOIN teams t ON tm.team_id = t.id

@@ -72,7 +72,27 @@ export const attendanceAPI = {
 
     getToday: async () => {
         const response = await apiClient.get('/attendance/today');
-        return response.data; // { status: 'none' | 'pending' | 'matched' | 'unmatched' }
+        return response.data; // { status: 'none' | 'pending' | 'matched' | 'unmatched' | 'not_applicable' }
+    },
+
+    getHolidaySettings: async () => {
+        const response = await apiClient.get('/admin/attendance/holidays');
+        return response.data; // { weekends_off, holidays: [{ id, date, label }] }
+    },
+
+    addHoliday: async (date, label) => {
+        const response = await apiClient.post('/admin/attendance/holidays', { date, label });
+        return response.data;
+    },
+
+    removeHoliday: async (holidayId) => {
+        const response = await apiClient.delete(`/admin/attendance/holidays/${holidayId}`);
+        return response.data;
+    },
+
+    setWeekendsOff: async (off) => {
+        const response = await apiClient.put('/admin/attendance/holidays/weekends', { off });
+        return response.data;
     },
 };
 

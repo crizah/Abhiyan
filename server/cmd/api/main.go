@@ -16,6 +16,7 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	app "github.com/crizah/Onion/app"
+	"github.com/crizah/Onion/backend"
 	"github.com/crizah/Onion/broker"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -43,11 +44,14 @@ func main() {
 	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
 
+	br := app.BrokerAddr{Broker: broker.BrokerPostgres, Addr: db_url}
+	ba := app.BackendURL{DB: backend.DBTypePostgres, ConnectionString: db_url}
+
 	// Reuse the same Redis instance the task broker runs on for rate-limit counters.
 	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
 	onionApp, err := app.New(app.Config{
-		BrokerAddr:    broker_url,
-		BackendURL:    db_url,
+		BrokerAddr:    br,
+		BackendURL:    ba,
 		DashboardAddr: dashboard_addr,
 		DefaultQueue:  "default",
 		Queues: []broker.Queue{
@@ -193,6 +197,10 @@ func main() {
 			superAdminGroup.GET("/attendance/report", attendanceHandler.DownloadOrgReport)
 			superAdminGroup.GET("/attendance/users/:user_id/summary", attendanceHandler.GetUserAttendanceSummary)
 			superAdminGroup.GET("/attendance/users/:user_id/report", attendanceHandler.DownloadUserReport)
+			superAdminGroup.GET("/attendance/holidays", attendanceHandler.GetHolidaySettings)
+			superAdminGroup.POST("/attendance/holidays", attendanceHandler.AddHoliday)
+			superAdminGroup.DELETE("/attendance/holidays/:holiday_id", attendanceHandler.RemoveHoliday)
+			superAdminGroup.PUT("/attendance/holidays/weekends", attendanceHandler.SetWeekendsOff)
 		}
 
 		// TEAM ADMINS & SUPER ADMINS ---

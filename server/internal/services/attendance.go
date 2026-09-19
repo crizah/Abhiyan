@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/util"
+	"github.com/google/uuid"
 )
 
 type AttendanceService struct {
@@ -91,6 +93,19 @@ func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID st
 	if err != nil {
 		return "", err
 	}
+
+	// A holiday today short-circuits before looking for a row at all — none
+	// should exist (the batch cron and MarkAttendance both skip holidays),
+	// and returning 'not_applicable' here (rather than 'none') keeps the
+	// employee-facing capture modal from auto-opening on a holiday.
+	isHoliday, err := s.queries.IsOrgHolidayToday(ctx, oID)
+	if err != nil {
+		return "", err
+	}
+	if isHoliday {
+		return "not_applicable", nil
+	}
+
 	row, err := s.queries.GetTodayAttendance(ctx, db.GetTodayAttendanceParams{
 		UserID: uID,
 		OrgID:  oID,
@@ -102,6 +117,138 @@ func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID st
 		return "", err
 	}
 	return row.Status, nil
+}
+
+// IsHolidayToday reports whether today is a non-working day for the org — a
+// configured one-off date, or a weekend when the org has weekends off.
+func (s *AttendanceService) IsHolidayToday(ctx context.Context, orgID string) (bool, error) {
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return false, err
+	}
+	return s.queries.IsOrgHolidayToday(ctx, oID)
+}
+
+type OrgHoliday struct {
+	ID    string `json:"id"`
+	Date  string `json:"date"`
+	Label string `json:"label,omitempty"`
+}
+
+type HolidaySettings struct {
+	WeekendsOff bool         `json:"weekends_off"`
+	Holidays    []OrgHoliday `json:"holidays"`
+}
+
+func (s *AttendanceService) GetHolidaySettings(ctx context.Context, orgID string) (HolidaySettings, error) {
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return HolidaySettings{}, err
+	}
+	org, err := s.queries.GetOrgInfo(ctx, oID)
+	if err != nil {
+		return HolidaySettings{}, err
+	}
+	rows, err := s.queries.ListOrgHolidays(ctx, oID)
+	if err != nil {
+		return HolidaySettings{}, err
+	}
+	holidays := make([]OrgHoliday, len(rows))
+	for i, r := range rows {
+		holidays[i] = OrgHoliday{
+			ID:    r.ID.String(),
+			Date:  r.Date.Format("2006-01-02"),
+			Label: r.Label.String,
+		}
+	}
+	return HolidaySettings{WeekendsOff: org.WeekendsOff, Holidays: holidays}, nil
+}
+
+func (s *AttendanceService) AddHoliday(ctx context.Context, orgID, dateStr, label string) (OrgHoliday, error) {
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return OrgHoliday{}, err
+	}
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return OrgHoliday{}, fmt.Errorf("invalid date: %w", err)
+	}
+	row, err := s.queries.CreateOrgHoliday(ctx, db.CreateOrgHolidayParams{
+		OrgID: oID,
+		Date:  date,
+		Label: sql.NullString{String: label, Valid: label != ""},
+	})
+	if err != nil {
+		return OrgHoliday{}, err
+	}
+	return OrgHoliday{ID: row.ID.String(), Date: row.Date.Format("2006-01-02"), Label: row.Label.String}, nil
+}
+
+func (s *AttendanceService) RemoveHoliday(ctx context.Context, orgID, holidayID string) error {
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return err
+	}
+	hID, err := util.ParseUUID(holidayID)
+	if err != nil {
+		return err
+	}
+	return s.queries.DeleteOrgHoliday(ctx, db.DeleteOrgHolidayParams{ID: hID, OrgID: oID})
+}
+
+func (s *AttendanceService) SetWeekendsOff(ctx context.Context, orgID string, off bool) error {
+	oID, err := util.ParseUUID(orgID)
+	if err != nil {
+		return err
+	}
+	return s.queries.SetOrgWeekendsOff(ctx, db.SetOrgWeekendsOffParams{ID: oID, WeekendsOff: off})
+}
+
+// holidayContext is the per-org data needed to decide, for any given date,
+// whether it's a non-working day — fetched once per report and reused across
+// every row instead of re-querying per date.
+type holidayContext struct {
+	weekendsOff bool
+	dates       map[string]bool
+}
+
+func (s *AttendanceService) getHolidayContext(ctx context.Context, orgID uuid.UUID) (holidayContext, error) {
+	org, err := s.queries.GetOrgInfo(ctx, orgID)
+	if err != nil {
+		return holidayContext{}, err
+	}
+	holidays, err := s.queries.ListOrgHolidays(ctx, orgID)
+	if err != nil {
+		return holidayContext{}, err
+	}
+	dates := make(map[string]bool, len(holidays))
+	for _, h := range holidays {
+		dates[h.Date.Format("2006-01-02")] = true
+	}
+	return holidayContext{weekendsOff: org.WeekendsOff, dates: dates}, nil
+}
+
+func (hc holidayContext) isHoliday(date time.Time) bool {
+	if hc.weekendsOff {
+		wd := date.Weekday()
+		if wd == time.Saturday || wd == time.Sunday {
+			return true
+		}
+	}
+	return hc.dates[date.Format("2006-01-02")]
+}
+
+// datesInRange enumerates every holiday date within [from, to] (inclusive) as
+// "YYYY-MM-DD" strings. Bounded by validateDateRange's maxAttendanceRangeDays
+// cap on the caller side, so this loop can't run unbounded.
+func (hc holidayContext) datesInRange(from, to time.Time) []string {
+	var out []string
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		if hc.isHoliday(d) {
+			out = append(out, d.Format("2006-01-02"))
+		}
+	}
+	return out
 }
 
 func (s *AttendanceService) SetResult(ctx context.Context, recordID string, present bool, status string) error {
@@ -158,7 +305,15 @@ type AttendanceRow struct {
 // For attendance-enabled orgs, no_record only happens in the brief window
 // before the nightly batch job runs, and falling back to 'absent' matches the
 // existing "no check-in = absent" behavior.
-func resolveStatus(rawStatus string, attendanceEnabled bool) string {
+// resolveStatus folds a holiday override in ahead of everything else: a
+// configured holiday (or weekend, when the org has weekends off) always reads
+// as 'not_applicable', the same status already used for attendance-disabled
+// orgs — even overriding a stray present/absent row from before the holiday
+// was configured.
+func resolveStatus(rawStatus string, attendanceEnabled bool, isHoliday bool) string {
+	if isHoliday {
+		return "not_applicable"
+	}
 	if rawStatus != "no_record" {
 		return rawStatus
 	}
@@ -194,6 +349,12 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 		return nil, err
 	}
 
+	hc, err := s.getHolidayContext(ctx, parsedOrgID)
+	if err != nil {
+		return nil, err
+	}
+	isHoliday := hc.isHoliday(date)
+
 	if teamID != "" && teamID != "ALL" {
 		parsedTeamID, err := util.ParseUUID(teamID)
 		if err != nil {
@@ -209,7 +370,7 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 		}
 		out := make([]AttendanceRow, len(rows))
 		for i, r := range rows {
-			status := resolveStatus(r.AttendanceStatus, enabled)
+			status := resolveStatus(r.AttendanceStatus, enabled, isHoliday)
 			out[i] = AttendanceRow{
 				ID:               r.ID.String(),
 				FirstName:        r.FirstName,
@@ -232,7 +393,7 @@ func (s *AttendanceService) GetOrgAttendance(ctx context.Context, orgID, dateStr
 	}
 	out := make([]AttendanceRow, len(rows))
 	for i, r := range rows {
-		status := resolveStatus(r.AttendanceStatus, enabled)
+		status := resolveStatus(r.AttendanceStatus, enabled, isHoliday)
 		out[i] = AttendanceRow{
 			ID:               r.ID.String(),
 			FirstName:        r.FirstName,
@@ -272,6 +433,11 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 		return nil, err
 	}
 
+	hc, err := s.getHolidayContext(ctx, parsedOrgID)
+	if err != nil {
+		return nil, err
+	}
+
 	if teamID != "" && teamID != "ALL" {
 		parsedTeamID, err := util.ParseUUID(teamID)
 		if err != nil {
@@ -288,7 +454,7 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 		}
 		out := make([]AttendanceRow, len(rows))
 		for i, r := range rows {
-			status := resolveStatus(r.AttendanceStatus, enabled)
+			status := resolveStatus(r.AttendanceStatus, enabled, hc.isHoliday(r.AttendanceDate))
 			out[i] = AttendanceRow{
 				ID:               r.ID.String(),
 				FirstName:        r.FirstName,
@@ -313,7 +479,7 @@ func (s *AttendanceService) GetOrgAttendanceRange(ctx context.Context, orgID, fr
 	}
 	out := make([]AttendanceRow, len(rows))
 	for i, r := range rows {
-		status := resolveStatus(r.AttendanceStatus, enabled)
+		status := resolveStatus(r.AttendanceStatus, enabled, hc.isHoliday(r.AttendanceDate))
 		out[i] = AttendanceRow{
 			ID:               r.ID.String(),
 			FirstName:        r.FirstName,
@@ -338,6 +504,7 @@ type UserAttendanceSummary struct {
 type UserAttendanceHistory struct {
 	Date        string `json:"date"`
 	Present     bool   `json:"present"`
+	Status      string `json:"status"` // present | absent | not_applicable
 	Fulfillment string `json:"fulfillment"`
 }
 
@@ -391,18 +558,41 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOr
 		return nil, err
 	}
 
-	h := make([]UserAttendanceHistory, len(history))
-	for i, r := range history {
+	hc, err := s.getHolidayContext(ctx, oid)
+	if err != nil {
+		return nil, err
+	}
+
+	seenDates := make(map[string]bool, len(history))
+	h := make([]UserAttendanceHistory, 0, len(history))
+	for _, r := range history {
+		date := r.AttendanceDate.Time
+		seenDates[date.Format("2006-01-02")] = true
 		status := "absent"
 		if r.Present.Bool {
 			status = "present"
 		}
-		h[i] = UserAttendanceHistory{
-			Date:        r.AttendanceDate.Time.Format("2006-01-02"),
-			Present:     r.Present.Bool,
-			Fulfillment: resolveFulfillment(status, r.Fulfillment),
+		if hc.isHoliday(date) {
+			status = "not_applicable"
 		}
+		h = append(h, UserAttendanceHistory{
+			Date:        date.Format("2006-01-02"),
+			Present:     r.Present.Bool,
+			Status:      status,
+			Fulfillment: resolveFulfillment(status, r.Fulfillment),
+		})
 	}
+
+	// Holiday dates never get an attendance_record row (the batch cron and
+	// MarkAttendance both skip them), so they'd otherwise be silently absent
+	// from history/CSV instead of showing explicitly as not_applicable.
+	for _, dateStr := range hc.datesInRange(from, to) {
+		if seenDates[dateStr] {
+			continue
+		}
+		h = append(h, UserAttendanceHistory{Date: dateStr, Present: false, Status: "not_applicable"})
+	}
+	sort.Slice(h, func(i, j int) bool { return h[i].Date > h[j].Date })
 
 	return &UserAttendanceSummary{
 		PresentCount:      counts.PresentCount,
@@ -511,11 +701,7 @@ func (s *AttendanceService) WriteUserReport(ctx context.Context, userID, callerO
 	cw.Write([]string{})
 	cw.Write([]string{"Date", "Status", "Fulfillment"})
 	for _, h := range summary.History {
-		status := "absent"
-		if h.Present {
-			status = "present"
-		}
-		cw.Write([]string{h.Date, status, csvFulfillmentLabel(h.Fulfillment)})
+		cw.Write([]string{h.Date, csvStatusLabel(h.Status), csvFulfillmentLabel(h.Fulfillment)})
 	}
 	return nil
 }

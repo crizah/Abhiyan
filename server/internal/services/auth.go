@@ -17,7 +17,6 @@ import (
 	"github.com/crizah/Onion/app"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -27,17 +26,15 @@ type AuthService struct {
 	JwtSecret      []byte
 	GoogleClientID string
 	onionApp       *app.App
-	rdb            *redis.Client
 }
 
-func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App, rdb *redis.Client) *AuthService {
+func NewAuthService(dbConn *sql.DB, s []byte, googleClientID string, oa *app.App) *AuthService {
 	return &AuthService{
 		db:             dbConn,
 		Queries:        db.New(dbConn),
 		JwtSecret:      s,
 		GoogleClientID: googleClientID,
 		onionApp:       oa,
-		rdb:            rdb,
 	}
 }
 
@@ -273,7 +270,7 @@ func (s *AuthService) SelectOrg(ctx context.Context, pendingToken string, orgID 
 // LoginWithGoogle authenticates a user via a Google Sign-In ID token.
 // Because the API Lambda has no outbound internet access, it cannot call
 // Google directly. Instead it enqueues a verify_google_token job on the
-// dedicated auth queue, then polls Redis for the result written by the ECS
+// dedicated auth queue, then polls app_kv for the result written by the ECS
 // worker (which does have internet access).
 func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (*LoginResult, error) {
 	jobID := uuid.New().String()
@@ -286,14 +283,14 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, credential string) (*
 		return nil, fmt.Errorf("failed to queue google token verification: %w", err)
 	}
 
-	// Poll Redis until the worker writes a result or we time out.
+	// Poll app_kv until the worker writes a result or we time out.
 	// 250ms intervals × 40 = 10 seconds max wait.
 	const pollInterval = 250 * time.Millisecond
 	const maxWait = 10 * time.Second
 	deadline := time.Now().Add(maxWait)
 
 	for time.Now().Before(deadline) {
-		val, err := s.rdb.Get(ctx, resultKey).Result()
+		val, err := s.Queries.GetKV(ctx, resultKey)
 		if err == nil {
 			var result struct {
 				Email string `json:"email"`

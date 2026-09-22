@@ -311,3 +311,94 @@ aws lambda update-alias --function-name abhiyan-api --name prod --function-versi
 ```bash
 aws ecs update-service --cluster abhiyan-prod --service abhiyan-worker --task-definition abhiyan-worker:<previous-revision>
 ```
+
+---
+
+## Migration Plan — Full Redis Removal (~$14.60/month savings, $0 added cost)
+
+Redis was doing two unrelated jobs, and the first pass at this migration only
+caught one of them:
+- **Task broker (Onion)** — `onion_queue` storage. Already had a Postgres
+  option (`broker.BrokerPostgres`).
+- **App-level cache** — `middleware.RateLimit`'s fixed-window counters, and
+  the ~60s result handoff between the `verify_google_token` worker task and
+  the API's `LoginWithGoogle` poll loop (the worker has outbound internet for
+  the Google call, the API Lambda doesn't). This part was missed the first
+  time round and would have broken in prod if ElastiCache had been removed
+  right after the broker swap.
+
+Both now run on the existing RDS Postgres instance via one `app_kv` table —
+no new AWS resource, full ElastiCache removal.
+
+### Status (branch `migrate-redis`)
+- Onion (`github.com/crizah/Onion`, pinned in `server/go.mod`) already has
+  `PostgresBroker`, and dashboard/beat are wired generically against the
+  `Broker` interface — confirmed no library changes needed.
+- `server/internal/db/schemas/17_app_kv.sql` — new `app_kv` table (`key`,
+  `value`, `count`, `expires_at`), standalone, no FKs.
+- `server/internal/db/query/app_kv.sql` — `RateLimitHit` (atomic upsert,
+  same fixed-window semantics as the old `INCR`+`EXPIRE`), `SetKV`/`GetKV`
+  (Google-auth handoff), `DeleteExpiredKV` (cleanup). Generated via `make sqlc`.
+- `middleware.RateLimit` takes `*db.Queries` instead of `*redis.Client`.
+- `services.AuthService` and `tasks.NewVerifyGoogleTokenTask` read/write
+  `app_kv` via sqlc instead of Redis.
+- `cmd/api/main.go` / `cmd/worker/main.go`: Onion's broker points at `db_url`
+  (`BrokerPostgres`); `BROKER_URL`/`redis.NewClient` removed entirely — the
+  app doesn't read `BROKER_URL` anywhere anymore.
+- New `cleanup_expired_kv` task + `@every 10m` beat schedule — purges rows
+  more than 1hr past expiry (rate-limit keys self-overwrite on next hit,
+  but one-off Google-auth keys don't, so they need the sweep).
+- `go-redis` dropped to an indirect dependency in `go.mod`/`go.sum` (still
+  pulled in transitively by Onion's own Redis broker option — nothing in
+  Abhiyan imports it anymore).
+- `go build ./...` passes.
+
+### Remaining steps
+
+1. **Generate the migration** (needs Docker for Atlas's dev-db — not run here):
+   ```
+   make migrate-create name=add_app_kv
+   ```
+   Review the generated file under `server/internal/db/migrations/`, then
+   apply to dev:
+   ```
+   make migrate-up
+   ```
+2. **Apply to prod** once verified in dev:
+   ```
+   make migrate-up DB_URL="<prod DSN>"
+   ```
+3. **Terraform — drop `BROKER_URL` entirely** (not repointed at Postgres —
+   nothing reads it anymore, so the parameter itself goes away):
+   - `terraform/modules/data/main.tf` — delete `aws_ssm_parameter.broker_url`.
+   - `terraform/modules/compute/lambda.tf` — delete the
+     `data "aws_ssm_parameter" "broker_url"` block and its `BROKER_URL` entry
+     in the Lambda `environment` map (~line 101).
+   - `terraform/modules/compute/ecs.tf` — delete the `BROKER_URL` entry from
+     the worker task definition's `secrets` list (~line 40).
+   - `terraform apply` — only touches SSM/Lambda/ECS config; ElastiCache
+     keeps running untouched at this point.
+4. **Deploy** the new worker (ECS) and API (Lambda) builds off this branch.
+   `onion_queue` is auto-created by `PostgresBroker` on first connect;
+   `app_kv` comes from the migration in steps 1–2, not auto-created.
+5. **Verify in prod**:
+   - Dashboard/logs show tasks flowing through Postgres (`onion_queue`
+     empties as workers drain it, `onion_tasks` fills as usual).
+   - Trip a rate limit on a real endpoint, confirm the 429 + `Retry-After`,
+     and that `app_kv` has a growing `count` row for that key.
+   - Do a Google login end-to-end, confirm it completes inside the 10s poll
+     window.
+   - Let one `@every 10m` cleanup tick run, confirm `app_kv` isn't growing
+     unbounded.
+6. **Remove ElastiCache** once step 5 has run clean for a while:
+   - `terraform/modules/data/main.tf` — delete `aws_elasticache_cluster.redis`
+     and `aws_elasticache_subnet_group.main`.
+   - `terraform/modules/data/outputs.tf` — delete the `redis_endpoint` output.
+   - `terraform/modules/data/variables.tf` — delete the `redis_sg_id` variable.
+   - `terraform/modules/networking/main.tf` — delete `aws_security_group.redis`.
+   - `terraform/main.tf` — remove the `redis_sg_id = module.networking.redis_sg_id`
+     line passed into the `data` module.
+   - `terraform apply`.
+7. Update the `AWS Services Used` table, `SSM Parameter Store` table,
+   `Environment Parity` table, and the architecture diagram above — drop
+   every ElastiCache/Redis row and box, and the `~$43/month` estimate.

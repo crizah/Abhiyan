@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 // KeyByIP rate-limits per client IP. Use for unauthenticated endpoints where
@@ -28,25 +28,24 @@ func KeyByUser(c *gin.Context) string {
 	return c.ClientIP()
 }
 
-// RateLimit caps requests to `limit` per `window` using a Redis fixed-window
+// RateLimit caps requests to `limit` per `window` using a Postgres fixed-window
 // counter, keyed by keyFunc(c) under the given prefix. It fails open (allows
-// the request) on Redis errors so an outage doesn't take down the API.
-func RateLimit(rdb *redis.Client, prefix string, limit int, window time.Duration, keyFunc func(*gin.Context) string) gin.HandlerFunc {
+// the request) on errors so a DB blip doesn't take down the API.
+func RateLimit(queries *db.Queries, prefix string, limit int, window time.Duration, keyFunc func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := fmt.Sprintf("ratelimit:%s:%s", prefix, keyFunc(c))
 
-		count, err := rdb.Incr(c.Request.Context(), key).Result()
+		hit, err := queries.RateLimitHit(c.Request.Context(), db.RateLimitHitParams{
+			Key:  key,
+			Secs: window.Seconds(),
+		})
 		if err != nil {
 			c.Next()
 			return
 		}
-		if count == 1 {
-			rdb.Expire(c.Request.Context(), key, window)
-		}
 
-		if count > int64(limit) {
-			ttl, _ := rdb.TTL(c.Request.Context(), key).Result()
-			if ttl > 0 {
+		if hit.Count > int32(limit) {
+			if ttl := time.Until(hit.ExpiresAt); ttl > 0 {
 				c.Header("Retry-After", fmt.Sprintf("%.0f", ttl.Seconds()))
 			}
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests, please slow down"})

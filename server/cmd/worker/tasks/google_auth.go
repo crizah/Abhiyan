@@ -4,23 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
+	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
 	"github.com/crizah/Abhiyan/server/internal/util"
-	"github.com/redis/go-redis/v9"
 )
 
-// GoogleAuthResult is written to Redis so the API Lambda can read it.
+// GoogleAuthResult is written to app_kv so the API Lambda can read it.
 type GoogleAuthResult struct {
 	Email string `json:"email,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
 // NewVerifyGoogleTokenTask verifies a Google ID token and writes the result
-// to Redis under the key "google_auth:{job_id}". The API Lambda polls that
+// to app_kv under the key "google_auth:{job_id}". The API Lambda polls that
 // key while it waits. This task runs in the ECS worker, which has outbound
 // internet access — the API Lambda does not.
-func NewVerifyGoogleTokenTask(rdb *redis.Client, googleClientID string) func(context.Context, map[string]any) (any, error) {
+func NewVerifyGoogleTokenTask(queries *db.Queries, googleClientID string) func(context.Context, map[string]any) (any, error) {
 	return func(ctx context.Context, args map[string]any) (any, error) {
 		jobID, _ := args["job_id"].(string)
 		credential, _ := args["credential"].(string)
@@ -45,9 +44,9 @@ func NewVerifyGoogleTokenTask(rdb *redis.Client, googleClientID string) func(con
 			return nil, marshalErr
 		}
 
-		// Write to Redis first so Lambda can read the outcome regardless of success/failure.
-		if setErr := rdb.Set(ctx, resultKey, data, 60*time.Second).Err(); setErr != nil {
-			return nil, fmt.Errorf("verify_google_token: failed to write result to redis: %w", setErr)
+		// Write the result first so Lambda can read the outcome regardless of success/failure.
+		if setErr := queries.SetKV(ctx, db.SetKVParams{Key: resultKey, Value: string(data), Secs: 60}); setErr != nil {
+			return nil, fmt.Errorf("verify_google_token: failed to write result: %w", setErr)
 		}
 
 		// Surface verification failure to Onion for dashboard visibility.

@@ -16,11 +16,11 @@ import (
 	"github.com/crizah/Abhiyan/server/internal/middleware"
 	"github.com/crizah/Abhiyan/server/internal/services"
 	app "github.com/crizah/Onion/app"
+	"github.com/crizah/Onion/backend"
 	"github.com/crizah/Onion/broker"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -40,14 +40,14 @@ func main() {
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 
 	// initialise task queue
-	broker_url := os.Getenv("BROKER_URL")
 	dashboard_addr := os.Getenv("DASHBOARD_URL")
 
-	// Reuse the same Redis instance the task broker runs on for rate-limit counters.
-	rdb := redis.NewClient(&redis.Options{Addr: broker_url})
+	br := app.BrokerAddr{Broker: broker.BrokerPostgres, Addr: db_url}
+	ba := app.BackendURL{DB: backend.DBTypePostgres, ConnectionString: db_url}
+
 	onionApp, err := app.New(app.Config{
-		BrokerAddr:    broker_url,
-		BackendURL:    db_url,
+		BrokerAddr:    br,
+		BackendURL:    ba,
 		DashboardAddr: dashboard_addr,
 		DefaultQueue:  "default",
 		Queues: []broker.Queue{
@@ -74,7 +74,7 @@ func main() {
 	queries := db.New(dbConn)
 
 	// --- 1. Initialize Services ---
-	authService := services.NewAuthService(dbConn, s_byte, googleClientID, onionApp, rdb)
+	authService := services.NewAuthService(dbConn, s_byte, googleClientID, onionApp)
 	adminService := services.NewAdminService(dbConn, s_byte, onionApp)
 	userService := services.NewUserService(dbConn)
 	s3Service, err := services.NewS3Service(context.Background())
@@ -102,11 +102,11 @@ func main() {
 
 	// Unauthenticated auth endpoints: no user identity yet, so key by IP.
 	// Tight limit - these are brute-force/credential-stuffing/email-bombing targets.
-	authLimiter := middleware.RateLimit(rdb, "auth", 20, 5*time.Minute, middleware.KeyByIP)
+	authLimiter := middleware.RateLimit(queries, "auth", 20, 5*time.Minute, middleware.KeyByIP)
 
 	// Authenticated endpoints with real downstream cost (external API calls,
 	// message sends, S3 writes). Keyed by user so it can't be starved by shared IPs.
-	costLimiter := middleware.RateLimit(rdb, "cost", 20, time.Minute, middleware.KeyByUser)
+	costLimiter := middleware.RateLimit(queries, "cost", 20, time.Minute, middleware.KeyByUser)
 
 	// --- 3. Define Routes ---
 	v1 := r.Group("/api/v1")

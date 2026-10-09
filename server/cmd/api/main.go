@@ -22,7 +22,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
-# redeploy
+// redeploy
 func main() {
 	// In Lambda, env vars are injected by Terraform at deploy time.
 	// Locally, load from .env file.

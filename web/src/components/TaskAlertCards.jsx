@@ -1,33 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Flex, Typography, Button, Tag, theme } from 'antd';
-import { CalendarOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { Modal, Table, Typography, Button, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import apiClient from '../config/axios';
 import { useAuth } from '../context/AuthContext';
+import { reviewStatusColor } from '../utils/taskColors';
 
 const { Text } = Typography;
 
 const POLL_MS = 60000;
+const ROSE = '#B3455C';
 
 // REVIEW cards go to the admin tasks page, everything else to the employee tasks page.
-// showDetails=false means the card shows the server-written message instead of team/creator/deadline.
+// showDetails=false means the row shows the server-written message under the title.
 const KIND_META = {
-  ASSIGNED: { title: 'New Task Assigned', color: '#1E3A8A', path: '/employee-tasks', byLabel: 'Assigned by', showDetails: true },
-  REVIEW: { title: 'Task Ready for Review', color: '#6B21A8', path: '/tasks', byLabel: 'Created by', showDetails: true },
-  APPROVED: { title: 'Task Approved', color: '#166534', path: '/employee-tasks', showDetails: false },
-  REJECTED: { title: 'Task Rejected', color: '#991B1B', path: '/employee-tasks', showDetails: false },
-  REOPENED: { title: 'Task Reopened', color: '#B45309', path: '/employee-tasks', showDetails: false },
+  ASSIGNED: { label: 'Assigned', color: ROSE, path: '/employee-tasks', showDetails: true },
+  REVIEW: { label: 'To Review', color: reviewStatusColor('PENDING'), path: '/tasks', showDetails: true },
+  APPROVED: { label: 'Approved', color: reviewStatusColor('APPROVED'), path: '/employee-tasks', showDetails: false },
+  REJECTED: { label: 'Rejected', color: reviewStatusColor('REJECTED'), path: '/employee-tasks', showDetails: false },
+  REOPENED: { label: 'Reopened', color: '#71717A', path: '/employee-tasks', showDetails: false },
 };
 
 /**
- * Pop-up card listing the user's new assigned / to-review tasks.
+ * Pop-up card listing the user's new assigned / to-review / actioned tasks.
  * Backed by notifications rows flagged with card_kind; dismissing clears the flag.
  * Mounted in AppLayout next to AttendanceCapture.
  */
 export default function TaskAlertCards() {
   const { user } = useAuth();
-  const { token } = theme.useToken();
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
 
@@ -62,63 +62,109 @@ export default function TaskAlertCards() {
   // The cross dismisses everything currently shown.
   const handleClose = () => dismiss(cards.map(c => c.id));
 
+  const columns = [
+    {
+      title: 'Task',
+      key: 'task',
+      render: (_, card) => {
+        const meta = KIND_META[card.kind] || KIND_META.ASSIGNED;
+        return (
+          <div>
+            <Text strong style={{ wordBreak: 'break-word' }}>{card.task_title}</Text>
+            {!meta.showDetails && (
+              <div><Text type="secondary" style={{ fontSize: 12 }}>{card.message}</Text></div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Type',
+      key: 'kind',
+      width: 110,
+      render: (_, card) => {
+        const meta = KIND_META[card.kind] || KIND_META.ASSIGNED;
+        return <Tag color={meta.color} style={{ margin: 0 }}>{meta.label}</Tag>;
+      },
+    },
+    {
+      title: 'Team',
+      dataIndex: 'team_name',
+      key: 'team',
+      width: 130,
+      render: text => <Text>{text}</Text>,
+    },
+    {
+      title: 'Assigned By',
+      dataIndex: 'assigned_by',
+      key: 'by',
+      width: 140,
+      render: text => text ? <Text>{text}</Text> : <Text type="secondary">—</Text>,
+    },
+    {
+      title: 'Deadline',
+      dataIndex: 'due_date',
+      key: 'due',
+      width: 160,
+      render: date => date ? dayjs(date).format('MMM D, YYYY h:mm A') : <Text type="secondary">No deadline</Text>,
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 120,
+      render: (_, card) => (
+        <Button type="primary" size="small" onClick={() => handleView(card)}>View Task</Button>
+      ),
+    },
+  ];
+
   return (
-    <Modal
-      open={cards.length > 0}
-      title={cards.length > 1 ? `Tasks needing your attention (${cards.length})` : 'Task needing your attention'}
-      footer={null}
-      centered
-      width={440}
-      onCancel={handleClose}
-      maskClosable={false}
-    >
-      <div
-        className="notif-scrollbar"
-        style={{ maxHeight: '60vh', overflowY: 'auto', overflowX: 'hidden', paddingRight: 4 }}
+    <>
+      <style>{`
+        .task-alert-modal .ant-modal-content {
+          border-radius: 24px;
+          border: 1px solid rgba(24, 24, 27, 0.08);
+          box-shadow: 0 20px 40px -15px rgba(24, 24, 27, 0.18);
+          padding: 24px;
+        }
+        .task-alert-modal .ant-modal-header { margin-bottom: 16px; }
+        .task-alert-modal .ant-table-wrapper .ant-table {
+          border: 1px solid rgba(24, 24, 27, 0.08);
+          border-radius: 14px;
+          overflow: hidden;
+        }
+        .task-alert-modal .ant-table-thead > tr > th {
+          background: #F2E8E4;
+          color: #18181B;
+          font-weight: 600;
+          font-size: 12px;
+          border-bottom: 1px solid rgba(24, 24, 27, 0.08);
+        }
+        .task-alert-modal .ant-table-tbody > tr > td {
+          border-bottom: 1px solid rgba(24, 24, 27, 0.06);
+        }
+        .task-alert-modal .ant-table-tbody > tr:last-child > td { border-bottom: none; }
+        .task-alert-modal .ant-table-body { scrollbar-color: ${ROSE} transparent; scrollbar-width: thin; }
+      `}</style>
+      <Modal
+        className="task-alert-modal"
+        open={cards.length > 0}
+        title={cards.length > 1 ? `Tasks needing your attention (${cards.length})` : 'Task needing your attention'}
+        footer={null}
+        centered
+        width={900}
+        onCancel={handleClose}
+        maskClosable={false}
       >
-        <Flex vertical gap={token.marginSM}>
-          {cards.map(card => {
-            const meta = KIND_META[card.kind] || KIND_META.ASSIGNED;
-            return (
-              <div
-                key={card.id}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: token.borderRadiusLG,
-                  border: `1px solid ${token.colorBorderSecondary}`,
-                  borderLeft: `4px solid ${meta.color}`,
-                  backgroundColor: 'rgba(30, 58, 138, 0.06)',
-                }}
-              >
-                <Flex vertical gap={4}>
-                  <Tag color={meta.color} style={{ margin: 0, alignSelf: 'flex-start', fontSize: 11 }}>{meta.title}</Tag>
-                  <Text strong style={{ fontSize: 14, wordBreak: 'break-word' }}>{card.task_title}</Text>
-                  {meta.showDetails ? (
-                    <>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        <TeamOutlined /> Team: {card.team_name}
-                      </Text>
-                      {card.assigned_by && (
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          <UserOutlined /> {meta.byLabel}: {card.assigned_by}
-                        </Text>
-                      )}
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        <CalendarOutlined /> Deadline: {card.due_date ? dayjs(card.due_date).format('MMM D, YYYY h:mm A') : 'No deadline'}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text style={{ fontSize: 12 }}>{card.message}</Text>
-                  )}
-                  <Button type="primary" size="small" style={{ alignSelf: 'flex-start', marginTop: 6 }} onClick={() => handleView(card)}>
-                    Click here to view task
-                  </Button>
-                </Flex>
-              </div>
-            );
-          })}
-        </Flex>
-      </div>
-    </Modal>
+        <Table
+          size="middle"
+          rowKey="id"
+          columns={columns}
+          dataSource={cards}
+          pagination={false}
+          scroll={{ x: 760, y: '50vh' }}
+        />
+      </Modal>
+    </>
   );
 }

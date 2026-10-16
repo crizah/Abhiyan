@@ -18,6 +18,7 @@ import { CSidebar, CSidebarBrand, CSidebarHeader, CSidebarNav, CNavItem } from '
 import '@coreui/coreui/dist/css/coreui.min.css';
 import AttendanceFaceRegistration from '../components/AttendanceFaceRegistration';
 import AttendanceCapture from '../components/AttendanceCapture';
+import TaskAlertCards from '../components/TaskAlertCards';
 import Dock from '../components/ui/Dock';
 
 const { Header } = Layout;
@@ -655,6 +656,7 @@ export default function AppLayout() {
         >
           <AttendanceFaceRegistration />
           <AttendanceCapture />
+          <TaskAlertCards />
           <Outlet />
         </div>
       </div>

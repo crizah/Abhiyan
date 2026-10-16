@@ -26,6 +26,10 @@ OPEN → [employee submits] → PENDING REVIEW → [admin approves or rejects] �
 
 Tasks also support **updates** (progress posts by any team member) and threaded **comments** on those updates.
 
+**Task alert cards:** when a task is assigned, submitted for review, approved, rejected or reopened, the person who needs to act gets a pop-up card on login (and while logged in, via a 60s poll). Cards are rows in `notifications` with `task_id` and `card_kind` set (`ASSIGNED`, `REVIEW`, `APPROVED`, `REJECTED`, `REOPENED`); dismissing a card sets `card_kind` back to NULL. "Click here to view task" opens the task via `?open=<task_id>`. Only assignees get approve/reject/reopen cards, and only the admin who created the task (`tasks.created_by`) gets the review card.
+
+**Known gap — admin permissions on tasks:** a team can have several admins, and every admin of the team sees all of its tasks. The approve/reject/reopen routes only check for the `ADMIN`/`SUPER_ADMIN` role and the same org, not that the caller created the task or belongs to the team. So any admin can act on a task, even though only the creator is notified. Restricting this to the creator was deferred (a deleted creator would leave a task nobody can review).
+
 ---
 
 ### Smart Reminders (WhatsApp & Email)

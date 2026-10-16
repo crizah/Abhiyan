@@ -48,6 +48,47 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	return err
 }
 
+const createTaskCardNotification = `-- name: CreateTaskCardNotification :exec
+INSERT INTO notifications (user_id, org_id, title, message, task_id, card_kind)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateTaskCardNotificationParams struct {
+	UserID   uuid.UUID      `json:"user_id"`
+	OrgID    uuid.UUID      `json:"org_id"`
+	Title    string         `json:"title"`
+	Message  string         `json:"message"`
+	TaskID   uuid.NullUUID  `json:"task_id"`
+	CardKind sql.NullString `json:"card_kind"`
+}
+
+func (q *Queries) CreateTaskCardNotification(ctx context.Context, arg CreateTaskCardNotificationParams) error {
+	_, err := q.db.ExecContext(ctx, createTaskCardNotification,
+		arg.UserID,
+		arg.OrgID,
+		arg.Title,
+		arg.Message,
+		arg.TaskID,
+		arg.CardKind,
+	)
+	return err
+}
+
+const dismissTaskCard = `-- name: DismissTaskCard :exec
+UPDATE notifications SET card_kind = NULL WHERE id = $1 AND user_id = $2 AND org_id = $3
+`
+
+type DismissTaskCardParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) DismissTaskCard(ctx context.Context, arg DismissTaskCardParams) error {
+	_, err := q.db.ExecContext(ctx, dismissTaskCard, arg.ID, arg.UserID, arg.OrgID)
+	return err
+}
+
 const getUserNotifications = `-- name: GetUserNotifications :many
 SELECT id, title, message, is_read, created_at
 FROM notifications
@@ -84,6 +125,71 @@ func (q *Queries) GetUserNotifications(ctx context.Context, arg GetUserNotificat
 			&i.Message,
 			&i.IsRead,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserTaskCards = `-- name: GetUserTaskCards :many
+SELECT n.id, n.card_kind, n.message, n.created_at, n.task_id,
+       t.title AS task_title, t.due_date,
+       tm.name AS team_name,
+       u.first_name AS creator_first_name, u.last_name AS creator_last_name
+FROM notifications n
+JOIN tasks t ON t.id = n.task_id
+JOIN teams tm ON tm.id = t.team_id
+LEFT JOIN users u ON u.id = t.created_by
+WHERE n.user_id = $1 AND n.org_id = $2 AND n.card_kind IS NOT NULL
+ORDER BY n.created_at DESC
+`
+
+type GetUserTaskCardsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+type GetUserTaskCardsRow struct {
+	ID               uuid.UUID      `json:"id"`
+	CardKind         sql.NullString `json:"card_kind"`
+	Message          string         `json:"message"`
+	CreatedAt        sql.NullTime   `json:"created_at"`
+	TaskID           uuid.NullUUID  `json:"task_id"`
+	TaskTitle        string         `json:"task_title"`
+	DueDate          sql.NullTime   `json:"due_date"`
+	TeamName         string         `json:"team_name"`
+	CreatorFirstName sql.NullString `json:"creator_first_name"`
+	CreatorLastName  sql.NullString `json:"creator_last_name"`
+}
+
+func (q *Queries) GetUserTaskCards(ctx context.Context, arg GetUserTaskCardsParams) ([]GetUserTaskCardsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTaskCards, arg.UserID, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserTaskCardsRow
+	for rows.Next() {
+		var i GetUserTaskCardsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CardKind,
+			&i.Message,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.TaskTitle,
+			&i.DueDate,
+			&i.TeamName,
+			&i.CreatorFirstName,
+			&i.CreatorLastName,
 		); err != nil {
 			return nil, err
 		}

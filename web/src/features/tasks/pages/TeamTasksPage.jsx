@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Typography, Card, Button, Table, Flex, Tag, Select, message, Modal, Input, Form, DatePicker, Divider, Popconfirm, Upload } from 'antd';
 import { useAuth } from '../../../context/AuthContext';
 import { PlusOutlined, ClockCircleOutlined, PaperClipOutlined, EditOutlined } from '@ant-design/icons';
@@ -114,7 +115,7 @@ export default function TeamTasksPage() {
     try {
       const res = await apiClient.get('/admin/my-teams'); 
       setTeams(res.data || []);
-      if (res.data?.length > 0) setActiveTeamId(res.data[0].id);
+      if (res.data?.length > 0) setActiveTeamId(prev => prev || res.data[0].id);
     } catch (err) { message.error("Failed to load teams."); }
   };
 
@@ -409,6 +410,20 @@ export default function TeamTasksPage() {
 
   const baseColumns = buildTaskColumns({ onView: openTaskDrawer });
   const columns = activeTeamId === 'ALL' ? [{ title: 'Team', dataIndex: 'team_name', key: 'team_name', render: text => <Tag color="geekblue">{text}</Tag> }, ...baseColumns] : baseColumns;
+
+  // Deep link from the task alert card: ?open=<task_id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const taskId = searchParams.get('open');
+    if (!taskId) return;
+    setSearchParams({}, { replace: true });
+    apiClient.get(`/admin/tasks/${taskId}/details`).then(res => {
+      const t = res.data?.task;
+      if (!t) return;
+      if (t.team_id) setActiveTeamId(t.team_id);
+      openTaskDrawer(t);
+    }).catch(() => message.error('Could not open that task.'));
+  }, [searchParams]);
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>

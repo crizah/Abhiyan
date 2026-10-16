@@ -682,13 +682,15 @@ type FaceValidationJob struct {
 }
 
 type Notification struct {
-	ID        uuid.UUID    `json:"id"`
-	UserID    uuid.UUID    `json:"user_id"`
-	OrgID     uuid.UUID    `json:"org_id"`
-	Title     string       `json:"title"`
-	Message   string       `json:"message"`
-	IsRead    sql.NullBool `json:"is_read"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	ID        uuid.UUID      `json:"id"`
+	UserID    uuid.UUID      `json:"user_id"`
+	OrgID     uuid.UUID      `json:"org_id"`
+	Title     string         `json:"title"`
+	Message   string         `json:"message"`
+	IsRead    sql.NullBool   `json:"is_read"`
+	TaskID    uuid.NullUUID  `json:"task_id"`
+	CardKind  sql.NullString `json:"card_kind"`
+	CreatedAt sql.NullTime   `json:"created_at"`
 }
 
 type OrgMembership struct {

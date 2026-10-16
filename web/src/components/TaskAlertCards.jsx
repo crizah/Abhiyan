@@ -72,7 +72,7 @@ export default function TaskAlertCards() {
           <div>
             <Text strong style={{ wordBreak: 'break-word' }}>{card.task_title}</Text>
             {!meta.showDetails && (
-              <div><Text type="secondary" style={{ fontSize: 12 }}>{card.message}</Text></div>
+              <div><Text style={{ fontSize: 12, color: '#18181B' }}>{card.message}</Text></div>
             )}
           </div>
         );
@@ -99,7 +99,7 @@ export default function TaskAlertCards() {
       dataIndex: 'assigned_by',
       key: 'by',
       width: 140,
-      render: text => text ? <Text>{text}</Text> : <Text type="secondary">—</Text>,
+      render: text => text ? <Text>{text}</Text> : <Text style={{ color: '#18181B' }}>—</Text>,
     },
     {
       title: 'Deadline',
@@ -144,6 +144,10 @@ export default function TaskAlertCards() {
           border-bottom: 1px solid rgba(24, 24, 27, 0.06);
         }
         .task-alert-modal .ant-table-tbody > tr:last-child > td { border-bottom: none; }
+        .task-alert-modal .ant-modal-title,
+        .task-alert-modal .ant-table-tbody > tr > td,
+        .task-alert-modal .ant-table-tbody > tr > td .ant-typography { color: #18181B; }
+        .task-alert-modal .ant-table-tbody > tr > td .ant-typography-secondary { color: rgba(24, 24, 27, 0.45); }
         .task-alert-modal .ant-table-body { scrollbar-color: ${ROSE} transparent; scrollbar-width: thin; }
       `}</style>
       <Modal

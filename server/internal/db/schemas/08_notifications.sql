@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS notifications (
     title TEXT NOT NULL,
     message TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
+    task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    card_kind VARCHAR(16),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

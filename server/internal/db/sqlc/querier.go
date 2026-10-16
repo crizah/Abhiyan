@@ -36,6 +36,7 @@ type Querier interface {
 	CreateOrganizations(ctx context.Context, arg CreateOrganizationsParams) (Organization, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateTaskCardNotification(ctx context.Context, arg CreateTaskCardNotificationParams) error
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (uuid.UUID, error)
 	// Shared identity only — org_id/status live on org_memberships, written
 	// separately by the caller in the same transaction (multi-org membership).
@@ -50,6 +51,7 @@ type Querier interface {
 	// Scoped to one org — must never wipe a person's roles in a different org
 	// they also belong to.
 	DeleteUserSystemRoles(ctx context.Context, arg DeleteUserSystemRolesParams) error
+	DismissTaskCard(ctx context.Context, arg DismissTaskCardParams) error
 	FailAudioTranscode(ctx context.Context, arg FailAudioTranscodeParams) error
 	FailTranscription(ctx context.Context, arg FailTranscriptionParams) error
 	GetAdminAllTasks(ctx context.Context, arg GetAdminAllTasksParams) ([]GetAdminAllTasksRow, error)
@@ -137,6 +139,7 @@ type Querier interface {
 	// Fetches the roles a user holds in one specific org (not global — a person
 	// can hold different roles in different orgs).
 	GetUserSystemRoles(ctx context.Context, arg GetUserSystemRolesParams) ([]SystemRole, error)
+	GetUserTaskCards(ctx context.Context, arg GetUserTaskCardsParams) ([]GetUserTaskCardsRow, error)
 	GetUserTeams(ctx context.Context, arg GetUserTeamsParams) ([]GetUserTeamsRow, error)
 	GetUserTeamsWithAdmins(ctx context.Context, arg GetUserTeamsWithAdminsParams) ([]GetUserTeamsWithAdminsRow, error)
 	GetUsersByOrg(ctx context.Context, orgID uuid.UUID) ([]GetUsersByOrgRow, error)

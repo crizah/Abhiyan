@@ -280,11 +280,13 @@ func (s *TaskService) CreateTask(ctx context.Context, adminID string, req schema
 		if err != nil {
 			continue
 		}
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  assigneeUID,
-			OrgID:   orgID,
-			Title:   "New Task Assigned",
-			Message: fmt.Sprintf("You have been assigned to: %s", req.Title),
+		_ = qtx.CreateTaskCardNotification(ctx, db.CreateTaskCardNotificationParams{
+			UserID:   assigneeUID,
+			OrgID:    orgID,
+			Title:    "New Task Assigned",
+			Message:  fmt.Sprintf("You have been assigned to: %s", req.Title),
+			TaskID:   uuid.NullUUID{UUID: task.ID, Valid: true},
+			CardKind: sql.NullString{String: "ASSIGNED", Valid: true},
 		})
 	}
 
@@ -615,8 +617,10 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 		}
 		_ = qtx.AddTaskParticipant(ctx, db.AddTaskParticipantParams{TaskID: tID, UserID: uID, Role: db.ParticipantRoleASSIGNEE})
 		if !oldMap[assigneeID] { // Only notify if they are NEW
-			_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			_ = qtx.CreateTaskCardNotification(ctx, db.CreateTaskCardNotificationParams{
 				UserID: uID, OrgID: orgID, Title: "Task Assignment Updated", Message: fmt.Sprintf("You have been added to the task: %s", req.Title),
+				TaskID:   uuid.NullUUID{UUID: tID, Valid: true},
+				CardKind: sql.NullString{String: "ASSIGNED", Valid: true},
 			})
 		}
 	}
@@ -799,15 +803,9 @@ func (s *TaskService) ReopenTask(ctx context.Context, taskID string, userID stri
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
 
-	for _, p := range participants {
-		// We notify EVERYONE, even the admin doing it, so it's a clear system record
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  p.ID,
-			OrgID:   orgID,
-			Title:   "Task Reopened",
-			Message: fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
-		})
-	}
+	s.notifyParticipantsWithCard(ctx, qtx, orgID, tID, uID, participants,
+		"Task Reopened", fmt.Sprintf("Task '%s' has been reopened and requires your attention.", taskTitle),
+		"REOPENED", fmt.Sprintf("Your task '%s' was reopened by the admin. Please review the updated details and redo it.", taskTitle))
 
 	return tx.Commit()
 }
@@ -1291,10 +1289,12 @@ func (s *TaskService) SubmitTaskForReview(ctx context.Context, taskID string, us
 		TaskID: tID, UserID: uuid.NullUUID{UUID: uID, Valid: true}, Content: "Task submitted for Admin review.",
 	})
 
-	admins, _ := qtx.GetTeamAdminsByTask(ctx, tID)
-	for _, adminID := range admins {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: adminID, OrgID: orgID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
+	// Only the admin who assigned the task is asked to review it.
+	if task, err := qtx.GetTaskByID(ctx, tID); err == nil {
+		_ = qtx.CreateTaskCardNotification(ctx, db.CreateTaskCardNotificationParams{
+			UserID: task.CreatedBy, OrgID: orgID, Title: "Task Ready for Review", Message: fmt.Sprintf("%s submitted: %s", userName, taskTitle),
+			TaskID:   uuid.NullUUID{UUID: tID, Valid: true},
+			CardKind: sql.NullString{String: "REVIEW", Valid: true},
 		})
 	}
 	return tx.Commit()
@@ -1339,11 +1339,9 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
-	for _, p := range participants {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, OrgID: orgID, Title: "Task Approved", Message: fmt.Sprintf("Yay '%s' was approved.", taskTitle),
-		})
-	}
+	s.notifyParticipantsWithCard(ctx, qtx, orgID, tID, aID, participants,
+		"Task Approved", fmt.Sprintf("Yay '%s' was approved.", taskTitle),
+		"APPROVED", fmt.Sprintf("Yay! Your task '%s' was approved by the admin.", taskTitle))
 
 	assigneePhones, _ := qtx.GetTaskAssigneePhones(ctx, tID)
 
@@ -1447,11 +1445,13 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 
 	taskTitle, _ := qtx.GetTaskDetailsForNotifications(ctx, tID)
 	participants, _ := qtx.GetTaskParticipants(ctx, tID)
-	for _, p := range participants {
-		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID: p.ID, OrgID: orgID, Title: "Task " + strings.Title(strings.ToLower(action)), Message: fmt.Sprintf("'%s' requires your attention.", taskTitle),
-		})
+	cardKind, cardMsg := "REOPENED", fmt.Sprintf("Your task '%s' was reopened by the admin. Please review the updated details and redo it.", taskTitle)
+	if action == "REJECT" {
+		cardKind, cardMsg = "REJECTED", fmt.Sprintf("Your task '%s' was rejected by the admin. Please review the updated details and redo it.", taskTitle)
 	}
+	s.notifyParticipantsWithCard(ctx, qtx, orgID, tID, uID, participants,
+		"Task "+strings.Title(strings.ToLower(action)), fmt.Sprintf("'%s' requires your attention.", taskTitle),
+		cardKind, cardMsg)
 
 	var assigneePhones []sql.NullString
 	if action == "REJECT" {
@@ -1530,4 +1530,25 @@ func (s *TaskService) GetTranscription(ctx context.Context, attachmentID string,
 		TranscriptText: t.TranscriptText.String,
 		ErrorMessage:   t.ErrorMessage.String,
 	}, nil
+}
+
+// Assignees (except the admin acting) get a pop-up card carrying cardMsg;
+// everyone else just gets the regular bell notification.
+func (s *TaskService) notifyParticipantsWithCard(ctx context.Context, qtx *db.Queries, orgID, taskID, actorID uuid.UUID, participants []db.GetTaskParticipantsRow, bellTitle, bellMsg, cardKind, cardMsg string) {
+	for _, p := range participants {
+		if p.TpRole == string(db.ParticipantRoleASSIGNEE) && p.ID != actorID {
+			_ = qtx.CreateTaskCardNotification(ctx, db.CreateTaskCardNotificationParams{
+				UserID:   p.ID,
+				OrgID:    orgID,
+				Title:    bellTitle,
+				Message:  cardMsg,
+				TaskID:   uuid.NullUUID{UUID: taskID, Valid: true},
+				CardKind: sql.NullString{String: cardKind, Valid: true},
+			})
+			continue
+		}
+		_ = qtx.CreateNotification(ctx, db.CreateNotificationParams{
+			UserID: p.ID, OrgID: orgID, Title: bellTitle, Message: bellMsg,
+		})
+	}
 }

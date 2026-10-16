@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	db "github.com/crizah/Abhiyan/server/internal/db/sqlc"
@@ -145,5 +146,56 @@ func (h *NotificationHandler) MarkOneRead(c *gin.Context) {
 		return
 	}
 
+	c.Status(http.StatusOK)
+}
+
+func (h *NotificationHandler) GetTaskCards(c *gin.Context) {
+	uID, uErr := util.ParseUUID(c.MustGet("user_id").(string))
+	oID, oErr := util.ParseUUID(c.MustGet("org_id").(string))
+	if uErr != nil || oErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user or org id"})
+		return
+	}
+
+	rows, err := h.db.GetUserTaskCards(c.Request.Context(), db.GetUserTaskCardsParams{UserID: uID, OrgID: oID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load task cards"})
+		return
+	}
+
+	cards := make([]schemas.TaskCardResponse, 0, len(rows))
+	for _, r := range rows {
+		card := schemas.TaskCardResponse{
+			ID:         r.ID.String(),
+			TaskID:     r.TaskID.UUID.String(),
+			Kind:       r.CardKind.String,
+			Message:    r.Message,
+			TaskTitle:  r.TaskTitle,
+			TeamName:   r.TeamName,
+			AssignedBy: strings.TrimSpace(r.CreatorFirstName.String + " " + r.CreatorLastName.String),
+			CreatedAt:  r.CreatedAt.Time.Format(time.RFC3339),
+		}
+		if r.DueDate.Valid {
+			d := r.DueDate.Time.Format(time.RFC3339)
+			card.DueDate = &d
+		}
+		cards = append(cards, card)
+	}
+	c.JSON(http.StatusOK, cards)
+}
+
+func (h *NotificationHandler) DismissTaskCard(c *gin.Context) {
+	nID, nErr := util.ParseUUID(c.Param("id"))
+	uID, uErr := util.ParseUUID(c.MustGet("user_id").(string))
+	oID, oErr := util.ParseUUID(c.MustGet("org_id").(string))
+	if nErr != nil || uErr != nil || oErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid card, user, or org id"})
+		return
+	}
+
+	if err := h.db.DismissTaskCard(c.Request.Context(), db.DismissTaskCardParams{ID: nID, UserID: uID, OrgID: oID}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to dismiss card"})
+		return
+	}
 	c.Status(http.StatusOK)
 }

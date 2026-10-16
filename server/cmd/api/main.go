@@ -140,6 +140,8 @@ func main() {
 		{
 			// Everyone can hit these, but the handler decides WHAT they see
 			general.GET("/notifications", notificationHandler.GetMyNotifications)
+			general.GET("/notifications/cards", notificationHandler.GetTaskCards)
+			general.PUT("/notifications/cards/:id/dismiss", notificationHandler.DismissTaskCard)
 			general.PUT("/notifications/read", notificationHandler.MarkAllRead)
 			general.DELETE("/notifications/clear", notificationHandler.ClearAll)
 			general.PUT("/notifications/:id/read", notificationHandler.MarkOneRead)

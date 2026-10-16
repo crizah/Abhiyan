@@ -37,7 +37,6 @@ resource "aws_ecs_task_definition" "worker" {
 
     secrets = [
       { name = "DB_URL",                  valueFrom = "/${var.project}/prod/DB_URL" },
-      { name = "BROKER_URL",              valueFrom = "/${var.project}/prod/BROKER_URL" },
       { name = "JWT_SECRET",              valueFrom = "/${var.project}/prod/JWT_SECRET" },
       { name = "OPENAI_API_KEY",          valueFrom = "/${var.project}/prod/OPENAI_API_KEY" },
       { name = "DASHBOARD_URL",           valueFrom = "/${var.project}/prod/DASHBOARD_URL" },

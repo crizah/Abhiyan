@@ -10,10 +10,6 @@ variable "rds_sg_id" {
   type = string
 }
 
-variable "redis_sg_id" {
-  type = string
-}
-
 variable "db_name" {
   type    = string
   default = "abhiyan"

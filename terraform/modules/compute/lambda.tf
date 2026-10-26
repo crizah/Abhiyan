@@ -8,10 +8,6 @@ data "aws_ssm_parameter" "jwt_secret" {
   name            = "/${var.project}/prod/JWT_SECRET"
   with_decryption = true
 }
-data "aws_ssm_parameter" "broker_url" {
-  name            = "/${var.project}/prod/BROKER_URL"
-  with_decryption = true
-}
 data "aws_ssm_parameter" "frontend_url" {
   name            = "/${var.project}/prod/FRONTEND_URL"
   with_decryption = true
@@ -98,7 +94,6 @@ resource "aws_lambda_function" "api" {
     variables = {
       DB_URL                = data.aws_ssm_parameter.db_url.value
       JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
-      BROKER_URL            = data.aws_ssm_parameter.broker_url.value
       FRONTEND_URL          = data.aws_ssm_parameter.frontend_url.value
       AWS_S3_BUCKET_NAME    = data.aws_ssm_parameter.s3_bucket_name.value
       AWS_SES_SENDER        = data.aws_ssm_parameter.ses_sender.value

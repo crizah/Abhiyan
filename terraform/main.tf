@@ -41,7 +41,6 @@ module "data" {
   project            = var.project
   private_subnet_ids = module.networking.private_subnet_ids
   rds_sg_id          = module.networking.rds_sg_id
-  redis_sg_id        = module.networking.redis_sg_id
   db_password        = var.db_password
   frontend_url       = var.frontend_url
   s3_bucket_name     = var.s3_bucket_name

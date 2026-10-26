@@ -37,30 +37,6 @@ resource "aws_db_instance" "postgres" {
   tags = { Name = "${var.project}-postgres" }
 }
 
-# ── ElastiCache Redis ────────────────────────────────────────────────────────
-
-resource "aws_elasticache_subnet_group" "main" {
-  name       = "${var.project}-redis-subnet-group"
-  subnet_ids = var.private_subnet_ids
-
-  tags = { Name = "${var.project}-redis-subnet-group" }
-}
-
-resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = "${var.project}-redis"
-  engine               = "redis"
-  node_type            = "cache.t4g.micro"
-  num_cache_nodes      = 1
-  parameter_group_name = "default.redis7"
-  engine_version       = "7.1"
-  port                 = 6379
-
-  subnet_group_name  = aws_elasticache_subnet_group.main.name
-  security_group_ids = [var.redis_sg_id]
-
-  tags = { Name = "${var.project}-redis" }
-}
-
 # ── SSM Parameters ───────────────────────────────────────────────────────────
 # Sensitive values (DB_URL, JWT_SECRET, OPENAI_API_KEY) are created here as
 # placeholders. Set the real values manually in the console or via:
@@ -70,14 +46,6 @@ resource "aws_ssm_parameter" "db_url" {
   name  = "/${var.project}/prod/DB_URL"
   type  = "SecureString"
   value = "postgres://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.endpoint}/${var.db_name}?sslmode=require"
-
-  tags = { Project = var.project }
-}
-
-resource "aws_ssm_parameter" "broker_url" {
-  name  = "/${var.project}/prod/BROKER_URL"
-  type  = "SecureString"
-  value = "${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379"
 
   tags = { Project = var.project }
 }

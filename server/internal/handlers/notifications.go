@@ -206,7 +206,7 @@ func (h *NotificationHandler) GetTaskCards(c *gin.Context) {
 		cards = append(cards, card)
 	}
 
-	assignorOverdue, _ := h.db.GetOverdueTasksAsAssignor(ctx, db.GetOverdueTasksAsAssignorParams{UserID: uID, OrgID: oID})
+	assignorOverdue, _ := h.db.GetOverdueTasksAsAssignor(ctx, db.GetOverdueTasksAsAssignorParams{CreatedBy: uID, OrgID: oID})
 	for _, r := range assignorOverdue {
 		assigneeName := strings.TrimSpace(r.AssigneeFirstName + " " + r.AssigneeLastName)
 		card := schemas.TaskCardResponse{

@@ -10,7 +10,7 @@ RETURNING id;
 -- name: GetTodayAttendance :one
 SELECT id, status, present
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2 AND attendance_date = CURRENT_DATE
+WHERE user_id = $1 AND attendance_date = CURRENT_DATE
 LIMIT 1;
 
 -- name: SetAttendanceResult :exec
@@ -131,12 +131,12 @@ SELECT
     COUNT(*) FILTER (WHERE present = true)::int AS present_count,
     COUNT(*) FILTER (WHERE present = false)::int AS absent_count
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2
+WHERE user_id = $1
   AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date;
 
 -- name: GetUserAttendanceHistoryRange :many
 SELECT attendance_date, present, fulfillment
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2
+WHERE user_id = $1
   AND attendance_date BETWEEN sqlc.arg('from_date')::date AND sqlc.arg('to_date')::date
 ORDER BY attendance_date DESC;

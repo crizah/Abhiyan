@@ -87,14 +87,9 @@ func (s *AttendanceService) GetTodayStatus(ctx context.Context, userID, orgID st
 	if err != nil {
 		return "", err
 	}
-	oID, err := util.ParseUUID(orgID)
-	if err != nil {
-		return "", err
-	}
-	row, err := s.queries.GetTodayAttendance(ctx, db.GetTodayAttendanceParams{
-		UserID: uID,
-		OrgID:  oID,
-	})
+	// orgID intentionally unused here — attendance is now per-user, not per-org
+	_ = orgID
+	row, err := s.queries.GetTodayAttendance(ctx, uID)
 	if err == sql.ErrNoRows {
 		return "none", nil
 	}
@@ -367,7 +362,8 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOr
 	if err != nil {
 		return nil, err
 	}
-	oid, err := util.ParseUUID(callerOrgID)
+	// oid intentionally unused in DB calls — history/summary are now per-user
+	_, err = util.ParseUUID(callerOrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -378,14 +374,14 @@ func (s *AttendanceService) GetUserSummary(ctx context.Context, userID, callerOr
 	}
 
 	counts, err := s.queries.GetUserAttendanceSummaryRange(ctx, db.GetUserAttendanceSummaryRangeParams{
-		UserID: uid, OrgID: oid, FromDate: from, ToDate: to,
+		UserID: uid, /* OrgID: oid, */ FromDate: from, ToDate: to,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	history, err := s.queries.GetUserAttendanceHistoryRange(ctx, db.GetUserAttendanceHistoryRangeParams{
-		UserID: uid, OrgID: oid, FromDate: from, ToDate: to,
+		UserID: uid, /* OrgID: oid, */ FromDate: from, ToDate: to,
 	})
 	if err != nil {
 		return nil, err

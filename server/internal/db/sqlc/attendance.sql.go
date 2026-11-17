@@ -331,14 +331,9 @@ func (q *Queries) GetOrgAttendanceRangeByTeam(ctx context.Context, arg GetOrgAtt
 const getTodayAttendance = `-- name: GetTodayAttendance :one
 SELECT id, status, present
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2 AND attendance_date = CURRENT_DATE
+WHERE user_id = $1 AND attendance_date = CURRENT_DATE
 LIMIT 1
 `
-
-type GetTodayAttendanceParams struct {
-	UserID uuid.UUID `json:"user_id"`
-	OrgID  uuid.UUID `json:"org_id"`
-}
 
 type GetTodayAttendanceRow struct {
 	ID      uuid.UUID    `json:"id"`
@@ -346,8 +341,8 @@ type GetTodayAttendanceRow struct {
 	Present sql.NullBool `json:"present"`
 }
 
-func (q *Queries) GetTodayAttendance(ctx context.Context, arg GetTodayAttendanceParams) (GetTodayAttendanceRow, error) {
-	row := q.db.QueryRowContext(ctx, getTodayAttendance, arg.UserID, arg.OrgID)
+func (q *Queries) GetTodayAttendance(ctx context.Context, userID uuid.UUID) (GetTodayAttendanceRow, error) {
+	row := q.db.QueryRowContext(ctx, getTodayAttendance, userID)
 	var i GetTodayAttendanceRow
 	err := row.Scan(&i.ID, &i.Status, &i.Present)
 	return i, err
@@ -356,14 +351,13 @@ func (q *Queries) GetTodayAttendance(ctx context.Context, arg GetTodayAttendance
 const getUserAttendanceHistoryRange = `-- name: GetUserAttendanceHistoryRange :many
 SELECT attendance_date, present, fulfillment
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2
-  AND attendance_date BETWEEN $3::date AND $4::date
+WHERE user_id = $1
+  AND attendance_date BETWEEN $2::date AND $3::date
 ORDER BY attendance_date DESC
 `
 
 type GetUserAttendanceHistoryRangeParams struct {
 	UserID   uuid.UUID `json:"user_id"`
-	OrgID    uuid.UUID `json:"org_id"`
 	FromDate time.Time `json:"from_date"`
 	ToDate   time.Time `json:"to_date"`
 }
@@ -375,12 +369,7 @@ type GetUserAttendanceHistoryRangeRow struct {
 }
 
 func (q *Queries) GetUserAttendanceHistoryRange(ctx context.Context, arg GetUserAttendanceHistoryRangeParams) ([]GetUserAttendanceHistoryRangeRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserAttendanceHistoryRange,
-		arg.UserID,
-		arg.OrgID,
-		arg.FromDate,
-		arg.ToDate,
-	)
+	rows, err := q.db.QueryContext(ctx, getUserAttendanceHistoryRange, arg.UserID, arg.FromDate, arg.ToDate)
 	if err != nil {
 		return nil, err
 	}
@@ -407,13 +396,12 @@ SELECT
     COUNT(*) FILTER (WHERE present = true)::int AS present_count,
     COUNT(*) FILTER (WHERE present = false)::int AS absent_count
 FROM attendance_record
-WHERE user_id = $1 AND org_id = $2
-  AND attendance_date BETWEEN $3::date AND $4::date
+WHERE user_id = $1
+  AND attendance_date BETWEEN $2::date AND $3::date
 `
 
 type GetUserAttendanceSummaryRangeParams struct {
 	UserID   uuid.UUID `json:"user_id"`
-	OrgID    uuid.UUID `json:"org_id"`
 	FromDate time.Time `json:"from_date"`
 	ToDate   time.Time `json:"to_date"`
 }
@@ -424,12 +412,7 @@ type GetUserAttendanceSummaryRangeRow struct {
 }
 
 func (q *Queries) GetUserAttendanceSummaryRange(ctx context.Context, arg GetUserAttendanceSummaryRangeParams) (GetUserAttendanceSummaryRangeRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserAttendanceSummaryRange,
-		arg.UserID,
-		arg.OrgID,
-		arg.FromDate,
-		arg.ToDate,
-	)
+	row := q.db.QueryRowContext(ctx, getUserAttendanceSummaryRange, arg.UserID, arg.FromDate, arg.ToDate)
 	var i GetUserAttendanceSummaryRangeRow
 	err := row.Scan(&i.PresentCount, &i.AbsentCount)
 	return i, err

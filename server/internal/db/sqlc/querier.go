@@ -115,7 +115,7 @@ type Querier interface {
 	GetTeamMembersDetails(ctx context.Context, teamID uuid.UUID) ([]GetTeamMembersDetailsRow, error)
 	GetTeamOrgID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetTeamTasks(ctx context.Context, arg GetTeamTasksParams) ([]GetTeamTasksRow, error)
-	GetTodayAttendance(ctx context.Context, arg GetTodayAttendanceParams) (GetTodayAttendanceRow, error)
+	GetTodayAttendance(ctx context.Context, userID uuid.UUID) (GetTodayAttendanceRow, error)
 	GetTotalUsersByOrg(ctx context.Context, orgID uuid.UUID) (int64, error)
 	GetTotalUsersInAdminTeams(ctx context.Context, arg GetTotalUsersInAdminTeamsParams) (int64, error)
 	GetTranscriptionByAttachmentID(ctx context.Context, attachmentID uuid.UUID) (GetTranscriptionByAttachmentIDRow, error)

@@ -583,36 +583,47 @@ export default function TeamTasksPage() {
         showReminders
         extra={
           <Flex gap="small">
-            {selectedTask?.status === 'OPEN' ? (
-              selectedTask?.review_status === 'PENDING' ? (
-                <>
-                  <Button onClick={openActionModal} style={{ background: 'transparent', border: '1px solid #B3455C', color: '#B3455C' }}>Reject</Button>
-                  <Popconfirm title="Approve and close this task?" onConfirm={handleApprove}>
-                    <Button style={{ backgroundColor: '#B3455C', border: 'none', color: '#FFFFFF' }}>Approve</Button>
-                  </Popconfirm>
-                </>
-              ) : (
-                <>
-                  {canSubmit && (
-                    <Popconfirm title="Submit this task for review?" onConfirm={submitTaskForReview}>
-                      <Button type="primary" style={{ backgroundColor: '#B3455C', border: 'none' }}>Submit for Review</Button>
-                    </Popconfirm>
-                  )}
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={openEditModal}
-                    style={{ background: 'transparent', border: '1px solid rgba(24, 24, 27, 0.15)', color: '#18181B' }}
-                  >
-                    Edit
-                  </Button>
-                  <Popconfirm title="Force close task?" onConfirm={() => changeTaskStatus('CLOSED')}>
-                    <Button style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}>Close Task</Button>
-                  </Popconfirm>
-                </>
-              )
-            ) : (
-              <Button type="primary" onClick={openActionModal}>Reopen Task</Button>
-            )}
+            {(() => {
+              const isCreator = selectedTask?.created_by && selectedTask.created_by === user?.id;
+              if (selectedTask?.status === 'OPEN') {
+                if (selectedTask?.review_status === 'PENDING') {
+                  return isCreator ? (
+                    <>
+                      <Button onClick={openActionModal} style={{ background: 'transparent', border: '1px solid #B3455C', color: '#B3455C' }}>Reject</Button>
+                      <Popconfirm title="Approve and close this task?" onConfirm={handleApprove}>
+                        <Button style={{ backgroundColor: '#B3455C', border: 'none', color: '#FFFFFF' }}>Approve</Button>
+                      </Popconfirm>
+                    </>
+                  ) : null;
+                }
+                return (
+                  <>
+                    {canSubmit && (
+                      <Popconfirm title="Submit this task for review?" onConfirm={submitTaskForReview}>
+                        <Button type="primary" style={{ backgroundColor: '#B3455C', border: 'none' }}>Submit for Review</Button>
+                      </Popconfirm>
+                    )}
+                    {isCreator && (
+                      <>
+                        <Button
+                          icon={<EditOutlined />}
+                          onClick={openEditModal}
+                          style={{ background: 'transparent', border: '1px solid rgba(24, 24, 27, 0.15)', color: '#18181B' }}
+                        >
+                          Edit
+                        </Button>
+                        <Popconfirm title="Force close task?" onConfirm={() => changeTaskStatus('CLOSED')}>
+                          <Button style={{ background: '#B3455C', border: 'none', color: '#FFFFFF' }}>Close Task</Button>
+                        </Popconfirm>
+                      </>
+                    )}
+                  </>
+                );
+              }
+              return isCreator ? (
+                <Button type="primary" onClick={openActionModal}>Reopen Task</Button>
+              ) : null;
+            })()}
           </Flex>
         }
         taskUpdates={taskUpdates}

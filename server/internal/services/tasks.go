@@ -103,6 +103,17 @@ func (s *TaskService) diffAttachments(
 	return s3URLsToDelete
 }
 
+func (s *TaskService) assertTaskCreatedBy(ctx context.Context, taskID uuid.UUID, callerID uuid.UUID) error {
+	task, err := s.queries.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch task: %w", err)
+	}
+	if task.CreatedBy != callerID {
+		return errors.New("unauthorized: only the task creator can perform this action")
+	}
+	return nil
+}
+
 // assertTaskInOrg confirms taskID belongs to callerOrgID before any read/write
 // touches it — the whole task subsystem is otherwise reachable cross-tenant by
 // just guessing/reusing a UUID from another org.
@@ -566,7 +577,14 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	if err != nil {
 		return err
 	}
+	uID, err := util.ParseUUID(userid)
+	if err != nil {
+		return err
+	}
 	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
+		return err
+	}
+	if err := s.assertTaskCreatedBy(ctx, tID, uID); err != nil {
 		return err
 	}
 	if err := s.assertUsersInOrg(ctx, req.AssigneeIDs, orgID); err != nil {
@@ -651,10 +669,6 @@ func (s *TaskService) UpdateTaskDetails(ctx context.Context, taskID string, req 
 	}
 
 	// Diff Task Attachments instead of wiping
-	uID, err := util.ParseUUID(userid)
-	if err != nil {
-		return err
-	}
 	s3URLsToDelete := s.diffAttachments(ctx, qtx, uuid.NullUUID{UUID: tID, Valid: true}, uID, req.Attachments)
 
 	if err := tx.Commit(); err != nil {
@@ -1311,6 +1325,13 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
 		return err
 	}
+	aID, err := util.ParseUUID(adminID)
+	if err != nil {
+		return err
+	}
+	if err := s.assertTaskCreatedBy(ctx, tID, aID); err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1319,10 +1340,6 @@ func (s *TaskService) ApproveTask(ctx context.Context, taskID string, adminID st
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	aID, err := util.ParseUUID(adminID)
-	if err != nil {
-		return err
-	}
 
 	err = qtx.ApproveTaskState(ctx, tID)
 	if err != nil {
@@ -1384,6 +1401,13 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	if err := s.assertTaskInOrg(ctx, tID, orgID); err != nil {
 		return err
 	}
+	uID, err := util.ParseUUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.assertTaskCreatedBy(ctx, tID, uID); err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1392,10 +1416,6 @@ func (s *TaskService) ActionTask(ctx context.Context, action string, taskID stri
 	defer tx.Rollback()
 
 	qtx := s.queries.WithTx(tx)
-	uID, err := util.ParseUUID(userID)
-	if err != nil {
-		return err
-	}
 
 	var safeDueDate sql.NullTime
 	if req.DueDate != nil {

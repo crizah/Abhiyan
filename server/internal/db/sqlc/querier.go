@@ -88,6 +88,8 @@ type Querier interface {
 	GetOrgInfo(ctx context.Context, id uuid.UUID) (GetOrgInfoRow, error)
 	GetOrgTeams(ctx context.Context, orgID uuid.UUID) ([]GetOrgTeamsRow, error)
 	GetOrganizationName(ctx context.Context, id uuid.UUID) (string, error)
+	GetOverdueTasksAsAssignee(ctx context.Context, arg GetOverdueTasksAsAssigneeParams) ([]GetOverdueTasksAsAssigneeRow, error)
+	GetOverdueTasksAsAssignor(ctx context.Context, arg GetOverdueTasksAsAssignorParams) ([]GetOverdueTasksAsAssignorRow, error)
 	GetPendingAudioTranscodes(ctx context.Context) ([]GetPendingAudioTranscodesRow, error)
 	GetPendingInvitedUser(ctx context.Context, arg GetPendingInvitedUserParams) (GetPendingInvitedUserRow, error)
 	GetPendingTranscriptions(ctx context.Context) ([]GetPendingTranscriptionsRow, error)

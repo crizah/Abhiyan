@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Modal, Table, Typography, Button, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -10,16 +10,21 @@ const { Text } = Typography;
 
 const POLL_MS = 60000;
 const ROSE = '#B3455C';
+const AMBER = '#D97706';
 
 // REVIEW cards go to the admin tasks page, everything else to the employee tasks page.
 // showDetails=false means the row shows the server-written message under the title.
 const KIND_META = {
-  ASSIGNED: { label: 'Assigned', color: ROSE, path: '/employee-tasks', showDetails: true },
-  REVIEW: { label: 'To Review', color: reviewStatusColor('PENDING'), path: '/tasks', showDetails: true },
-  APPROVED: { label: 'Approved', color: reviewStatusColor('APPROVED'), path: '/employee-tasks', showDetails: false },
-  REJECTED: { label: 'Rejected', color: reviewStatusColor('REJECTED'), path: '/employee-tasks', showDetails: false },
-  REOPENED: { label: 'Reopened', color: '#71717A', path: '/employee-tasks', showDetails: false },
+  ASSIGNED:         { label: 'Assigned',  color: ROSE,                        path: '/employee-tasks', showDetails: true },
+  REVIEW:           { label: 'To Review', color: reviewStatusColor('PENDING'), path: '/tasks',          showDetails: true },
+  APPROVED:         { label: 'Approved',  color: reviewStatusColor('APPROVED'),path: '/employee-tasks', showDetails: false },
+  REJECTED:         { label: 'Rejected',  color: reviewStatusColor('REJECTED'),path: '/employee-tasks', showDetails: false },
+  REOPENED:         { label: 'Reopened',  color: '#71717A',                    path: '/employee-tasks', showDetails: false },
+  OVERDUE_ASSIGNEE: { label: 'Overdue',   color: AMBER,                        path: '/employee-tasks', showDetails: false },
+  OVERDUE_ASSIGNOR: { label: 'Overdue',   color: AMBER,                        path: '/tasks',          showDetails: false },
 };
+
+const isComputedCard = (id) => id.includes(':overdue');
 
 /**
  * Pop-up card listing the user's new assigned / to-review / actioned tasks.
@@ -30,11 +35,14 @@ export default function TaskAlertCards() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
+  // Track dismissed computed card IDs for the session so they don't reappear on poll.
+  const dismissedComputed = useRef(new Set());
 
   const fetchCards = useCallback(async () => {
     try {
       const res = await apiClient.get('/notifications/cards');
-      setCards(res.data || []);
+      const all = res.data || [];
+      setCards(all.filter(c => !dismissedComputed.current.has(c.id)));
     } catch {}
   }, []);
 
@@ -51,7 +59,10 @@ export default function TaskAlertCards() {
 
   const dismiss = async (ids) => {
     setCards(prev => prev.filter(c => !ids.includes(c.id)));
-    await Promise.all(ids.map(id => apiClient.put(`/notifications/cards/${id}/dismiss`).catch(() => {})));
+    const persisted = ids.filter(id => !isComputedCard(id));
+    const computed  = ids.filter(id =>  isComputedCard(id));
+    computed.forEach(id => dismissedComputed.current.add(id));
+    await Promise.all(persisted.map(id => apiClient.put(`/notifications/cards/${id}/dismiss`).catch(() => {})));
   };
 
   const handleView = async (card) => {
@@ -99,7 +110,10 @@ export default function TaskAlertCards() {
       dataIndex: 'assigned_by',
       key: 'by',
       width: 140,
-      render: text => text ? <Text>{text}</Text> : <Text style={{ color: '#18181B' }}>—</Text>,
+      render: (text, card) => {
+        if (card.kind === 'OVERDUE_ASSIGNOR') return <Text style={{ color: '#18181B' }}>—</Text>;
+        return text ? <Text>{text}</Text> : <Text style={{ color: '#18181B' }}>—</Text>;
+      },
     },
     {
       title: 'Deadline',

@@ -89,6 +89,124 @@ func (q *Queries) DismissTaskCard(ctx context.Context, arg DismissTaskCardParams
 	return err
 }
 
+const getOverdueTasksAsAssignee = `-- name: GetOverdueTasksAsAssignee :many
+SELECT t.id, t.title, tm.name AS team_name, t.due_date,
+       COALESCE(u.first_name, '') AS creator_first_name,
+       COALESCE(u.last_name, '') AS creator_last_name
+FROM tasks t
+JOIN teams tm ON tm.id = t.team_id AND tm.org_id = $2
+JOIN task_participants tp ON tp.task_id = t.id AND tp.user_id = $1 AND tp.role = 'ASSIGNEE'
+LEFT JOIN users u ON u.id = t.created_by
+WHERE t.status = 'OPEN'
+  AND t.review_status <> 'APPROVED'
+  AND t.due_date < NOW()
+`
+
+type GetOverdueTasksAsAssigneeParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+type GetOverdueTasksAsAssigneeRow struct {
+	ID               uuid.UUID    `json:"id"`
+	Title            string       `json:"title"`
+	TeamName         string       `json:"team_name"`
+	DueDate          sql.NullTime `json:"due_date"`
+	CreatorFirstName string       `json:"creator_first_name"`
+	CreatorLastName  string       `json:"creator_last_name"`
+}
+
+func (q *Queries) GetOverdueTasksAsAssignee(ctx context.Context, arg GetOverdueTasksAsAssigneeParams) ([]GetOverdueTasksAsAssigneeRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOverdueTasksAsAssignee, arg.UserID, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOverdueTasksAsAssigneeRow
+	for rows.Next() {
+		var i GetOverdueTasksAsAssigneeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TeamName,
+			&i.DueDate,
+			&i.CreatorFirstName,
+			&i.CreatorLastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOverdueTasksAsAssignor = `-- name: GetOverdueTasksAsAssignor :many
+SELECT t.id, t.title, tm.name AS team_name, t.due_date,
+       tp.user_id AS assignee_id,
+       COALESCE(u.first_name, '') AS assignee_first_name,
+       COALESCE(u.last_name, '') AS assignee_last_name
+FROM tasks t
+JOIN teams tm ON tm.id = t.team_id AND tm.org_id = $2
+JOIN task_participants tp ON tp.task_id = t.id AND tp.role = 'ASSIGNEE'
+JOIN users u ON u.id = tp.user_id
+WHERE t.created_by = $1
+  AND t.status = 'OPEN'
+  AND t.review_status <> 'APPROVED'
+  AND t.due_date < NOW()
+`
+
+type GetOverdueTasksAsAssignorParams struct {
+	CreatedBy uuid.UUID `json:"created_by"`
+	OrgID     uuid.UUID `json:"org_id"`
+}
+
+type GetOverdueTasksAsAssignorRow struct {
+	ID                uuid.UUID    `json:"id"`
+	Title             string       `json:"title"`
+	TeamName          string       `json:"team_name"`
+	DueDate           sql.NullTime `json:"due_date"`
+	AssigneeID        uuid.UUID    `json:"assignee_id"`
+	AssigneeFirstName string       `json:"assignee_first_name"`
+	AssigneeLastName  string       `json:"assignee_last_name"`
+}
+
+func (q *Queries) GetOverdueTasksAsAssignor(ctx context.Context, arg GetOverdueTasksAsAssignorParams) ([]GetOverdueTasksAsAssignorRow, error) {
+	rows, err := q.db.QueryContext(ctx, getOverdueTasksAsAssignor, arg.CreatedBy, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOverdueTasksAsAssignorRow
+	for rows.Next() {
+		var i GetOverdueTasksAsAssignorRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TeamName,
+			&i.DueDate,
+			&i.AssigneeID,
+			&i.AssigneeFirstName,
+			&i.AssigneeLastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserNotifications = `-- name: GetUserNotifications :many
 SELECT id, title, message, is_read, created_at
 FROM notifications

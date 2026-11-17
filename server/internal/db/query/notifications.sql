@@ -38,3 +38,29 @@ ORDER BY n.created_at DESC;
 
 -- name: DismissTaskCard :exec
 UPDATE notifications SET card_kind = NULL WHERE id = $1 AND user_id = $2 AND org_id = $3;
+
+-- name: GetOverdueTasksAsAssignee :many
+SELECT t.id, t.title, tm.name AS team_name, t.due_date,
+       COALESCE(u.first_name, '') AS creator_first_name,
+       COALESCE(u.last_name, '') AS creator_last_name
+FROM tasks t
+JOIN teams tm ON tm.id = t.team_id AND tm.org_id = $2
+JOIN task_participants tp ON tp.task_id = t.id AND tp.user_id = $1 AND tp.role = 'ASSIGNEE'
+LEFT JOIN users u ON u.id = t.created_by
+WHERE t.status = 'OPEN'
+  AND t.review_status <> 'APPROVED'
+  AND t.due_date < NOW();
+
+-- name: GetOverdueTasksAsAssignor :many
+SELECT t.id, t.title, tm.name AS team_name, t.due_date,
+       tp.user_id AS assignee_id,
+       COALESCE(u.first_name, '') AS assignee_first_name,
+       COALESCE(u.last_name, '') AS assignee_last_name
+FROM tasks t
+JOIN teams tm ON tm.id = t.team_id AND tm.org_id = $2
+JOIN task_participants tp ON tp.task_id = t.id AND tp.role = 'ASSIGNEE'
+JOIN users u ON u.id = tp.user_id
+WHERE t.created_by = $1
+  AND t.status = 'OPEN'
+  AND t.review_status <> 'APPROVED'
+  AND t.due_date < NOW();

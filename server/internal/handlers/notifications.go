@@ -157,7 +157,10 @@ func (h *NotificationHandler) GetTaskCards(c *gin.Context) {
 		return
 	}
 
-	rows, err := h.db.GetUserTaskCards(c.Request.Context(), db.GetUserTaskCardsParams{UserID: uID, OrgID: oID})
+	ctx := c.Request.Context()
+	params := db.GetUserTaskCardsParams{UserID: uID, OrgID: oID}
+
+	rows, err := h.db.GetUserTaskCards(ctx, params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load task cards"})
 		return
@@ -181,6 +184,47 @@ func (h *NotificationHandler) GetTaskCards(c *gin.Context) {
 		}
 		cards = append(cards, card)
 	}
+
+	// Computed overdue cards — not persisted, generated fresh each call.
+
+	assigneeOverdue, _ := h.db.GetOverdueTasksAsAssignee(ctx, db.GetOverdueTasksAsAssigneeParams{UserID: uID, OrgID: oID})
+	for _, r := range assigneeOverdue {
+		card := schemas.TaskCardResponse{
+			ID:         r.ID.String() + ":overdue",
+			TaskID:     r.ID.String(),
+			Kind:       "OVERDUE_ASSIGNEE",
+			Message:    "You missed your deadline",
+			TaskTitle:  r.Title,
+			TeamName:   r.TeamName,
+			AssignedBy: strings.TrimSpace(r.CreatorFirstName + " " + r.CreatorLastName),
+			CreatedAt:  time.Now().Format(time.RFC3339),
+		}
+		if r.DueDate.Valid {
+			d := r.DueDate.Time.Format(time.RFC3339)
+			card.DueDate = &d
+		}
+		cards = append(cards, card)
+	}
+
+	assignorOverdue, _ := h.db.GetOverdueTasksAsAssignor(ctx, db.GetOverdueTasksAsAssignorParams{UserID: uID, OrgID: oID})
+	for _, r := range assignorOverdue {
+		assigneeName := strings.TrimSpace(r.AssigneeFirstName + " " + r.AssigneeLastName)
+		card := schemas.TaskCardResponse{
+			ID:        r.ID.String() + ":" + r.AssigneeID.String() + ":overdue",
+			TaskID:    r.ID.String(),
+			Kind:      "OVERDUE_ASSIGNOR",
+			Message:   assigneeName + " missed their deadline",
+			TaskTitle: r.Title,
+			TeamName:  r.TeamName,
+			CreatedAt: time.Now().Format(time.RFC3339),
+		}
+		if r.DueDate.Valid {
+			d := r.DueDate.Time.Format(time.RFC3339)
+			card.DueDate = &d
+		}
+		cards = append(cards, card)
+	}
+
 	c.JSON(http.StatusOK, cards)
 }
 
